@@ -1,4 +1,4 @@
-/* 籌碼雷達：深色交易室為主，系統淺色時自動切換。台灣習慣「紅漲綠跌」。 */
+/* 籌碼雷達：深色交易室為主，系統淺色時自動切換。改成「綠漲紅跌」：做多、上漲是綠色，做空、下跌是紅色。 */
 :root {
   --bg: #0e1318;
   --panel: #151c23;
@@ -8,11 +8,11 @@
   --muted: #8a95a1;
   --accent: #d6a548;
   --accent-ink: #1a1306;
-  --up: #f05a4d;
-  --down: #2fb67c;
+  --up: #2fb67c;
+  --down: #f05a4d;
   --flat: #8a95a1;
-  --chip-up: rgba(240, 90, 77, .14);
-  --chip-down: rgba(47, 182, 124, .14);
+  --chip-up: rgba(47, 182, 124, .14);
+  --chip-down: rgba(240, 90, 77, .14);
   --chip-flat: rgba(214, 165, 72, .14);
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -23,8 +23,8 @@
   :root {
     --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #dbe1e7;
     --fg: #121820; --muted: #5d6874; --accent: #a5741a; --accent-ink: #ffffff;
-    --up: #d63a2f; --down: #1c8f5c; --flat: #5d6874;
-    --chip-up: rgba(214, 58, 47, .10); --chip-down: rgba(28, 143, 92, .10); --chip-flat: rgba(165, 116, 26, .12);
+    --up: #1c8f5c; --down: #d63a2f; --flat: #5d6874;
+    --chip-up: rgba(28, 143, 92, .10); --chip-down: rgba(214, 58, 47, .10); --chip-flat: rgba(165, 116, 26, .12);
     color-scheme: light;
   }
 }
