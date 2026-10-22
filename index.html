@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>籌碼雷達</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <div class="brand"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11.5" fill="none" stroke="var(--line)" stroke-width="1.5"/><circle cx="13" cy="13" r="6.5" fill="none" stroke="var(--line)" stroke-width="1.5"/><path d="M13 13 L13 1.5 A11.5 11.5 0 0 1 23.5 8.2 Z" fill="var(--accent)" opacity=".35"/><line x1="13" y1="13" x2="23.5" y2="8.2" stroke="var(--accent)" stroke-width="1.8"/><circle cx="18" cy="6.5" r="1.8" fill="var(--up)"/></svg> 籌碼雷達</div>
+    <span class="spacer"></span>
+    <button class="ghost" id="logout" type="button">登出</button>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-crypto" data-tab="crypto" aria-selected="true">加密貨幣</button>
+    <button class="tab" role="tab" id="tab-tw" data-tab="tw" aria-selected="false">台股</button>
+  </nav>
+</header>
+
+<main>
+  <div class="toolbar">
+    <input class="search" id="q" type="search" placeholder="搜尋代號或名稱，例如 BTC、2330、台積電" autocomplete="off">
+    <select class="select" id="sort" aria-label="排序"></select>
+    <button class="refresh" id="refresh" type="button">重新整理</button>
+    <div class="status" id="status" aria-live="polite">載入中…</div>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="依訊號篩選"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden></div>
+  <button class="ghost more" id="more" type="button" hidden>顯示更多</button>
+
+  <details class="guide" id="guide-crypto">
+    <summary>加密貨幣指標怎麼看</summary>
+    <dl>
+      <dt>持倉量 OI（24h／4h 變化）</dt>
+      <dd>市場上還沒平倉的合約總價值。價格漲＋持倉增加，代表有新資金進場做多；價格跌＋持倉增加，是新空單進場。持倉大減是有人在大量平倉或被爆倉。</dd>
+      <dt>大戶多空比</dt>
+      <dd>幣安保證金前 20% 帳戶的「多單部位 ÷ 空單部位」。大於 1 偏多。看的是它 24 小時內往哪個方向變。</dd>
+      <dt>散戶多空比</dt>
+      <dd>全部帳戶「做多人數 ÷ 做空人數」。常見的反向思路：大戶偏多但散戶偏空時，行情較容易往大戶那邊走。</dd>
+      <dt>資金費率</dt>
+      <dd>每 8 小時多空互付的費用。正值是多方付錢給空方，代表多單擁擠；高於 0.05% 要小心多殺多，低於 -0.03% 容易軋空。</dd>
+      <dt>主動買賣比</dt>
+      <dd>近 4 小時主動用市價買入量 ÷ 主動賣出量。大於 1.2 是買盤急著進場。</dd>
+      <dt>大戶動能分數</dt>
+      <dd>把持倉變化、大戶多空比變化、主動買賣力道加權成 0–100，只代表「動得多大」，方向要看紅綠訊號標籤。</dd>
+    </dl>
+  </details>
+  <details class="guide" id="guide-tw" hidden>
+    <summary>台股指標怎麼看</summary>
+    <dl>
+      <dt>外資／投信／自營商（張）</dt>
+      <dd>當天三大法人的買賣超張數。投信資金規模較小，連續買進常是中小型股的發動訊號；外資影響大型權值股。</dd>
+      <dt>連買／連賣天數</dt>
+      <dd>近 5 個交易日從最新一天往回數，連續買超或賣超幾天。「連 3」以上會標成訊號。</dd>
+      <dt>融資增減</dt>
+      <dd>散戶借錢買股的餘額變化。法人買超但融資減少，表示籌碼從散戶流向法人，稱為「籌碼集中」。</dd>
+      <dt>融券增減</dt>
+      <dd>借券放空的餘額變化。融券大增後若股價續強，可能出現軋空。</dd>
+      <dt>法人買超佔量</dt>
+      <dd>三大法人合計買超 ÷ 當日成交量。超過 20% 代表當天成交有很大比例是法人在買。</dd>
+      <dt>資料時間</dt>
+      <dd>證交所每天收盤後約 15:00–16:30 公布，盤中看到的是前一個交易日的資料。目前只涵蓋上市股票。</dd>
+    </dl>
+  </details>
+  <p class="disclaimer">籌碼只是線索，不保證漲跌。所有資料來自交易所公開資料，可能延遲或出錯，下單前請自行確認並控制風險。</p>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

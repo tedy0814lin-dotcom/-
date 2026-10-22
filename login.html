@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>登入｜籌碼雷達</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <form class="login" id="form" autocomplete="on">
+    <h1><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11.5" fill="none" stroke="var(--line)" stroke-width="1.5"/><circle cx="13" cy="13" r="6.5" fill="none" stroke="var(--line)" stroke-width="1.5"/><path d="M13 13 L13 1.5 A11.5 11.5 0 0 1 23.5 8.2 Z" fill="var(--accent)" opacity=".35"/><line x1="13" y1="13" x2="23.5" y2="8.2" stroke="var(--accent)" stroke-width="1.8"/><circle cx="18" cy="6.5" r="1.8" fill="var(--up)"/></svg> 籌碼雷達</h1>
+    <p>用多空比、持倉量、資金費率與法人買賣超，找出大戶在動的標的。</p>
+    <div class="field"><label for="u">帳號</label><input id="u" name="username" autocomplete="username" required></div>
+    <div class="field"><label for="p">密碼</label><input id="p" name="password" type="password" autocomplete="current-password" required></div>
+    <button class="refresh" id="btn" type="submit">登入</button>
+    <div class="err" id="err" role="alert"></div>
+  </form>
+</div>
+<script>
+const form = document.getElementById('form');
+const btn = document.getElementById('btn');
+const err = document.getElementById('err');
+fetch('/api/me').then(r => { if (r.ok) location.replace('/'); });
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  btn.disabled = true; btn.textContent = '登入中…'; err.textContent = '';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: form.username.value.trim(), password: form.password.value }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return location.replace('/');
+    err.textContent = j.error || '登入失敗，請再試一次';
+  } catch { err.textContent = '連不到伺服器，請檢查網路'; }
+  btn.disabled = false; btn.textContent = '登入';
+});
+</script>
+</body>
+</html>

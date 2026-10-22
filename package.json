@@ -1,0 +1,6 @@
+{
+  "name": "whale-radar",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
