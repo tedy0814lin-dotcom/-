@@ -188,7 +188,7 @@ function cryptoCard(r) {
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
-    ${catBlock(r, [...(r.patWhy || []), ...(r.coilWhy || [])])}
+    ${catBlock(r, [...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
   </article>`;
 }
 
