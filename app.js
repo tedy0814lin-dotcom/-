@@ -13,6 +13,10 @@ const TW_SIGNALS = {
   loBoxBreak:  { label: '低位小箱突破', dir: 1, alert: true },
   pullLong:    { label: '多頭回踩箱體反彈', dir: 1, alert: true },
   pullShort:   { label: '空頭反彈箱體遇壓', dir: -1, alert: true },
+  retestLong:  { label: '短箱突破回踩', dir: 1, alert: true },
+  retestShort: { label: '短箱跌破回抽', dir: -1, alert: true },
+  revRetestLong:  { label: '空頭短箱突破回踩・反轉', dir: 1, alert: true },
+  revRetestShort: { label: '多頭短箱跌破回抽・反轉', dir: -1, alert: true },
   boxLongPlus: { label: '多重籌碼確認', dir: 1, alert: true },
   boxShortPlus:{ label: '多重籌碼確認', dir: -1, alert: true },
   baseBreak:   { label: '築底突破', dir: 1, alert: true },
@@ -233,7 +237,7 @@ function sortRows(rows) {
     totalLow: (r) => -r.total,
     marginDrop: (r) => -(r.marginChg ?? 0),
     cvdLow: (r) => -(r.cvdRatio ?? 0),
-    patFirst: (r) => (r.signals.some((k) => ['baseBreak', 'botTurn', 'topTurn', 'topWarn', 'boxBreakDown', 'dBoxLong', 'dBoxShort', 'boxLong', 'boxShort', 'hiBoxBreak', 'loBoxBreak', 'pullLong', 'pullShort'].includes(k)) ? 1e9 : 0) + (r.score ?? Math.abs(r.total5 ?? 0)),
+    patFirst: (r) => (r.signals.some((k) => ['baseBreak', 'botTurn', 'topTurn', 'topWarn', 'boxBreakDown', 'dBoxLong', 'dBoxShort', 'boxLong', 'boxShort', 'hiBoxBreak', 'loBoxBreak', 'pullLong', 'pullShort', 'retestLong', 'retestShort', 'revRetestLong', 'revRetestShort'].includes(k)) ? 1e9 : 0) + (r.score ?? Math.abs(r.total5 ?? 0)),
     coilFirst: (r) => (r.signals.some((k) => k.startsWith('coil')) ? 1e9 : 0) + (r.score ?? r.ratio5 ?? 0),
   }[key] || ((r) => r[key] ?? -Infinity);
   return [...rows].sort((a, b) => get(b) - get(a));
