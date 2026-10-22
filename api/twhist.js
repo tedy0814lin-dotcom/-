@@ -2,6 +2,7 @@
 // 抓個股近 4 個月日 K，算日線 MACD 背離與型態（大漲大跌、箱型突破）。一次最多 8 檔（證交所會擋太快的請求）。
 import { requireUser, getJSON, sleep } from './_lib.js';
 import { divergence, pattern } from '../lib/indicators.js';
+import { structure, STRUCT_TW } from '../lib/structure.js';
 
 const TWSE = 'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
 const cache = new Map(); // code → { day, data }
@@ -23,14 +24,14 @@ function months(n) {
 
 async function history(code) {
   const bars = [];
-  for (const ym of months(4)) {
+  for (const ym of months(5)) {
     const j = await getJSON(`${TWSE}?date=${ym}&stockNo=${code}&response=json`);
     if (j.stat === 'OK' && Array.isArray(j.data)) {
       const f = j.fields.map(String);
-      const iH = f.findIndex((x) => x.includes('最高')), iL = f.findIndex((x) => x.includes('最低')), iC = f.findIndex((x) => x.includes('收盤'));
+      const iO = f.findIndex((x) => x.includes('開盤')), iH = f.findIndex((x) => x.includes('最高')), iL = f.findIndex((x) => x.includes('最低')), iC = f.findIndex((x) => x.includes('收盤'));
       const iV = f.findIndex((x) => x.includes('成交股數'));
       for (const r of j.data) {
-        const b = { h: num(r[iH]), l: num(r[iL]), c: num(r[iC]), v: iV >= 0 ? num(r[iV]) / 1000 : 0 };
+        const b = { o: iO >= 0 ? num(r[iO]) : undefined, h: num(r[iH]), l: num(r[iL]), c: num(r[iC]), v: iV >= 0 ? num(r[iV]) / 1000 : 0 };
         if (b.h > 0 && b.l > 0 && b.c > 0) bars.push(b);
       }
     }
@@ -53,6 +54,7 @@ export default async function handler(req, res) {
       const data = {
         ...divergence(bars, { lookback: 70, w: 3, recent: 12 }),
         pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
+        st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
         bars: bars.length,
       };
       cache.set(code, { day, data });
