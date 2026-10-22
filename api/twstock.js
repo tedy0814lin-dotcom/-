@@ -165,13 +165,14 @@ async function build() {
     // 築底吸籌：5 日股價幾乎沒動，法人卻累積買超、融資沒有增加
     const flat5 = r.chg5 != null && Math.abs(r.chg5) <= 3;
     const liquid = r.volume >= 1000;
-    if (flat5 && liquid && r.ratio5 >= 30 && (r.trustStreak >= 2 || r.foreignStreak >= 2) && !(r.marginChg > 0)) s.push('coilUp');
+    // 門檻用 2026/10/22 實際資料調過：5 日法人買超 ≥ 1 天成交量、投信連買 3 天、融資減少（約 1% 的股票會中）
+    if (flat5 && liquid && r.ratio5 >= 100 && r.trustStreak >= 3 && r.marginChg != null && r.marginChg < 0) s.push('coilUp');
     // 高檔出貨：5 日股價沒動，法人累積賣超、融資反而增加（散戶在接）
     // 逆勢偷買：股價 5 日跌超過 3%，法人卻連買、累積買超大 → 有人在低接
     if (liquid && r.chg5 != null && r.chg5 <= -3 && r.ratio5 >= 30 && (r.trustStreak >= 2 || r.foreignStreak >= 2)) s.push('stealthBuy');
     // 逢高偷賣：股價 5 日漲超過 3%，法人卻連賣 → 有人趁漲出貨
     if (liquid && r.chg5 != null && r.chg5 >= 3 && r.ratio5 <= -30 && (r.trustStreak <= -2 || r.foreignStreak <= -2)) s.push('stealthSell');
-    if (flat5 && liquid && r.ratio5 <= -30 && (r.trustStreak <= -2 || r.foreignStreak <= -2) && r.marginChg > 0) s.push('coilDown');
+    if (flat5 && liquid && r.ratio5 <= -100 && r.trustStreak <= -3 && r.marginChg > 0) s.push('coilDown');
     if (r.trustStreak >= 3) s.push('trustBuy');
     if (r.foreignStreak >= 3) s.push('foreignBuy');
     if (r.foreign > 0 && r.trust > 0) s.push('bothBuy');
