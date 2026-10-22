@@ -1,10 +1,20 @@
 // 籌碼雷達前端：讀 /api 的資料，畫成卡片，提供搜尋、排序、訊號篩選
-import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore } from '/lib/cryptoCore.js';
+import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { createTrustTab } from '/trustTab.js';
 
 const TW_SIGNALS = {
+  dBoxLong:    { label: '日線大箱底做多', dir: 1, alert: true },
+  dBoxShort:   { label: '日線大箱頂做空', dir: -1, alert: true },
+  boxLong:     { label: '短箱底做多', dir: 1, alert: true },
+  boxShort:    { label: '短箱頂做空', dir: -1, alert: true },
+  hiBoxBreak:  { label: '高位小箱跌破', dir: -1, alert: true },
+  loBoxBreak:  { label: '低位小箱突破', dir: 1, alert: true },
+  pullLong:    { label: '多頭回踩箱體反彈', dir: 1, alert: true },
+  pullShort:   { label: '空頭反彈箱體遇壓', dir: -1, alert: true },
+  boxLongPlus: { label: '多重籌碼確認', dir: 1, alert: true },
+  boxShortPlus:{ label: '多重籌碼確認', dir: -1, alert: true },
   baseBreak:   { label: '築底突破', dir: 1, alert: true },
   botTurn:     { label: '大跌後轉強啟動', dir: 1, alert: true },
   topTurn:     { label: '大漲後轉弱啟動', dir: -1, alert: true },
@@ -209,7 +219,7 @@ function twCard(r) {
       ${metric('融券增減', lotsFmt(r.shortChg), r.shortBal != null ? `餘 ${nf.format(r.shortBal)}` : '', cls(r.shortChg))}
     </div>
     <div class="spark-row"><span class="k">法人 5 日</span>${spark(r.trend, 'bars')}<span class="k num">${r.ratio == null ? '' : '佔量 ' + r.ratio.toFixed(0) + '%'}</span></div>
-    ${catBlock(r, r.patWhy)}
+    ${catBlock(r, [...(r.boxWhy || []), ...(r.patWhy || [])])}
   </article>`;
 }
 
@@ -223,7 +233,7 @@ function sortRows(rows) {
     totalLow: (r) => -r.total,
     marginDrop: (r) => -(r.marginChg ?? 0),
     cvdLow: (r) => -(r.cvdRatio ?? 0),
-    patFirst: (r) => (r.signals.some((k) => ['baseBreak', 'botTurn', 'topTurn', 'topWarn', 'boxBreakDown'].includes(k)) ? 1e9 : 0) + (r.score ?? Math.abs(r.total5 ?? 0)),
+    patFirst: (r) => (r.signals.some((k) => ['baseBreak', 'botTurn', 'topTurn', 'topWarn', 'boxBreakDown', 'dBoxLong', 'dBoxShort', 'boxLong', 'boxShort', 'hiBoxBreak', 'loBoxBreak', 'pullLong', 'pullShort'].includes(k)) ? 1e9 : 0) + (r.score ?? Math.abs(r.total5 ?? 0)),
     coilFirst: (r) => (r.signals.some((k) => k.startsWith('coil')) ? 1e9 : 0) + (r.score ?? r.ratio5 ?? 0),
   }[key] || ((r) => r[key] ?? -Infinity);
   return [...rows].sort((a, b) => get(b) - get(a));
@@ -416,7 +426,33 @@ function applyExchanges() {
 }
 
 // 台股型態訊號：日 K 型態 + 當天法人與融資確認
+// 台股的籌碼確認：資金流 = 法人今天買 / 投信連買 / 外資連買；輔助 = 融資減少、法人 5 日買超
+function confirmTw(r, dir) {
+  const flow = [], ctx = [];
+  if (dir > 0) {
+    if (r.total > 0) flow.push('法人今日買超');
+    if (r.trustStreak >= 2) flow.push(`投信連買 ${r.trustStreak} 天`);
+    if (r.foreignStreak >= 2) flow.push(`外資連買 ${r.foreignStreak} 天`);
+    if (r.marginChg != null && r.marginChg < 0) ctx.push('融資減少（籌碼集中）');
+    if (r.total5 > 0) ctx.push('法人 5 日買超');
+  } else {
+    if (r.total < 0) flow.push('法人今日賣超');
+    if (r.trustStreak <= -2) flow.push(`投信連賣 ${-r.trustStreak} 天`);
+    if (r.foreignStreak <= -2) flow.push(`外資連賣 ${-r.foreignStreak} 天`);
+    if (r.marginChg != null && r.marginChg > 0) ctx.push('融資增加（散戶在接）');
+    if (r.total5 < 0) ctx.push('法人 5 日賣超');
+  }
+  return { flow, ctx };
+}
+const TW_UNITS = { small: '短箱', big: '日線大箱', tr: '日線', lenUnit: 1, lenName: '天', bigLenName: '天' };
+
 function twPatternSignals(r) {
+  const boxOut = structSignals(r, r.div?.st, confirmTw, TW_UNITS);
+  const pat = twPatternOnly(r);
+  return [...boxOut, ...pat.filter((k) => !(k === 'baseBreak' && boxOut.includes('loBoxBreak')) && !(k === 'boxBreakDown' && boxOut.includes('hiBoxBreak')))];
+}
+
+function twPatternOnly(r) {
   const p = r.div?.pat;
   if (!p) return [];
   const out = [], why = [];
