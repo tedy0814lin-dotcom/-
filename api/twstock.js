@@ -66,6 +66,23 @@ async function fetchMargin(ymd) {
   return map;
 }
 
+// 某一天全部上市股票的收盤價（用來算 5 日漲跌）
+async function fetchCloses(ymd) {
+  const j = await getJSON(`${TWSE}/afterTrading/MI_INDEX?date=${ymd}&type=ALLBUT0999&response=json`);
+  const map = new Map();
+  if (j.stat !== 'OK') return map;
+  const tables = j.tables || [];
+  const t = tables.find((x) => Array.isArray(x.fields) && x.fields.some((f) => String(f).includes('證券代號')) && x.fields.some((f) => String(f).includes('收盤價')));
+  if (!t) return map;
+  const iCode = t.fields.findIndex((f) => String(f).includes('證券代號'));
+  const iClose = t.fields.findIndex((f) => String(f).includes('收盤價'));
+  for (const r of t.data || []) {
+    const c = num(r[iClose]);
+    if (c > 0) map.set(String(r[iCode]).trim(), c);
+  }
+  return map;
+}
+
 async function fetchPrices() {
   const arr = await getJSON('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
   const map = new Map();
@@ -92,6 +109,7 @@ function streak(values) {
 }
 
 export const TW_SIGNALS = {
+  coilUp: '築底吸籌', coilDown: '高檔出貨', stealthBuy: '法人逆勢偷買', stealthSell: '法人逢高偷賣',
   trustBuy: '投信連買', foreignBuy: '外資連買', bothBuy: '土洋同買',
   concentrate: '籌碼集中', bigRatio: '法人買超佔量大',
   trustSell: '投信連賣', foreignSell: '外資連賣', shortUp: '融券大增',
@@ -113,9 +131,11 @@ async function build() {
   }
   if (!days.length) throw new Error('證交所沒有回傳三大法人資料');
   const latest = days[0];
-  const [margin, prices] = await Promise.all([
+  const oldest = days[days.length - 1];
+  const [margin, prices, oldCloses] = await Promise.all([
     fetchMargin(latest.ymd).catch(() => new Map()),
     fetchPrices().catch(() => new Map()),
+    days.length > 1 ? fetchCloses(oldest.ymd).catch(() => new Map()) : Promise.resolve(new Map()),
   ]);
 
   const rows = [];
@@ -138,7 +158,20 @@ async function build() {
       trend: hist.map((h) => h.total).reverse(), // 舊 → 新
     };
     r.ratio = r.volume ? (r.total / r.volume) * 100 : null;
+    const base = oldCloses.get(code);
+    r.chg5 = base && r.close ? (r.close / base - 1) * 100 : null;
+    r.ratio5 = r.volume ? (r.total5 / r.volume) * 100 : null; // 5 日法人買賣超 ÷ 今日成交量
     const s = [];
+    // 築底吸籌：5 日股價幾乎沒動，法人卻累積買超、融資沒有增加
+    const flat5 = r.chg5 != null && Math.abs(r.chg5) <= 3;
+    const liquid = r.volume >= 1000;
+    if (flat5 && liquid && r.ratio5 >= 30 && (r.trustStreak >= 2 || r.foreignStreak >= 2) && !(r.marginChg > 0)) s.push('coilUp');
+    // 高檔出貨：5 日股價沒動，法人累積賣超、融資反而增加（散戶在接）
+    // 逆勢偷買：股價 5 日跌超過 3%，法人卻連買、累積買超大 → 有人在低接
+    if (liquid && r.chg5 != null && r.chg5 <= -3 && r.ratio5 >= 30 && (r.trustStreak >= 2 || r.foreignStreak >= 2)) s.push('stealthBuy');
+    // 逢高偷賣：股價 5 日漲超過 3%，法人卻連賣 → 有人趁漲出貨
+    if (liquid && r.chg5 != null && r.chg5 >= 3 && r.ratio5 <= -30 && (r.trustStreak <= -2 || r.foreignStreak <= -2)) s.push('stealthSell');
+    if (flat5 && liquid && r.ratio5 <= -30 && (r.trustStreak <= -2 || r.foreignStreak <= -2) && r.marginChg > 0) s.push('coilDown');
     if (r.trustStreak >= 3) s.push('trustBuy');
     if (r.foreignStreak >= 3) s.push('foreignBuy');
     if (r.foreign > 0 && r.trust > 0) s.push('bothBuy');
