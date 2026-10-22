@@ -217,7 +217,7 @@ function twCard(r) {
 function sortRows(rows) {
   const key = state.sort[state.tab];
   const get = {
-    cat: (r) => (r.catScore || 0) * 1000 + (r.score ?? Math.abs(r.total5 ?? 0) / 1e6),
+    cat: (r) => ({ 強: 3, 中: 2, 弱: 1 }[r.catLevel] || 0) * 1e5 + (r.catScore || 0) * 1000 + (r.score ?? Math.abs(r.total5 ?? 0) / 1e6),
     oiChgAbs: (r) => Math.abs(r.oiChg24 ?? 0),
     fundingLow: (r) => -(r.funding ?? 0),
     totalLow: (r) => -r.total,
@@ -285,7 +285,7 @@ function alertRows(tab) {
   if (!d) return [];
   const day = tab === 'crypto' ? new Date().toISOString().slice(0, 10) : d.date;
   return d.rows
-    .filter((r) => r.cat && r.catScore >= 4)
+    .filter((r) => r.cat && r.catLevel !== '弱')
     .map((r) => { const id = `${tab}:${r.symbol || r.code}:${r.cat}:${day}`; return { r, k: r.cat, id, isNew: !seen.has(id) }; })
     .sort((a, b) => b.isNew - a.isNew || b.r.catScore - a.r.catScore);
 }
