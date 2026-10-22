@@ -2,6 +2,14 @@
 import { buildCrypto, CRYPTO_SIGNALS } from '/lib/cryptoCore.js';
 
 const TW_SIGNALS = {
+  stealthBuy:  { label: '法人逆勢偷買', dir: 1, alert: true },
+  stealthSell: { label: '法人逢高偷賣', dir: -1, alert: true },
+  macdBull2:   { label: '日線 MACD 持續底背離', dir: 1, alert: true },
+  macdBear2:   { label: '日線 MACD 持續頂背離', dir: -1, alert: true },
+  macdBull:    { label: '日線 MACD 底背離', dir: 1 },
+  macdBear:    { label: '日線 MACD 頂背離', dir: -1 },
+  coilUp:      { label: '築底吸籌', dir: 1, alert: true },
+  coilDown:    { label: '高檔出貨', dir: -1, alert: true },
   trustBuy:    { label: '投信連買', dir: 1 },
   foreignBuy:  { label: '外資連買', dir: 1 },
   bothBuy:     { label: '土洋同買', dir: 1 },
@@ -15,17 +23,22 @@ const TW_SIGNALS = {
 const SORTS = {
   crypto: [
     ['score', '大戶動能分數'],
+    ['coilFirst', '蓄力警報優先'],
     ['oiChg24', '持倉 24h 增幅'],
     ['oiChgAbs', '持倉 24h 變化（絕對值）'],
     ['topLSChg', '大戶多空比上升'],
     ['funding', '資金費率（高→低）'],
     ['fundingLow', '資金費率（低→高）'],
+    ['cvdRatio', 'CVD 淨買入（佔成交額）'],
+    ['cvdLow', 'CVD 淨賣出（佔成交額）'],
     ['taker', '主動買賣比'],
     ['vol24', '24h 成交額'],
     ['chg24', '24h 漲幅'],
   ],
   tw: [
     ['total', '三大法人今日買超'],
+    ['coilFirst', '築底警報優先'],
+    ['ratio5', '法人 5 日買超佔量'],
     ['total5', '三大法人 5 日買超'],
     ['trust', '投信今日買超'],
     ['trustStreak', '投信連買天數'],
@@ -129,14 +142,16 @@ function cryptoCard(r) {
     </div>
     <div class="metrics">
       ${metric('持倉量', '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
-      ${metric('持倉 4h', signed(r.oiChg4, 1, '%'), '', cls(r.oiChg4))}
+      ${metric('24h 振幅', r.range24 == null ? '—' : r.range24.toFixed(1) + '%', `持倉 4h <span class="${cls(r.oiChg4)}">${signed(r.oiChg4, 1, '%')}</span>`)}
       ${metric('資金費率', signed(r.funding, 4, '%'), '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
       ${metric('大戶多空比', r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
       ${metric('散戶多空比', r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
-      ${metric('主動買賣比', r.taker == null ? '—' : r.taker.toFixed(2), '', r.taker >= 1.2 ? 'up' : r.taker <= 0.83 ? 'down' : '')}
+      ${metric('CVD 24h', r.cvd24 == null ? '—' : (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
     </div>
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
+    ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${tags(r.signals, CRYPTO_SIGNALS)}
+    ${r.coilWhy && r.coilWhy.length ? `<div class="why">${r.coilWhy.map(esc).join('・')}</div>` : ''}
   </article>`;
 }
 
@@ -145,7 +160,7 @@ function twCard(r) {
     <div class="card-head">
       <span class="sym num">${esc(r.code)}</span>
       <span class="sub">${esc(r.name)}</span>
-      <div class="price"><span class="p num">${r.close == null ? '—' : price(r.close)}</span><span class="c num ${cls(r.chg)}">${signed(r.chg, 2, '%')}</span></div>
+      <div class="price"><span class="p num">${r.close == null ? '—' : price(r.close)}</span><span class="c num ${cls(r.chg)}">${signed(r.chg, 2, '%')}</span><span class="c num ${cls(r.chg5)}">5 日 ${signed(r.chg5, 1, '%')}</span></div>
     </div>
     <div class="metrics">
       ${metric('外資', lotsFmt(r.foreign), streakFmt(r.foreignStreak), cls(r.foreign))}
@@ -168,6 +183,8 @@ function sortRows(rows) {
     fundingLow: (r) => -(r.funding ?? 0),
     totalLow: (r) => -r.total,
     marginDrop: (r) => -(r.marginChg ?? 0),
+    cvdLow: (r) => -(r.cvdRatio ?? 0),
+    coilFirst: (r) => (r.signals.some((k) => k.startsWith('coil')) ? 1e9 : 0) + (r.score ?? r.ratio5 ?? 0),
   }[key] || ((r) => r[key] ?? -Infinity);
   return [...rows].sort((a, b) => get(b) - get(a));
 }
@@ -211,6 +228,67 @@ function renderStatus() {
   el.textContent = parts.join('・');
 }
 
+// ---------- 蓄力警報 ----------
+const ALERT_KEY = 'wr_seen_alerts';
+function loadSeen() { try { return new Set(JSON.parse(localStorage.getItem(ALERT_KEY) || '[]')); } catch { return new Set(); } }
+function saveSeen(set) { try { localStorage.setItem(ALERT_KEY, JSON.stringify([...set].slice(-400))); } catch {} }
+let seen = loadSeen();
+
+function alertRows(tab) {
+  const d = state.data[tab];
+  if (!d) return [];
+  const dict = tab === 'crypto' ? CRYPTO_SIGNALS : TW_SIGNALS;
+  const day = tab === 'crypto' ? new Date().toISOString().slice(0, 10) : d.date;
+  const out = [];
+  for (const r of d.rows) {
+    for (const k of r.signals) {
+      if (!dict[k]?.alert) continue;
+      const id = `${tab}:${r.symbol || r.code}:${k}:${day}`;
+      out.push({ r, k, id, isNew: !seen.has(id) });
+    }
+  }
+  return out.sort((a, b) => b.isNew - a.isNew || dict[b.k].dir - dict[a.k].dir);
+}
+
+function renderAlerts() {
+  const list = alertRows(state.tab);
+  const el = $('alerts');
+  const dict = state.tab === 'crypto' ? CRYPTO_SIGNALS : TW_SIGNALS;
+  if (!state.data[state.tab]) { el.hidden = true; return; }
+  el.hidden = false;
+  const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+  const nb = perm === 'default' ? '<button class="ghost" id="notify" type="button">開啟通知</button>'
+    : perm === 'granted' ? '<span class="muted small">通知已開啟</span>' : '';
+  const items = list.slice(0, 12).map(({ r, k, isNew }) => {
+    const s = dict[k]; const c = s.dir > 0 ? 'up' : s.dir < 0 ? 'down' : '';
+    const name = r.base || `${r.code} ${r.name}`;
+    const move = r.chg24 != null ? `24h ${signed(r.chg24, 1, '%')}・持倉 ${signed(r.oiChg24, 1, '%')}` : `5 日 ${signed(r.chg5, 1, '%')}・法人 5 日 ${lotsFmt(r.total5)} 張`;
+    return `<li class="alert-row">${isNew ? '<span class="dot" title="新出現"></span>' : ''}<b>${esc(name)}</b><span class="tag ${c}">${s.label}</span><span class="muted num small">${move}</span></li>`;
+  }).join('');
+  el.innerHTML = `<div class="alerts-head"><strong>${state.tab === 'crypto' ? '蓄力警報' : '築底警報'}</strong><span class="muted small">價格還沒動、籌碼先動的標的</span><span class="spacer"></span>${nb}</div>
+    ${list.length ? `<ul class="alert-list">${items}</ul>${list.length > 12 ? `<div class="muted small">還有 ${list.length - 12} 檔，點下方「${state.tab === 'crypto' ? '築底蓄力' : '築底吸籌'}」標籤看全部</div>` : ''}`
+      : '<div class="muted small">目前沒有符合條件的標的。條件很嚴格，沒有訊號是常態。</div>'}`;
+  const btn = document.getElementById('notify');
+  if (btn) btn.onclick = async () => { try { await Notification.requestPermission(); } catch {} renderAlerts(); };
+}
+
+function notifyNew(tab) {
+  const fresh = alertRows(tab).filter((a) => a.isNew);
+  if (!fresh.length) return;
+  const dict = tab === 'crypto' ? CRYPTO_SIGNALS : TW_SIGNALS;
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const body = fresh.slice(0, 5).map(({ r, k }) => `${r.base || r.code + ' ' + r.name}：${dict[k].label}`).join('\n');
+    try { new Notification(`籌碼雷達：${fresh.length} 個新警報`, { body, tag: 'wr-' + tab }); } catch {}
+  }
+  document.title = `(${fresh.length}) 籌碼雷達`;
+}
+
+function markSeen() {
+  for (const a of alertRows(state.tab)) seen.add(a.id);
+  saveSeen(seen);
+  document.title = '籌碼雷達';
+}
+
 function render() {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === state.tab)));
   $('guide-crypto').hidden = state.tab !== 'crypto';
@@ -220,6 +298,7 @@ function render() {
   $('refresh').disabled = state.loading[state.tab];
   $('refresh').textContent = state.loading[state.tab] ? '更新中…' : '重新整理';
   renderStatus();
+  renderAlerts();
   renderChips();
   const rows = visibleRows();
   const shown = rows.slice(0, state.limit);
@@ -257,6 +336,33 @@ async function cryptoFromBrowser() {
   return { ...d, viaBrowser: true };
 }
 
+// 台股 MACD 背離：只對有籌碼訊號或法人進出最大的股票抓日 K（避免被證交所擋）
+async function enrichTwMacd() {
+  const d = state.data.tw;
+  if (!d || d.macdDone) return;
+  d.macdDone = true;
+  const liquid = d.rows.filter((r) => r.volume >= 1000);
+  const pick = new Set([
+    ...liquid.filter((r) => r.signals.some((k) => TW_SIGNALS[k]?.alert)).map((r) => r.code),
+    ...[...liquid].sort((a, b) => Math.abs(b.total5) - Math.abs(a.total5)).slice(0, 16).map((r) => r.code),
+  ]);
+  const codes = [...pick].slice(0, 24);
+  for (let i = 0; i < codes.length; i += 8) {
+    try {
+      const res = await api(`/api/twhist?codes=${codes.slice(i, i + 8).join(',')}`);
+      for (const r of d.rows) {
+        const m = res[r.code];
+        if (!m || m.error) continue;
+        r.div = m;
+        if (m.bull >= 2) r.signals.push('macdBull2'); else if (m.bull === 1) r.signals.push('macdBull');
+        if (m.bear >= 2) r.signals.push('macdBear2'); else if (m.bear === 1) r.signals.push('macdBear');
+      }
+      if (state.tab === 'tw') render();
+    } catch { break; }
+  }
+  notifyNew('tw');
+}
+
 async function load(tab, refresh = false) {
   if (state.loading[tab]) return;
   state.loading[tab] = true; state.error[tab] = '';
@@ -271,11 +377,13 @@ async function load(tab, refresh = false) {
       }
     } else {
       state.data.tw = await api(`/api/twstock${refresh ? '?refresh=1' : ''}`);
+      setTimeout(enrichTwMacd, 0);
     }
   } catch (e) {
     state.error[tab] = e.message === '未登入' ? '' : `更新失敗：${e.message}`;
   } finally {
     state.loading[tab] = false;
+    if (state.data[tab]) notifyNew(tab);
     if (tab === state.tab) render();
   }
 }
@@ -296,6 +404,8 @@ $('chips').addEventListener('click', (e) => {
 $('q').addEventListener('input', (e) => { state.q = e.target.value; state.limit = 60; render(); });
 $('sort').addEventListener('change', (e) => { state.sort[state.tab] = e.target.value; savePrefs(); render(); });
 $('refresh').addEventListener('click', () => load(state.tab, true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(markSeen, 4000); });
+$('alerts').addEventListener('click', (e) => { if (e.target.closest('.alert-row')) markSeen(); });
 $('more').addEventListener('click', () => { state.limit += 60; render(); });
 $('logout').addEventListener('click', async () => {
   await fetch('/api/logout', { method: 'POST' }).catch(() => {});

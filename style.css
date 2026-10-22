@@ -95,6 +95,17 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--chip-flat); }
 .chip[aria-pressed="true"] b { color: var(--accent); }
 
+/* ---------- 警報 ---------- */
+.alerts { margin-top: 12px; background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 8px; }
+.alerts-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.alerts-head strong { color: var(--accent); }
+.alert-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.alert-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: default; min-width: 0; }
+.alert-row b { font-weight: 900; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--up); flex: none; }
+.small { font-size: 12.5px; }
+.why { font-size: 12px; color: var(--muted); }
+
 /* ---------- 卡片 ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
 .card {
