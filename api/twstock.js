@@ -294,6 +294,14 @@ async function build() {
   };
 }
 
+// 有快取就用快取（警報排程用）
+export async function twData() {
+  if (cache.data && Date.now() - cache.at < TTL) return cache.data;
+  const data = await build();
+  cache = { at: Date.now(), data };
+  return data;
+}
+
 export default async function handler(req, res) {
   if (!requireUser(req, res)) return;
   res.setHeader('Cache-Control', 'private, no-store');

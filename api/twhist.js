@@ -57,29 +57,30 @@ async function history(code) {
   return bars;
 }
 
+// 一檔股票的日線分析（警報排程也會用）
+export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)) {
+  const hit = cache.get(code);
+  if (hit && hit.day === day) return hit.data;
+  const bars = await history(code);
+  // 日線：20 日箱型、往回 60 日找大漲大跌
+  const data = {
+    ...divergence(bars, { lookback: 70, w: 3, recent: 12 }),
+    pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
+    st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
+    choch: choch(bars), // 台股一天交易 4.5 小時，日 K ≈ 一根 4H
+    bars: bars.length,
+  };
+  cache.set(code, { day, data });
+  return data;
+}
+
 export default async function handler(req, res) {
   if (!requireUser(req, res)) return;
   const codes = String(req.query.codes || '').split(',').map((c) => c.trim()).filter((c) => /^\d{4}$/.test(c)).slice(0, 8);
   const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const out = {};
   for (const code of codes) {
-    const hit = cache.get(code);
-    if (hit && hit.day === day) { out[code] = hit.data; continue; }
-    try {
-      const bars = await history(code);
-      // 日線：20 日箱型、往回 60 日找大漲大跌
-      const data = {
-        ...divergence(bars, { lookback: 70, w: 3, recent: 12 }),
-        pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
-        st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
-        choch: choch(bars), // 台股一天交易 4.5 小時，日 K ≈ 一根 4H
-        bars: bars.length,
-      };
-      cache.set(code, { day, data });
-      out[code] = data;
-    } catch (e) {
-      out[code] = { error: e.message };
-    }
+    try { out[code] = await histData(code, day); } catch (e) { out[code] = { error: e.message }; }
   }
   res.setHeader('Cache-Control', 'private, no-store');
   res.status(200).json(out);
