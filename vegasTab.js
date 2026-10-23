@@ -4,30 +4,43 @@ const TFN = { '15m': '15 分', '1h': '1 小時', '4h': '4 小時', '1d': '日線
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(3) : v.toPrecision(4));
 
-// 等級：確認 = 中；大一級時區剛好在通道裡（同方向）= 強；15 分單獨確認 = 當沖；風報比 < 1 或逆大週期 = 弱
+// 訊號分數 0–100：步驟（確認 50 / 回踩完成 35 / 突破 EMA12 25 / 碰通道 10）
+// ＋ 大一級時區在通道 15、同方向 8、逆向 −20 ＋ 這檔這個時區歷史勝率 ±20 ＋ 其他時區同方向 8 ＋ 風報比 ≥2、主動買賣、帶量各 5
+const BASE = { 確認: 50, 回踩完成: 35, 已突破EMA12: 25, 碰通道: 10 };
 function grade(r, m) {
   const tfs = TFS[m];
   let best = null;
   tfs.forEach((tf, k) => {
     const v = r.data?.[tf];
     if (!v?.now) return;
-    const n = v.now, up = r.data[tfs[k + 1]];
-    let lv = 0, notes = [];
+    const n = v.now, up = r.data[tfs[k + 1]], notes = [];
+    let sc = BASE[n.status] || 0;
+    if (up && up.inTunnel === n.dir) { sc += 15; notes.push(`${TFN[tfs[k + 1]]}也在通道`); }
+    else if (up && up.trend === n.dir) sc += 8;
+    if (up && up.trend === -n.dir) { sc -= 20; notes.push(`逆${TFN[tfs[k + 1]]}趨勢`); }
+    const s = v.stats;
+    if (s && s.n >= 4 && s.winRate != null) { sc += Math.max(-20, Math.min(20, (s.winRate - 50) * 0.5)); if (s.winRate >= 65) notes.push(`這個時區勝率 ${s.winRate}%`); }
+    const others = tfs.filter((t) => t !== tf && r.data[t]?.trend === n.dir).length;
+    sc += others * 8;
     if (n.status === '確認') {
-      lv = 2;
-      if (up && up.inTunnel === n.dir) { lv = 3; notes.push(`${TFN[tfs[k + 1]]}剛好在通道`); }
-      if (up && up.trend === -n.dir) { lv = 1; notes.push(`逆${TFN[tfs[k + 1]]}趨勢`); }
-      if (n.rr < 1) { lv = 1; notes.push('風報比不足'); }
-      if (tf === '15m' && lv === 2) notes.push('當沖');
-    } else {
-      // 還沒確認也先提醒：碰通道 → 突破 EMA12 → 回踩完成，一步一步升級
-      lv = n.status === '回踩完成' ? 0.8 : n.status === '已突破EMA12' ? 0.6 : 0.3;
-      if (up && up.inTunnel === n.dir) { lv += 0.1; notes.push(`${TFN[tfs[k + 1]]}也在通道`); }
+      if (n.rr >= 2) sc += 5;
+      if (n.rr < 1) { sc -= 25; notes.push('風報比不足'); }
+      if (n.flow) sc += 5;
+      if (n.volUp) sc += 5;
+      if (tf === '15m') notes.push('當沖');
     }
-    if (!best || lv > best.lv) best = { lv, tf, n, notes };
+    sc = Math.max(0, Math.min(100, Math.round(sc)));
+    if (!best || sc > best.sc) best = { sc, tf, n, notes };
   });
+  if (best) best.group = best.n.status === '確認' && best.sc >= 70 ? 'hot' : best.n.status === '確認' || best.n.status === '回踩完成' ? 'ready' : best.sc >= 40 ? 'watch' : 'far';
   return best;
 }
+const GROUPS = {
+  hot: ['強訊號', '已確認、多條件同時成立，可以考慮進場'],
+  ready: ['準備進場', '回踩完成等突破高點，或已確認但條件較少'],
+  watch: ['注意', '剛突破 EMA12 或碰通道，而且大週期／歷史勝率支持'],
+  far: ['觀察', '剛碰通道，還早'],
+};
 
 // 這檔哪個時區、哪條通道比較有效（歷史統計）
 function bestTf(r, m) {
@@ -66,7 +79,7 @@ export function createVegasTab({ api, el }) {
     const g = grade(r, m), bt = bestTf(r, m);
     const n = g?.n;
     const dirTxt = n ? (n.dir > 0 ? '做多' : '做空') : '';
-    const lvTxt = !g ? '' : g.lv >= 3 ? '強' : g.lv >= 2 ? '中' : g.lv >= 1 ? '弱' : g.lv >= 0.8 ? '等突破高點' : g.lv >= 0.6 ? '有機會' : '碰通道';
+    const lvTxt = !g ? '' : `${GROUPS[g.group][0]} ${g.sc}分・${TFN[g.tf]}${g.n.status}`;
     const badge = n ? `<span class="cat ${n.dir > 0 ? 'cat-long' : 'cat-short'}">${dirTxt} <b>${lvTxt}</b></span>` : '';
     const rowsHtml = TFS[m].map((tf) => {
       const v = r.data?.[tf];
@@ -91,22 +104,34 @@ export function createVegasTab({ api, el }) {
 
   function render() {
     const m = st.m, rows = st.rows[m] || [];
-    const graded = rows.filter((r) => r.data).map((r) => ({ r, g: grade(r, m) }));
-    const shown = graded.filter((x) => st.showAll || (x.g && x.g.lv >= 0.3)).sort((a, b) => (b.g?.lv || 0) - (a.g?.lv || 0));
+    const graded = rows.filter((r) => r.data).map((r) => ({ r, g: grade(r, m) })).filter((x) => x.g);
+    const cnt = { hot: 0, ready: 0, watch: 0, far: 0 };
+    graded.forEach((x) => cnt[x.g.group]++);
+    const shown = graded.filter((x) => (st.group ? x.g.group === st.group : st.showAll || x.g.group !== 'far') && (!st.dir || x.g.n.dir === st.dir))
+      .sort((a, b) => b.g.sc - a.g.sc);
+    let html = '', cur = null;
+    for (const x of shown) {
+      if (x.g.group !== cur) { cur = x.g.group; html += `<h3 class="vg-h">${GROUPS[cur][0]}（${cnt[cur]}）<span class="muted"> ${GROUPS[cur][1]}</span></h3>`; }
+      html += card(x.r, m);
+    }
+    const chip = (k) => `<button class="chip" data-g="${k}" aria-pressed="${st.group === k}">${GROUPS[k][0]} <b>${cnt[k]}</b></button>`;
     el.innerHTML = `<div class="toolbar">
         <button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密（15分/1H/4H）</button>
         <button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股（15分/1H/日線）</button>
-        <button class="chip" data-all aria-pressed="${st.showAll}">顯示全部</button>
         <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中 ' + st.progress : '重新整理'}</button></div>
+      <div class="toolbar">${['hot', 'ready', 'watch', 'far'].map(chip).join('')}
+        <button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button>
+        <button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
-      <p class="muted">${m === 'tw' ? '股價 10–200 元、成交值前 120 名。分時資料來自 Yahoo 財經，約延遲 20 分鐘。' : '幣安成交額前 40 名永續合約。'}只要碰到通道、突破 EMA12、回踩完成、確認任何一步就會列出來，越後面的步驟排越前面。</p>
-      <div class="grid">${shown.map((x) => card(x.r, m)).join('') || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
+      <p class="muted">${m === 'tw' ? '股價 10–200 元、成交值前 120 名。分時資料來自 Yahoo 財經，約延遲 20 分鐘。' : '幣安成交額前 80 名永續合約。'}依分數由高到低排序；「觀察」預設收起，點上面的按鈕可以只看某一類。</p>
+      <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}.vg-h .muted{font-size:12.5px;font-weight:400}</style><div class="grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
   }
 
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.m) { st.m = b.dataset.m; render(); if (!st.loaded[st.m]) load(); }
-    else if ('all' in b.dataset) { st.showAll = !st.showAll; render(); }
+    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; render(); }
+    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
     else if ('reload' in b.dataset) load(true);
   });
   return { load, render, get loaded() { return !!st.loaded[st.m]; } };
