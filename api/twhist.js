@@ -3,6 +3,7 @@
 import { requireUser, getJSON, sleep } from './_lib.js';
 import { divergence, pattern } from '../lib/indicators.js';
 import { structure, STRUCT_TW, choch, harmonic } from '../lib/structure.js';
+import { harmonicPending } from '../lib/harmonic.js';
 
 const TWSE = 'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
 const cache = new Map(); // code → { day, data }
@@ -68,7 +69,8 @@ export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toI
     pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
     st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
     choch: choch(bars), // 台股一天交易 4.5 小時，日 K ≈ 一根 4H
-    harm: harmonic(bars, { ema: 60 }), // 諧波型態（台股日線只有約 100 根，逆勢過濾用 60 日均線）
+    harm: harmonic(bars), // 諧波型態（已完成）
+    harmPend: harmonicPending(bars), // 諧波型態（未成形，等待 D 點）
     bars: bars.length,
   };
   cache.set(code, { day, data });
