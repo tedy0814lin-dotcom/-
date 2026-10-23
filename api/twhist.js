@@ -2,7 +2,7 @@
 // 抓個股近 4 個月日 K，算日線 MACD 背離與型態（大漲大跌、箱型突破）。一次最多 8 檔（證交所會擋太快的請求）。
 import { requireUser, getJSON, sleep } from './_lib.js';
 import { divergence, pattern } from '../lib/indicators.js';
-import { structure, STRUCT_TW } from '../lib/structure.js';
+import { structure, STRUCT_TW, choch } from '../lib/structure.js';
 
 const TWSE = 'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
 const cache = new Map(); // code → { day, data }
@@ -72,6 +72,7 @@ export default async function handler(req, res) {
         ...divergence(bars, { lookback: 70, w: 3, recent: 12 }),
         pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
         st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
+        choch: choch(bars), // 台股一天交易 4.5 小時，日 K ≈ 一根 4H
         bars: bars.length,
       };
       cache.set(code, { day, data });
