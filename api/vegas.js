@@ -13,7 +13,7 @@ const pick = (row, tests) => { for (const k of Object.keys(row)) if (tests.some(
 async function listCrypto() {
   const [t, info] = await Promise.all([getJSON(`${BN}/fapi/v1/ticker/24hr`), getJSON(`${BN}/fapi/v1/exchangeInfo`)]);
   const ok = new Set(info.symbols.filter((x) => x.contractType === 'PERPETUAL' && x.quoteAsset === 'USDT' && x.status === 'TRADING').map((x) => x.symbol));
-  return t.filter((x) => ok.has(x.symbol)).sort((a, b) => b.quoteVolume - a.quoteVolume).slice(0, 40)
+  return t.filter((x) => ok.has(x.symbol)).sort((a, b) => b.quoteVolume - a.quoteVolume).slice(0, 80)
     .map((x) => ({ s: x.symbol, name: x.symbol.replace(/USDT$/, '') }));
 }
 
