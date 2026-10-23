@@ -33,6 +33,8 @@ function pick(rows, dict, mkt, min = 3) {
       price: r.price ?? r.close ?? null,
       why: r.catWhy.slice(0, 4),
       choch: (r.chochWhy || []).slice(0, 4),
+      // 進場／停損／目標：優先用 CHoCH 的計畫，沒有就用諧波或箱體的
+      plan: [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.boxWhy || [])].filter((x) => /^(進場|停損|目標|風報比)/.test(x)).slice(0, 4),
     });
   }
   return out;
