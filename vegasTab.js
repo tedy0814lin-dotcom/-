@@ -35,6 +35,7 @@ function grade(r, m) {
   if (best) best.group = best.n.status === '確認' && best.sc >= 70 ? 'hot' : best.n.status === '確認' || best.n.status === '回踩完成' ? 'ready' : best.sc >= 40 ? 'watch' : 'far';
   return best;
 }
+const GO = { hot: 0, ready: 1, watch: 2, far: 3 };
 const GROUPS = {
   hot: ['強訊號', '已確認、多條件同時成立，可以考慮進場'],
   ready: ['準備進場', '回踩完成等突破高點，或已確認但條件較少'],
@@ -108,7 +109,7 @@ export function createVegasTab({ api, el }) {
     const cnt = { hot: 0, ready: 0, watch: 0, far: 0 };
     graded.forEach((x) => cnt[x.g.group]++);
     const shown = graded.filter((x) => (st.group ? x.g.group === st.group : st.showAll || x.g.group !== 'far') && (!st.dir || x.g.n.dir === st.dir))
-      .sort((a, b) => b.g.sc - a.g.sc);
+      .sort((a, b) => GO[a.g.group] - GO[b.g.group] || b.g.sc - a.g.sc);
     let html = '', cur = null;
     for (const x of shown) {
       if (x.g.group !== cur) { cur = x.g.group; html += `<h3 class="vg-h">${GROUPS[cur][0]}（${cnt[cur]}）<span class="muted"> ${GROUPS[cur][1]}</span></h3>`; }
