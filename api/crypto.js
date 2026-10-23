@@ -8,7 +8,7 @@ let cache = { at: 0, n: 0, data: null };
 export default async function handler(req, res) {
   if (!requireUser(req, res)) return;
   res.setHeader('Cache-Control', 'private, no-store');
-  const n = Math.min(Math.max(parseInt(req.query.n, 10) || 200, 10), 200);
+  const n = Math.min(Math.max(parseInt(req.query.n, 10) || 120, 10), 200);
   const fresh = cache.data && cache.n === n && Date.now() - cache.at < TTL;
   if (fresh && req.query.refresh !== '1') return res.status(200).json({ ...cache.data, cached: true });
   try {
