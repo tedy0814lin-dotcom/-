@@ -29,6 +29,7 @@ async function yahooDaily(code) {
   if (!q) return [];
   const bars = [];
   for (let i = 0; i < (r.timestamp || []).length; i++) {
+    if (r.timestamp[i] + 4.5 * 3600 > Date.now() / 1000) continue; // 今天還沒收盤的不算
     const b = { o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: (q.volume[i] || 0) / 1000 };
     if (b.h > 0 && b.l > 0 && b.c > 0) bars.push(b);
   }

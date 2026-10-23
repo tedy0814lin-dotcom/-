@@ -73,13 +73,25 @@ export function safeEqual(a, b) {
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function getJSON(url, { timeout = 9000 } = {}) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (whale-radar)', Accept: 'application/json' },
-    signal: AbortSignal.timeout(timeout),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}：${new URL(url).pathname}`);
-  return res.json();
+// 抓 JSON；網路錯誤、被限流（429）或對方伺服器錯誤（5xx）會自動重試 2 次
+export async function getJSON(url, { timeout = 9000, retries = 2 } = {}) {
+  let err;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (whale-radar)', Accept: 'application/json' },
+        signal: AbortSignal.timeout(timeout),
+      });
+      if (res.ok) return await res.json();
+      err = new Error(`HTTP ${res.status}：${new URL(url).pathname}`);
+      if (res.status !== 429 && res.status < 500) throw err; // 404 這類不用重試
+    } catch (e) {
+      err = e;
+      if (/HTTP 4(?!29)/.test(e.message)) throw e;
+    }
+    if (i < retries) await sleep(600 * (i + 1));
+  }
+  throw err;
 }
 
 // 一次最多同時跑 limit 個請求，避免被交易所限流

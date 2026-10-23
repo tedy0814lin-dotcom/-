@@ -18,7 +18,7 @@ async function listCrypto() {
 }
 
 // 台股：股價 10–200 元、成交值前 120 名（上市＋上櫃，排除 ETF / 權證）
-async function listTw() {
+async function listTw(all = false) {
   const [twse, tpex] = await Promise.all([
     getJSON('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', { timeout: 15000 }).catch(() => []),
     getJSON('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', { timeout: 15000 }).catch(() => []),
@@ -30,17 +30,17 @@ async function listTw() {
       if (!/^[1-9]\d{3}$/.test(code)) continue;
       const close = num(pick(r, [/^ClosingPrice$/i, /^Close$/i]));
       const value = num(pick(r, [/^TradeValue$/i, /TransactionAmount/i, /TradingValue/i]));
-      if (!close || close < 10 || close > 200 || !value) continue;
+      if (!all && (!close || close < 10 || close > 200 || !value)) continue;
       rows.push({ s: code + sfx, name: `${code} ${String(pick(r, [/^Name$/i, /CompanyName/i]) ?? '').trim()}`, value });
     }
   }
-  return rows.sort((a, b) => b.value - a.value).slice(0, 120).map(({ s, name }) => ({ s, name }));
+  return rows.sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, all ? 5000 : 120).map(({ s, name }) => ({ s, name }));
 }
 
 async function crypto(sym) {
   const tf = async (iv) => {
     const k = await getJSON(`${BN}/fapi/v1/klines?symbol=${sym}&interval=${iv}&limit=1500`, { timeout: 12000 });
-    return vegas(k.map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[7], d: 2 * +x[10] - +x[7] })));
+    return vegas(k.slice(0, -1).map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[7], d: 2 * +x[10] - +x[7] })));
   };
   const [m15, h1, h4] = await Promise.all([tf('15m'), tf('1h'), tf('4h')]);
   return { '15m': m15, '1h': h1, '4h': h4 };
@@ -52,7 +52,11 @@ async function yahoo(sym, interval, range) {
   const q = r?.indicators?.quote?.[0];
   if (!q) throw new Error('Yahoo 沒有資料');
   const bars = [];
+  // 只用已經收盤的 K 棒：分 K 看開始時間＋週期；日 K 要過 13:30 收盤
+  const span = { '15m': 900, '60m': 3600, '1d': 4.5 * 3600 }[interval] || 0;
+  const now = Date.now() / 1000;
   for (let i = 0; i < (r.timestamp || []).length; i++) {
+    if (r.timestamp[i] + span > now) continue;
     const b = { o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] || 0 };
     if (b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0) bars.push(b);
   }
@@ -71,7 +75,7 @@ export default async function handler(req, res) {
     const list = req.query.list;
     if (list) {
       const k = 'list:' + list;
-      const data = hit(k, 30 * 60e3) || (list === 'tw' ? await listTw() : await listCrypto());
+      const data = hit(k, 30 * 60e3) || (list === 'tw' ? await listTw() : list === 'twall' ? await listTw(true) : await listCrypto());
       cache.set(k, { at: Date.now(), data });
       return res.status(200).json(data);
     }
