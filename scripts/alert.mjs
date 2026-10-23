@@ -81,7 +81,8 @@ if (fresh.length) {
     '【' + tag(x) + '】' + x.name + price(x),
     x.cat + '・' + x.level,
     ...x.why.map((w) => '・' + w),
-    ...(x.choch[3] ? [x.choch[3]] : []),
+    ...x.choch.filter((w) => w.startsWith('★')),
+    ...(x.plan || []),
   ].join('\n');
   await push('🔥 籌碼雷達｜非常強 ' + fresh.length + ' 個\n\n' + fresh.map(fmt).join('\n\n') + '\n\n' + SITE);
   for (const x of fresh) state[x.id] = now;
