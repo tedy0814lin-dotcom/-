@@ -1,5 +1,5 @@
 // 籌碼雷達前端：讀 /api 的資料，畫成卡片，提供搜尋、排序、訊號篩選
-import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals, chochWhy } from '/lib/cryptoCore.js';
+import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { createVegasTab } from '/vegasTab.js';
@@ -9,6 +9,8 @@ const TW_SIGNALS = {
   chochDownClean: { label: '上漲中無深回調', dir: -1, alert: true },
   chochUp:     { label: '下跌後首次 CHoCH 轉強', dir: 1, alert: true },
   chochUpClean: { label: '下跌中無深反彈', dir: 1, alert: true },
+  chochBosUp:   { label: 'CHoCH 後第二次突破（趨勢延續）', dir: 1, alert: true },
+  chochBosDown: { label: 'CHoCH 後第二次跌破（趨勢延續）', dir: -1, alert: true },
   dBoxLong:    { label: '日線大箱底做多', dir: 1, alert: true },
   dBoxShort:   { label: '日線大箱頂做空', dir: -1, alert: true },
   boxLong:     { label: '短箱底做多', dir: 1, alert: true },
@@ -459,7 +461,7 @@ function twPatternSignals(r) {
   const pat = twPatternOnly(r);
   const c = r.div?.choch;
   r.chochWhy = c ? chochWhy(c, '日線（台股一天約等於一根 4H）') : null;
-  if (c) boxOut.unshift(...(c.dir > 0 ? ['chochUp', 'chochUpClean'] : ['chochDown', 'chochDownClean']));
+  if (c) boxOut.unshift(...chochKeys(c));
   return [...boxOut, ...pat.filter((k) => !(k === 'baseBreak' && boxOut.includes('loBoxBreak')) && !(k === 'boxBreakDown' && boxOut.includes('hiBoxBreak')))];
 }
 
