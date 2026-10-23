@@ -108,6 +108,90 @@ function streak(values) {
   return n * sign;
 }
 
+// ---------- 上櫃（櫃買中心）----------
+const pickKey = (row, re) => Object.keys(row).find((k) => re.test(k));
+const ymdSlash = (ymd) => `${ymd.slice(0, 4)}/${ymd.slice(4, 6)}/${ymd.slice(6, 8)}`;
+
+// 上櫃三大法人：依欄位名稱找（外資、投信、自營商、合計），找不到用舊版固定欄位
+async function tpexInsti(ymd) {
+  const build = (fields, rows) => {
+    const f = (fields || []).map((x) => String(x).replace(/\s/g, ''));
+    const find = (test, fb) => { const all = f.map((x, i) => [x, i]).filter(([x]) => test(x)); const tot = all.find(([x]) => x.includes('合計')); return (tot || all[0] || [null, fb])[1]; };
+    const iF = find((x) => x.includes('外資') && x.includes('買賣超'), 10);
+    const iT = find((x) => x.includes('投信') && x.includes('買賣超'), 13);
+    const iD = find((x) => x.includes('自營商') && x.includes('買賣超'), 22);
+    const iA = find((x) => x.includes('三大法人') && x.includes('買賣超'), 23);
+    const map = new Map();
+    for (const r of rows || []) {
+      const code = String(r[0]).trim();
+      if (!/^\d{4}$/.test(code)) continue;
+      map.set(code, { name: String(r[1] ?? '').trim(), foreign: lots(r[iF]), trust: lots(r[iT]), dealer: lots(r[iD]), total: lots(r[iA]) });
+    }
+    return map.size ? map : null;
+  };
+  try {
+    const j = await getJSON(`https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?type=Daily&sect=EW&date=${ymdSlash(ymd)}&response=json`);
+    const t = (j.tables || [])[0];
+    const m = t && build(t.fields, t.data);
+    if (m) return m;
+  } catch {}
+  try {
+    const roc = `${Number(ymd.slice(0, 4)) - 1911}/${ymd.slice(4, 6)}/${ymd.slice(6, 8)}`;
+    const j = await getJSON(`https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${roc}`);
+    return build(null, j.aaData);
+  } catch { return null; }
+}
+
+// 上櫃收盤價、漲跌、成交量（最新一天）
+async function tpexPrices() {
+  const arr = await getJSON('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', { timeout: 15000 });
+  const map = new Map();
+  for (const r of arr) {
+    const code = String(r[pickKey(r, /SecuritiesCompanyCode|^Code$/i)] ?? '').trim();
+    const close = num(r[pickKey(r, /^Close$|ClosingPrice/i)]);
+    const change = num(r[pickKey(r, /^Change$/i)]);
+    const vol = num(r[pickKey(r, /TradingShares|TradeVolume/i)]);
+    if (!code || !(close > 0)) continue;
+    const prev = close - change;
+    map.set(code, { close, chg: prev > 0 ? (change / prev) * 100 : 0, volume: Math.round(vol / 1000) });
+  }
+  return map;
+}
+
+// 上櫃某一天的收盤價（算 5 日漲跌）
+async function tpexCloses(ymd) {
+  const map = new Map();
+  const j = await getJSON(`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=${ymdSlash(ymd)}&type=EW&response=json`);
+  const t = (j.tables || []).find((x) => (x.fields || []).some((f) => String(f).includes('收盤')));
+  if (!t) return map;
+  const f = t.fields.map(String), iC = f.findIndex((x) => x.includes('代號')), iP = f.findIndex((x) => x.includes('收盤'));
+  for (const r of t.data || []) { const c = num(r[iP]); if (c > 0) map.set(String(r[iC < 0 ? 0 : iC]).trim(), c); }
+  return map;
+}
+
+// 上櫃融資融券（最新一天）
+async function tpexMargin() {
+  const arr = await getJSON('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance', { timeout: 15000 });
+  const map = new Map();
+  if (!arr.length) return map;
+  const r0 = arr[0];
+  const kCode = pickKey(r0, /SecuritiesCompanyCode|^Code$|代號/i);
+  const kMP = pickKey(r0, /前資餘額|MarginPurchase.*Previous|Previous.*MarginPurchase/i);
+  const kM = pickKey(r0, /^資餘額|MarginPurchaseBalance$|MarginPurchase.*Today|Today.*MarginPurchase/i);
+  const kSP = pickKey(r0, /前券餘額|ShortSale.*Previous|Previous.*ShortSale/i);
+  const kS = pickKey(r0, /^券餘額|ShortSaleBalance$|ShortSale.*Today|Today.*ShortSale/i);
+  for (const r of arr) {
+    const code = String(r[kCode] ?? '').trim();
+    if (!code) continue;
+    const m = {};
+    if (kM && kMP) { m.marginBal = num(r[kM]); m.marginChg = num(r[kM]) - num(r[kMP]); }
+    if (kS && kSP) { m.shortBal = num(r[kS]); m.shortChg = num(r[kS]) - num(r[kSP]); }
+    map.set(code, m);
+  }
+  map.keys_ = { kCode, kMP, kM, kSP, kS };
+  return map;
+}
+
 export const TW_SIGNALS = {
   coilUp: '築底吸籌', coilDown: '高檔出貨', stealthBuy: '法人逆勢偷買', stealthSell: '法人逢高偷賣',
   trustBuy: '投信連買', foreignBuy: '外資連買', bothBuy: '土洋同買',
@@ -131,12 +215,28 @@ async function build() {
   }
   if (!days.length) throw new Error('證交所沒有回傳三大法人資料');
   const latest = days[0];
+  const twseCodes = new Set(days[0].map.keys());
   const oldest = days[days.length - 1];
   const [margin, prices, oldCloses] = await Promise.all([
     fetchMargin(latest.ymd).catch(() => new Map()),
     fetchPrices().catch(() => new Map()),
     days.length > 1 ? fetchCloses(oldest.ymd).catch(() => new Map()) : Promise.resolve(new Map()),
   ]);
+  // 上櫃：同樣 5 天的三大法人，併進每天的資料；股價、融資、5 日前收盤也合併
+  const otc = new Set();
+  let tpexDays = 0;
+  for (const d of days) {
+    const m = await tpexInsti(d.ymd).catch(() => null);
+    if (m) { tpexDays++; for (const [code, v] of m) { otc.add(code); if (!d.map.has(code)) d.map.set(code, v); } }
+    await sleep(300);
+  }
+  const [tPx, tMg, tOld] = await Promise.all([
+    tpexPrices().catch(() => new Map()), tpexMargin().catch(() => new Map()),
+    days.length > 1 ? tpexCloses(oldest.ymd).catch(() => new Map()) : Promise.resolve(new Map()),
+  ]);
+  for (const [k, v] of tPx) if (!prices.has(k)) prices.set(k, v);
+  for (const [k, v] of tMg) if (!margin.has(k)) margin.set(k, v);
+  for (const [k, v] of tOld) if (!oldCloses.has(k)) oldCloses.set(k, v);
 
   const rows = [];
   for (const [code, today] of latest.map) {
@@ -145,7 +245,7 @@ async function build() {
     const p = prices.get(code) || {};
     const m = margin.get(code) || {};
     const r = {
-      code, name: today.name,
+      code, name: today.name, mkt: otc.has(code) && !twseCodes.has(code) ? '上櫃' : '上市',
       close: p.close ?? null, chg: p.chg ?? null, volume: p.volume ?? null,
       foreign: today.foreign, trust: today.trust, dealer: today.dealer, total: today.total,
       foreign5: hist.reduce((a, h) => a + h.foreign, 0),
@@ -188,7 +288,8 @@ async function build() {
     updatedAt: Date.now(),
     date: latest.ymd,
     days: days.map((d) => d.ymd),
-    source: '臺灣證券交易所（上市）',
+    source: '臺灣證券交易所（上市）＋櫃買中心（上櫃）',
+    tpexDays, tpexMarginKeys: tMg.keys_ || null, otcCount: otc.size,
     rows,
   };
 }

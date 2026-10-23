@@ -22,9 +22,25 @@ function months(n) {
   return out.reverse();
 }
 
+// 上櫃股票證交所查不到，改抓 Yahoo 財經日 K
+async function yahooDaily(code) {
+  const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=1d&range=6mo`, { timeout: 12000 });
+  const r = j.chart?.result?.[0], q = r?.indicators?.quote?.[0];
+  if (!q) return [];
+  const bars = [];
+  for (let i = 0; i < (r.timestamp || []).length; i++) {
+    const b = { o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: (q.volume[i] || 0) / 1000 };
+    if (b.h > 0 && b.l > 0 && b.c > 0) bars.push(b);
+  }
+  return bars;
+}
+
 async function history(code) {
   const bars = [];
+  let first = true;
   for (const ym of months(5)) {
+    if (!first && !bars.length) return yahooDaily(code);
+    first = false;
     const j = await getJSON(`${TWSE}?date=${ym}&stockNo=${code}&response=json`);
     if (j.stat === 'OK' && Array.isArray(j.data)) {
       const f = j.fields.map(String);
