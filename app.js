@@ -166,7 +166,7 @@ function cryptoCard(r) {
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
-    ${catBlock(r, [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
+    ${catBlock(r, [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.harmPendWhy || []), ...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
   </article>`;
 }
 
@@ -187,7 +187,7 @@ function twCard(r) {
       ${metric('融券增減', lotsFmt(r.shortChg), r.shortBal != null ? `餘 ${nf.format(r.shortBal)}` : '', cls(r.shortChg))}
     </div>
     <div class="spark-row"><span class="k">法人 5 日</span>${spark(r.trend, 'bars')}<span class="k num">${r.ratio == null ? '' : '佔量 ' + r.ratio.toFixed(0) + '%'}</span></div>
-    ${catBlock(r, [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.boxWhy || []), ...(r.patWhy || [])])}
+    ${catBlock(r, [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.harmPendWhy || []), ...(r.boxWhy || []), ...(r.patWhy || [])])}
   </article>`;
 }
 
