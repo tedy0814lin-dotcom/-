@@ -105,7 +105,9 @@ export function createVegasTab({ api, el }) {
 
   function render() {
     const m = st.m, rows = st.rows[m] || [];
-    const graded = rows.filter((r) => r.data).map((r) => ({ r, g: grade(r, m) })).filter((x) => x.g);
+    // 台股：日線通道糾纏（不是平滑的多頭或空頭）的直接跳過
+    const skipped = m === 'tw' ? rows.filter((r) => r.data && !r.data['1d']?.smooth).length : 0;
+    const graded = rows.filter((r) => r.data && (m !== 'tw' || r.data['1d']?.smooth)).map((r) => ({ r, g: grade(r, m) })).filter((x) => x.g);
     const cnt = { hot: 0, ready: 0, watch: 0, far: 0 };
     graded.forEach((x) => cnt[x.g.group]++);
     const shown = graded.filter((x) => (st.group ? x.g.group === st.group : st.showAll || x.g.group !== 'far') && (!st.dir || x.g.n.dir === st.dir))
@@ -124,7 +126,7 @@ export function createVegasTab({ api, el }) {
         <button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button>
         <button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
-      <p class="muted">${m === 'tw' ? '股價 10–200 元、成交值前 120 名。分時資料來自 Yahoo 財經，約延遲 20 分鐘。' : '幣安成交額前 80 名永續合約。'}依分數由高到低排序；「觀察」預設收起，點上面的按鈕可以只看某一類。</p>
+      <p class="muted">${m === 'tw' ? `股價 10–200 元、成交值前 120 名，日線通道糾纏的已跳過（${skipped} 檔）。分時資料來自 Yahoo 財經，約延遲 20 分鐘。` : '幣安成交額前 80 名永續合約。'}依分數由高到低排序；「觀察」預設收起，點上面的按鈕可以只看某一類。</p>
       <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}.vg-h .muted{font-size:12.5px;font-weight:400}</style><div class="grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
   }
 
