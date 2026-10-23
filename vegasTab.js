@@ -64,13 +64,28 @@ export function createVegasTab({ api, el }) {
       if (!st.list[m] || force) st.list[m] = await api(`/api/vegas?list=${m}`);
       const L = st.list[m], size = m === 'tw' ? 6 : 8;
       st.rows[m] = L.map((x) => ({ ...x, data: null }));
+      const fetchPart = async (syms) => {
+        for (let t = 0; t < 2; t++) {
+          const part = await api(`/api/vegas?m=${m}&s=${syms.join(',')}`).catch(() => null);
+          if (part) return part;
+        }
+        return {};
+      };
       for (let i = 0; i < L.length; i += size) {
         st.progress = `${Math.min(i + size, L.length)} / ${L.length}`; render();
-        const part = await api(`/api/vegas?m=${m}&s=${L.slice(i, i + size).map((x) => x.s).join(',')}`).catch((e) => ({ _err: e.message }));
+        const part = await fetchPart(L.slice(i, i + size).map((x) => x.s));
         for (const r of st.rows[m]) if (part[r.s]) r.data = part[r.s];
-        if (part._err) st.error = part._err;
         if (st.m !== m) break;
       }
+      // 第一次沒抓到的再補抓一次
+      const miss = st.rows[m].filter((r) => !r.data || r.data.error);
+      for (let i = 0; i < miss.length && st.m === m; i += size) {
+        st.progress = `補抓 ${Math.min(i + size, miss.length)} / ${miss.length}`; render();
+        const part = await fetchPart(miss.slice(i, i + size).map((r) => r.s));
+        for (const r of miss) if (part[r.s] && !part[r.s].error) r.data = part[r.s];
+      }
+      const fail = st.rows[m].filter((r) => !r.data || r.data.error).length;
+      st.error = fail ? `${fail} 檔資料來源暫時抓不到（已重試），可以稍後按「重新整理」。` : '';
       st.loaded[m] = true;
     } catch (e) { st.error = e.message; }
     st.loading = false; st.progress = ''; render();
@@ -131,7 +146,7 @@ export function createVegasTab({ api, el }) {
   const toolbar = (m) => `<div class="toolbar">
         <button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密（15分/1H/4H）</button>
         <button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股（15分/1H/日線）</button>
-        <input id="vg-q" class="search" type="search" placeholder="搜尋代號，按 Enter（例如 1815、BTC）" value="${esc(st.q || '')}" style="max-width:260px">
+        <input id="vg-q" class="search" type="search" placeholder="搜尋代號或名稱，按 Enter（例如 1815、富喬、BTC）" value="${esc(st.q || '')}" style="max-width:260px">
         <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中 ' + st.progress : '重新整理'}</button></div>`;
 
   // 搜尋：不管有沒有訊號、有沒有被日線過濾、在不在清單裡都顯示
@@ -151,14 +166,29 @@ export function createVegasTab({ api, el }) {
   async function lookup(m, q) {
     const rows = (st.rows[m] ||= []);
     const Q = q.toUpperCase();
-    if (rows.some((r) => r.s.toUpperCase().startsWith(Q) || r.name.toUpperCase().includes(Q))) return render();
-    const cands = m === 'tw' ? (/^\d{4}$/.test(Q) ? [Q + '.TW', Q + '.TWO'] : []) : [Q.endsWith('USDT') ? Q : Q + 'USDT'];
+    const have = rows.filter((r) => r.s.toUpperCase().startsWith(Q) || r.name.toUpperCase().includes(Q));
+    // 在清單裡但還沒抓到資料（或抓失敗）→ 馬上單獨抓
+    const need = have.filter((r) => !r.data || r.data.error);
+    if (have.length && !need.length) return render();
+    if (need.length) {
+      st.searching = true; render();
+      const res = await api(`/api/vegas?m=${m}&s=${need.slice(0, 6).map((r) => r.s).join(',')}`).catch(() => ({}));
+      for (const r of need) if (res[r.s]) r.data = res[r.s];
+      st.searching = false; return render();
+    }
+    let cands = m === 'tw' ? (/^\d{4}$/.test(Q) ? [Q + '.TW', Q + '.TWO'] : []) : [Q.endsWith('USDT') ? Q : Q + 'USDT'];
+    // 台股用中文名稱搜尋：查全部上市櫃名單找代號
+    if (m === 'tw' && !cands.length) {
+      st.all ||= await api('/api/vegas?list=twall').catch(() => []);
+      cands = st.all.filter((x) => x.name.includes(q)).slice(0, 3).map((x) => x.s);
+    }
     if (!cands.length) return render();
     st.searching = true; render();
     for (const s of cands) {
       const res = await api(`/api/vegas?m=${m}&s=${s}`).catch(() => ({}));
       const d = res[s];
-      if (d && !d.error && d['1h']) { rows.push({ s, name: m === 'tw' ? `${Q}${s.endsWith('.TWO') ? '（上櫃）' : ''}` : Q.replace(/USDT$/, ''), data: d }); break; }
+      const nm = st.all?.find((x) => x.s === s)?.name;
+      if (d && !d.error && d['1h']) { rows.push({ s, name: m === 'tw' ? `${nm || s.replace(/\..*/, '')}${s.endsWith('.TWO') ? '（上櫃）' : ''}` : Q.replace(/USDT$/, ''), data: d }); if (/^\d{4}$/.test(Q) || m !== 'tw') break; }
     }
     st.searching = false; render();
   }
