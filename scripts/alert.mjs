@@ -42,6 +42,8 @@ if (doTw) {
   } catch (e) { console.error('台股清單失敗', e.message); }
 }
 
+// 手動執行時可勾「測試」：先送一則測試訊息，確認 LINE 有接上
+if (process.env.TEST === '1') items.unshift({ id: 'test-' + Date.now(), mkt: 'crypto', name: '測試訊息', price: null, cat: 'LINE 警報接上了', level: '測試', why: [`目前真正的非常強：${items.length} 個`], choch: [] });
 const fresh = items.filter((x) => !state[x.id]);
 console.log(`找到 ${items.length} 個非常強，新的 ${fresh.length} 個`);
 if (fresh.length) {
