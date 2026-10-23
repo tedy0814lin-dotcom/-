@@ -352,7 +352,7 @@ async function cryptoFromBrowser() {
     await Promise.all(Array.from({ length: limit }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } }));
     return out;
   };
-  const d = await buildCrypto(50, { getJSON, pool });
+  const d = await buildCrypto(200, { getJSON, pool });
   return { ...d, viaBrowser: true };
 }
 
@@ -421,7 +421,7 @@ async function load(tab, refresh = false) {
   try {
     if (tab === 'crypto') {
       try {
-        state.data.crypto = await api(`/api/crypto?n=50${refresh ? '&refresh=1' : ''}`);
+        state.data.crypto = await api(`/api/crypto?n=200${refresh ? '&refresh=1' : ''}`);
       } catch (e) {
         if (e.message === '未登入') throw e;
         state.data.crypto = await cryptoFromBrowser();
