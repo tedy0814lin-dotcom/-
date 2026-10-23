@@ -1,10 +1,14 @@
 // 籌碼雷達前端：讀 /api 的資料，畫成卡片，提供搜尋、排序、訊號篩選
-import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals } from '/lib/cryptoCore.js';
+import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals, chochWhy } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { createVegasTab } from '/vegasTab.js';
 
 const TW_SIGNALS = {
+  chochDown:   { label: '上漲後首次 CHoCH 轉弱', dir: -1, alert: true },
+  chochDownClean: { label: '上漲中無深回調', dir: -1, alert: true },
+  chochUp:     { label: '下跌後首次 CHoCH 轉強', dir: 1, alert: true },
+  chochUpClean: { label: '下跌中無深反彈', dir: 1, alert: true },
   dBoxLong:    { label: '日線大箱底做多', dir: 1, alert: true },
   dBoxShort:   { label: '日線大箱頂做空', dir: -1, alert: true },
   boxLong:     { label: '短箱底做多', dir: 1, alert: true },
@@ -171,7 +175,7 @@ function classifyAll(tab) {
 function catBadge(r) {
   if (!r.cat) return '';
   const c = CATS[r.cat];
-  return `<span class="cat cat-${r.cat} lv-${r.catLevel === '強' ? 3 : r.catLevel === '中' ? 2 : 1}">${c.label}<b>${r.catLevel}</b></span>`;
+  return `<span class="cat cat-${r.cat} lv-${r.catLevel === '非常強' ? 4 : r.catLevel === '強' ? 3 : r.catLevel === '中' ? 2 : 1}">${c.label}<b>${r.catLevel}</b></span>`;
 }
 function catBlock(r, why) {
   const lines = [];
@@ -202,7 +206,7 @@ function cryptoCard(r) {
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
-    ${catBlock(r, [...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
+    ${catBlock(r, [...(r.chochWhy || []), ...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
   </article>`;
 }
 
@@ -223,7 +227,7 @@ function twCard(r) {
       ${metric('融券增減', lotsFmt(r.shortChg), r.shortBal != null ? `餘 ${nf.format(r.shortBal)}` : '', cls(r.shortChg))}
     </div>
     <div class="spark-row"><span class="k">法人 5 日</span>${spark(r.trend, 'bars')}<span class="k num">${r.ratio == null ? '' : '佔量 ' + r.ratio.toFixed(0) + '%'}</span></div>
-    ${catBlock(r, [...(r.boxWhy || []), ...(r.patWhy || [])])}
+    ${catBlock(r, [...(r.chochWhy || []), ...(r.boxWhy || []), ...(r.patWhy || [])])}
   </article>`;
 }
 
@@ -231,7 +235,7 @@ function twCard(r) {
 function sortRows(rows) {
   const key = state.sort[state.tab];
   const get = {
-    cat: (r) => ({ 強: 3, 中: 2, 弱: 1 }[r.catLevel] || 0) * 1e5 + (r.catScore || 0) * 1000 + (r.score ?? Math.abs(r.total5 ?? 0) / 1e6),
+    cat: (r) => ({ 非常強: 4, 強: 3, 中: 2, 弱: 1 }[r.catLevel] || 0) * 1e5 + (r.catScore || 0) * 1000 + (r.score ?? Math.abs(r.total5 ?? 0) / 1e6),
     oiChgAbs: (r) => Math.abs(r.oiChg24 ?? 0),
     fundingLow: (r) => -(r.funding ?? 0),
     totalLow: (r) => -r.total,
@@ -453,6 +457,9 @@ const TW_UNITS = { small: '短箱', big: '日線大箱', tr: '日線', lenUnit: 
 function twPatternSignals(r) {
   const boxOut = structSignals(r, r.div?.st, confirmTw, TW_UNITS);
   const pat = twPatternOnly(r);
+  const c = r.div?.choch;
+  r.chochWhy = c ? chochWhy(c, '日線（台股一天約等於一根 4H）') : null;
+  if (c) boxOut.unshift(...(c.dir > 0 ? ['chochUp', 'chochUpClean'] : ['chochDown', 'chochDownClean']));
   return [...boxOut, ...pat.filter((k) => !(k === 'baseBreak' && boxOut.includes('loBoxBreak')) && !(k === 'boxBreakDown' && boxOut.includes('hiBoxBreak')))];
 }
 

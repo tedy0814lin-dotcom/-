@@ -114,6 +114,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .cat-short, .cat-top { color: var(--down); background: var(--chip-down); }
 .cat-bottom, .cat-top { border-style: dashed; border-color: currentColor; }
 .cat.lv-1 { opacity: .7; }
+.cat.lv-4 { box-shadow: 0 0 0 2px #f5b301; font-weight: 700; }
 .chip-long b, .chip-bottom b { color: var(--up); }
 .chip-short b, .chip-top b { color: var(--down); }
 .chip-sep { flex: none; align-self: center; font-size: 11.5px; color: var(--muted); padding: 0 2px 0 8px; }
