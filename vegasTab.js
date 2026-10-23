@@ -105,6 +105,7 @@ export function createVegasTab({ api, el }) {
 
   function render() {
     const m = st.m, rows = st.rows[m] || [];
+    if (st.q) return renderSearch(m, rows);
     // 台股：日線通道糾纏（不是平滑的多頭或空頭）的直接跳過
     const skipped = m === 'tw' ? rows.filter((r) => r.data && !r.data['1d']?.smooth).length : 0;
     const graded = rows.filter((r) => r.data && (m !== 'tw' || r.data['1d']?.smooth)).map((r) => ({ r, g: grade(r, m) })).filter((x) => x.g);
@@ -118,10 +119,7 @@ export function createVegasTab({ api, el }) {
       html += card(x.r, m);
     }
     const chip = (k) => `<button class="chip" data-g="${k}" aria-pressed="${st.group === k}">${GROUPS[k][0]} <b>${cnt[k]}</b></button>`;
-    el.innerHTML = `<div class="toolbar">
-        <button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密（15分/1H/4H）</button>
-        <button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股（15分/1H/日線）</button>
-        <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中 ' + st.progress : '重新整理'}</button></div>
+    el.innerHTML = toolbar(m) + `
       <div class="toolbar">${['hot', 'ready', 'watch', 'far'].map(chip).join('')}
         <button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button>
         <button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
@@ -130,9 +128,49 @@ export function createVegasTab({ api, el }) {
       <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}.vg-h .muted{font-size:12.5px;font-weight:400}</style><div class="grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
   }
 
+  const toolbar = (m) => `<div class="toolbar">
+        <button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密（15分/1H/4H）</button>
+        <button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股（15分/1H/日線）</button>
+        <input id="vg-q" class="search" type="search" placeholder="搜尋代號，按 Enter（例如 1815、BTC）" value="${esc(st.q || '')}" style="max-width:260px">
+        <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中 ' + st.progress : '重新整理'}</button></div>`;
+
+  // 搜尋：不管有沒有訊號、有沒有被日線過濾、在不在清單裡都顯示
+  function renderSearch(m, rows) {
+    const q = st.q.toUpperCase();
+    const hit = rows.filter((r) => r.s.toUpperCase().startsWith(q) || r.name.toUpperCase().includes(q));
+    const why = (r) => {
+      if (!r.data) return '資料還在載入';
+      if (r.data.error) return '抓不到資料：' + r.data.error;
+      if (m === 'tw' && !r.data['1d']?.smooth) return '日線通道糾纏，平常會被跳過';
+      return grade(r, m) ? '' : '三個時區目前都沒有訊號';
+    };
+    el.innerHTML = toolbar(m) + `<p class="muted">搜尋「${esc(st.q)}」：${hit.length} 筆${st.searching ? '，查詢中…' : ''}</p><div class="grid">${hit.map((r) => { const w = why(r); return (w ? `<p class="muted" style="grid-column:1/-1;margin:6px 0 0">${esc(r.name)}：${esc(w)}</p>` : '') + (r.data && !r.data.error ? card(r, m) : ''); }).join('')}</div>`;
+  }
+
+  // 清單裡沒有的代號：直接向伺服器查
+  async function lookup(m, q) {
+    const rows = (st.rows[m] ||= []);
+    const Q = q.toUpperCase();
+    if (rows.some((r) => r.s.toUpperCase().startsWith(Q) || r.name.toUpperCase().includes(Q))) return render();
+    const cands = m === 'tw' ? (/^\d{4}$/.test(Q) ? [Q + '.TW', Q + '.TWO'] : []) : [Q.endsWith('USDT') ? Q : Q + 'USDT'];
+    if (!cands.length) return render();
+    st.searching = true; render();
+    for (const s of cands) {
+      const res = await api(`/api/vegas?m=${m}&s=${s}`).catch(() => ({}));
+      const d = res[s];
+      if (d && !d.error && d['1h']) { rows.push({ s, name: m === 'tw' ? `${Q}${s.endsWith('.TWO') ? '（上櫃）' : ''}` : Q.replace(/USDT$/, ''), data: d }); break; }
+    }
+    st.searching = false; render();
+  }
+
+  el.addEventListener('keydown', (e) => {
+    if (e.target.id !== 'vg-q' || e.key !== 'Enter') return;
+    st.q = e.target.value.trim();
+    if (st.q) lookup(st.m, st.q); else render();
+  });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.m) { st.m = b.dataset.m; render(); if (!st.loaded[st.m]) load(); }
+    if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; render(); if (!st.loaded[st.m]) load(); }
     else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; render(); }
     else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
     else if ('reload' in b.dataset) load(true);

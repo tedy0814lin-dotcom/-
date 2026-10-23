@@ -210,7 +210,7 @@ function twCard(r) {
   return `<article class="card">
     <div class="card-head">
       <span class="sym num">${esc(r.code)}</span>
-      <span class="sub">${esc(r.name)}</span>
+      <span class="sub">${esc(r.name)}${r.mkt === '上櫃' ? ' <span class="muted">上櫃</span>' : ''}</span>
       ${catBadge(r)}
       <div class="price"><span class="p num">${r.close == null ? '—' : price(r.close)}</span><span class="c num ${cls(r.chg)}">${signed(r.chg, 2, '%')}</span><span class="c num ${cls(r.chg5)}">5 日 ${signed(r.chg5, 1, '%')}</span></div>
     </div>
