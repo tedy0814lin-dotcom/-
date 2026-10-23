@@ -5,7 +5,7 @@ import fs from 'node:fs';
 const SITE = process.env.SITE || 'https://whale-radar-three.vercel.app';
 const KEY = process.env.ALERT_KEY, LINE = process.env.LINE_TOKEN;
 const STATE = '.alert-state/state.json';
-if (!KEY || !LINE) { console.error('缺少 ALERT_KEY 或 LINE_TOKEN'); process.exit(1); }
+if (!KEY || !LINE) { console.log('還沒設定 ALERT_KEY / LINE_TOKEN，先跳過'); process.exit(0); }
 
 async function get(path) {
   for (let i = 0; i < 3; i++) {
