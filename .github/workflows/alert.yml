@@ -1,0 +1,34 @@
+name: 非常強警報
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      tw:
+        description: '強制掃台股（1 = 要）'
+        default: '0'
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency: alert
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: .alert-state
+          key: alert-state-${{ github.run_id }}
+          restore-keys: alert-state-
+      - run: node scripts/alert.mjs
+        env:
+          ALERT_KEY: ${{ secrets.ALERT_KEY }}
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          TW: ${{ github.event.inputs.tw }}
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .alert-state
+          key: alert-state-${{ github.run_id }}
