@@ -7,6 +7,9 @@ on:
       tw:
         description: '強制掃台股（1 = 要）'
         default: '0'
+      test:
+        description: '送一則測試訊息（1 = 要）'
+        default: '1'
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -27,6 +30,7 @@ jobs:
           ALERT_KEY: ${{ secrets.ALERT_KEY }}
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           TW: ${{ github.event.inputs.tw }}
+          TEST: ${{ github.event.inputs.test }}
       - uses: actions/cache/save@v4
         if: always()
         with:
