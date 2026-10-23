@@ -10,6 +10,9 @@ on:
       test:
         description: '送一則測試訊息（1 = 要）'
         default: '1'
+      digest:
+        description: '馬上送一次摘要（1 = 要）'
+        default: '0'
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -31,6 +34,7 @@ jobs:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           TW: ${{ github.event.inputs.tw }}
           TEST: ${{ github.event.inputs.test }}
+          DIGEST: ${{ github.event.inputs.digest }}
       - uses: actions/cache/save@v4
         if: always()
         with:
