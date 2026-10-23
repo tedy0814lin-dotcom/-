@@ -17,12 +17,14 @@ function authed(req) {
   return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 
-// 只留「非常強」，整理成要推播的內容；id 用來避免同一個訊號重複通知
-function pick(rows, dict, mkt) {
+// 只留夠強的（預設只要「非常強」；min=1 連「強」「中」也要，給每日摘要用）
+// 整理成要推播的內容；id 用來避免同一個訊號重複通知
+const RANK = { 非常強: 3, 強: 2, 中: 1 };
+function pick(rows, dict, mkt, min = 3) {
   const out = [];
   for (const r of rows) {
     classify(r, dict);
-    if (r.catLevel !== '非常強') continue;
+    if (!(RANK[r.catLevel] >= min)) continue;
     const c = r.choch || r.div?.choch || {};
     const name = mkt === 'crypto' ? r.base || r.symbol : `${r.code} ${r.name}`;
     out.push({
@@ -39,11 +41,12 @@ function pick(rows, dict, mkt) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!authed(req)) return res.status(401).json({ error: '金鑰不對' });
+  const min = req.query.min === '1' ? 1 : 3;
   try {
     if (req.query.m === 'crypto') {
       const d = await buildCrypto(50, { getJSON, pool });
       for (const r of d.rows) r.signals = cryptoSignals(r);
-      return res.status(200).json({ items: pick(d.rows, CRYPTO_SIGNALS, 'crypto') });
+      return res.status(200).json({ items: pick(d.rows, CRYPTO_SIGNALS, 'crypto', min) });
     }
     const d = await twData();
     if (req.query.step === 'pick') return res.status(200).json({ date: d.date, codes: twPick(d.rows) });
@@ -55,7 +58,7 @@ export default async function handler(req, res) {
       const r = { ...base, signals: [...base.signals] };
       try { applyTwHist(r, await histData(code)); rows.push(r); } catch {}
     }
-    res.status(200).json({ date: d.date, items: pick(rows, TW_SIGNALS, 'tw') });
+    res.status(200).json({ date: d.date, items: pick(rows, TW_SIGNALS, 'tw', min) });
   } catch (e) {
     res.status(502).json({ error: e.message });
   }
