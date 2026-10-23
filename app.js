@@ -511,7 +511,7 @@ render();
     last = {};
   };
   const open = () => {
-    try { ws = new WebSocket('wss://fstream.binance.com/ws/!miniTicker@arr'); } catch { return; }
+    try { ws = new WebSocket('wss://fstream.binance.com/market/ws/!miniTicker@arr'); } catch { return; }
     ws.onmessage = (e) => { try { for (const t of JSON.parse(e.data)) last[t.s] = { c: +t.c, o: +t.o }; } catch {} };
     ws.onclose = () => setTimeout(open, 5000); // 斷線 5 秒後重連
   };
