@@ -1,5 +1,5 @@
 // 給排程用的警報掃描（不用登入，要帶正確的 x-alert-key）
-// GET /api/alert?m=crypto                → 加密前 50 檔裡「非常強」的機會
+// GET /api/alert?m=crypto                → 加密前 200 檔裡「非常強」的機會
 // GET /api/alert?m=tw&step=pick          → 台股要抓日 K 的股票清單
 // GET /api/alert?m=tw&codes=2330,2317    → 這幾檔（最多 8 檔）裡「非常強」的機會
 import crypto from 'node:crypto';
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
   const min = req.query.min === '1' ? 1 : 3;
   try {
     if (req.query.m === 'crypto') {
-      const d = await buildCrypto(50, { getJSON, pool });
+      const d = await buildCrypto(200, { getJSON, pool });
       for (const r of d.rows) r.signals = cryptoSignals(r);
       return res.status(200).json({ items: pick(d.rows, CRYPTO_SIGNALS, 'crypto', min) });
     }
