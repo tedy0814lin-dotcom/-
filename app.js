@@ -148,7 +148,7 @@ function catBlock(r, why) {
 
 // ---------- 卡片 ----------
 function cryptoCard(r) {
-  return `<article class="card">
+  return `<article class="card" data-sym="${esc(r.symbol)}">
     <div class="card-head">
       <span class="sym">${esc(r.base)}</span>
       ${catBadge(r)}
@@ -352,7 +352,7 @@ async function cryptoFromBrowser() {
     await Promise.all(Array.from({ length: limit }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } }));
     return out;
   };
-  const d = await buildCrypto(200, { getJSON, pool });
+  const d = await buildCrypto(120, { getJSON, pool });
   return { ...d, viaBrowser: true };
 }
 
@@ -365,7 +365,18 @@ async function enrichCryptoExchanges(refresh = false) {
   try {
     let x;
     try {
-      x = await api(`/api/xchg?bases=${bases.join(',')}${refresh ? '&refresh=1' : ''}`);
+      // 一次最多 60 個幣（OKX 要一個一個慢慢問），分兩批同時抓再合併
+      const parts = [];
+      for (let i = 0; i < bases.length; i += 60) parts.push(bases.slice(i, i + 60));
+      const res = await Promise.all(parts.map((b) => api('/api/xchg?bases=' + b.join(',') + (refresh ? '&refresh=1' : ''))));
+      x = { updatedAt: Date.now(), status: {}, byBase: {}, hist: {} };
+      for (const p of res) {
+        Object.assign(x.byBase, p.byBase); Object.assign(x.hist, p.hist);
+        for (const [ex, st] of Object.entries(p.status || {})) {
+          const a = +(String(x.status[ex] || '').match(/^ok:(\d+)/)?.[1] || 0), b = +(String(st).match(/^ok:(\d+)/)?.[1] || 0);
+          x.status[ex] = a + b ? 'ok:' + (a + b) : st;
+        }
+      }
     } catch (e) {
       if (e.message === '未登入') throw e;
       const getJSON = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); };
@@ -421,7 +432,7 @@ async function load(tab, refresh = false) {
   try {
     if (tab === 'crypto') {
       try {
-        state.data.crypto = await api(`/api/crypto?n=200${refresh ? '&refresh=1' : ''}`);
+        state.data.crypto = await api(`/api/crypto?n=120${refresh ? '&refresh=1' : ''}`);
       } catch (e) {
         if (e.message === '未登入') throw e;
         state.data.crypto = await cryptoFromBrowser();
@@ -479,3 +490,31 @@ api('/api/me').then(() => {
   if (state.tab === 'vegas') vg.load(); else load(state.tab);
 }).catch(() => {});
 render();
+
+// ---------- 加密即時價格：幣安 WebSocket（每秒推一次全部合約的最新價），只更新價格與 24h 漲跌 ----------
+(function livePrices() {
+  let ws, last = {}, timer;
+  const flush = () => {
+    const d = state.data.crypto;
+    if (!d) return;
+    const bySym = new Map(d.rows.map((r) => [r.symbol, r]));
+    for (const [s, t] of Object.entries(last)) {
+      const r = bySym.get(s);
+      if (!r) continue;
+      r.price = t.c; r.chg24 = t.o ? (t.c / t.o - 1) * 100 : r.chg24;
+      const card = document.querySelector('article[data-sym="' + s + '"]');
+      if (!card) continue;
+      const p = card.querySelector('.price .p'), c = card.querySelector('.price .c');
+      if (p) p.textContent = price(r.price);
+      if (c) { c.textContent = signed(r.chg24, 2, '%'); c.className = 'c num ' + cls(r.chg24); }
+    }
+    last = {};
+  };
+  const open = () => {
+    try { ws = new WebSocket('wss://fstream.binance.com/ws/!miniTicker@arr'); } catch { return; }
+    ws.onmessage = (e) => { try { for (const t of JSON.parse(e.data)) last[t.s] = { c: +t.c, o: +t.o }; } catch {} };
+    ws.onclose = () => setTimeout(open, 5000); // 斷線 5 秒後重連
+  };
+  open();
+  timer = setInterval(() => { if (state.tab === 'crypto' && document.visibilityState === 'visible') flush(); }, 1000);
+})();
