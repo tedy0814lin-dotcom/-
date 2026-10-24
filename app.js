@@ -225,7 +225,7 @@ function visibleRows() {
 }
 
 // 特別篩選：諧波 CD 段（觸發或等待中）、SMC CHoCH 結構轉變
-const harmList = (r) => r.harmCD || r.div?.harmCD || [];
+const harmList = (r) => [...(r.harmCD || r.div?.harmCD || []), ...(r.harmCD1h || [])];
 const SPECIAL = {
   harm: (r) => harmList(r).length > 0,
   choch: (r) => (r.signals || []).some((k) => k.startsWith('choch')),
