@@ -1,7 +1,6 @@
 // 排程警報（推播到 LINE）
-// 1) 非常強：每次掃描（每 15 分鐘）有新的就馬上推
-// 2) 強／中：整理成摘要，加密每天 9、15、21 點各一則；台股平日 21 點一則（台北時間）
-// 需要的環境變數：SITE、ALERT_KEY、LINE_TOKEN；手動執行可加 TW=1（強制掃台股）、TEST=1（測試訊息）、DIGEST=1（強制送摘要）
+// 強以上（強、非常強）：每次掃描（每 15 分鐘）有新的就推；台北時間 0～9 點不推
+// 需要的環境變數：SITE、ALERT_KEY、LINE_TOKEN；手動執行可加 TW=1（強制掃台股）、TEST=1（測試訊息）
 import fs from 'node:fs';
 
 const SITE = process.env.SITE || 'https://whale-radar-three.vercel.app';
@@ -44,25 +43,19 @@ const now = Date.now();
 for (const k of Object.keys(state)) if (now - state[k] > 7 * 864e5) delete state[k];
 const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); };
 
-// 這次要不要送摘要（每個時段只送一次）
-const cryptoSlot = 'digest|crypto|' + day + '|' + hour;
-const twSlot = 'digest|tw|' + day;
-const force = process.env.DIGEST === '1';
-const cryptoDigest = force || ([9, 15, 21].includes(hour) && !state[cryptoSlot]);
-const twDigest = force || (weekday && hour === 21 && !state[twSlot]);
-// 台股：平日 17 點（法人資料出來）、21 點（融資資料出來）掃
-const doTw = process.env.TW === '1' || force || (weekday && [17, 21].includes(hour));
+// 台北時間 0:00～9:00 睡覺不推；這段時間出現、到 9 點還有效的，9 點後第一次掃描會一起推
+const quiet = hour < 9;
+// 台股：平日 9～13 點盤中每小時、17 點（法人資料出來）、21 點（融資資料出來）掃
+const doTw = process.env.TW === '1' || (weekday && ([9, 10, 11, 12, 13, 17, 21].includes(hour) && tpe.getUTCMinutes() < 15));
 
 const crypto = [], tw = [];
-let twOk = false;
-try { crypto.push(...(await get('/api/alert?m=crypto' + (cryptoDigest ? '&min=1' : ''))).items); }
+try { crypto.push(...(await get('/api/alert?m=crypto&min=2')).items); }
 catch (e) { console.error('加密掃描失敗', e.message); }
 if (doTw) {
   try {
     const { codes } = await get('/api/alert?m=tw&step=pick');
-    twOk = true;
     for (let i = 0; i < codes.length; i += 8) {
-      try { tw.push(...(await get('/api/alert?m=tw' + (twDigest ? '&min=1' : '') + '&codes=' + codes.slice(i, i + 8).join(','))).items); }
+      try { tw.push(...(await get('/api/alert?m=tw&min=2&codes=' + codes.slice(i, i + 8).join(','))).items); }
       catch (e) { console.error('台股掃描失敗', e.message); }
     }
   } catch (e) { console.error('台股清單失敗', e.message); }
@@ -71,40 +64,22 @@ if (doTw) {
 const tag = (x) => (x.mkt === 'crypto' ? '加密' : '台股');
 const price = (x) => (x.price != null ? '（' + x.price + '）' : '');
 
-// ---- 1) 非常強：即時推 ----
-const strong = [...crypto, ...tw].filter((x) => x.level === '非常強');
-if (process.env.TEST === '1') strong.unshift({ id: 'test-' + now, mkt: 'crypto', name: '測試訊息', price: null, cat: 'LINE 警報接上了', level: '測試', why: ['目前真正的非常強：' + strong.length + ' 個'], choch: [] });
-const fresh = strong.filter((x) => !state[x.id]);
-console.log('非常強 ' + strong.length + ' 個，新的 ' + fresh.length + ' 個');
-if (fresh.length) {
+// 強以上：有新的就推（同一個訊號只推一次）
+const strong = [...crypto, ...tw].filter((x) => x.level === '非常強' || x.level === '強');
+if (process.env.TEST === '1') strong.unshift({ id: 'test-' + now, mkt: 'crypto', name: '測試訊息', price: null, cat: 'LINE 警報接上了', level: '測試', why: ['目前強以上：' + strong.length + ' 個'], choch: [] });
+const fresh = strong.filter((x) => !state[x.id]).sort((a, b) => (a.level === '非常強' ? -1 : 0) - (b.level === '非常強' ? -1 : 0));
+console.log('強以上 ' + strong.length + ' 個，新的 ' + fresh.length + ' 個' + (quiet && process.env.TEST !== '1' ? '（睡覺時間，先不推）' : ''));
+if (fresh.length && (!quiet || process.env.TEST === '1')) {
   const fmt = (x) => [
-    '【' + tag(x) + '】' + x.name + price(x),
+    (x.level === '非常強' ? '🔥' : '⭐') + '【' + tag(x) + '】' + x.name + price(x),
     x.cat + '・' + x.level,
     ...x.why.map((w) => '・' + w),
     ...x.choch.filter((w) => w.startsWith('★')),
     ...(x.plan || []),
   ].join('\n');
-  await push('🔥 籌碼雷達｜非常強 ' + fresh.length + ' 個\n\n' + fresh.map(fmt).join('\n\n') + '\n\n' + SITE);
+  const nVS = fresh.filter((x) => x.level === '非常強').length;
+  await push('📡 籌碼雷達｜' + (nVS ? '非常強 ' + nVS + '、' : '') + '強 ' + (fresh.length - nVS) + '\n\n' + fresh.map(fmt).join('\n\n') + '\n\n' + SITE);
   for (const x of fresh) state[x.id] = now;
-  save();
-}
-
-// ---- 2) 強／中：摘要 ----
-function digest(title, list) {
-  const order = { 非常強: 0, 強: 1, 中: 2 };
-  list = list.filter((x) => x.level !== '非常強').sort((a, b) => order[a.level] - order[b.level]);
-  const line = (x) => (x.level === '強' ? '★ ' : '・') + x.name + price(x) + '｜' + x.cat + '・' + x.level + '\n   ' + x.why.slice(0, 2).join('、');
-  const n強 = list.filter((x) => x.level === '強').length;
-  return '📋 ' + title + '｜強 ' + n強 + '、中 ' + (list.length - n強) + '\n\n' + (list.length ? list.map(line).join('\n') : '目前沒有中以上的機會');
-}
-const parts = [];
-if (cryptoDigest) parts.push(digest('加密摘要 ' + hour + ':00', crypto));
-if (twDigest && twOk) parts.push(digest('台股摘要（' + day + '）', tw));
-if (parts.length) {
-  await push(parts.join('\n\n——————\n\n') + '\n\n' + SITE);
-  if (cryptoDigest) state[cryptoSlot] = now;
-  if (twDigest && twOk) state[twSlot] = now;
-  console.log('已送摘要');
 }
 
 save();
