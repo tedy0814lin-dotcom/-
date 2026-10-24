@@ -1,7 +1,7 @@
-name: 非常強警報
+name: 強訊號警報
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       tw:
@@ -10,14 +10,14 @@ on:
       test:
         description: '送一則測試訊息（1 = 要）'
         default: '1'
-      digest:
-        description: '馬上送一次摘要（1 = 要）'
-        default: '0'
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency: alert
+    timeout-minutes: 60
+    # GitHub 的定時排程常常 30～45 分鐘才跑一次，所以每次啟動後自己每 5 分鐘掃一次、連續 50 分鐘；下一輪排在後面接著跑
+    concurrency:
+      group: alert
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,13 +28,17 @@ jobs:
           path: .alert-state
           key: alert-state-${{ github.run_id }}
           restore-keys: alert-state-
-      - run: node scripts/alert.mjs
+      - run: |
+          for i in $(seq 1 10); do
+            if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" node scripts/alert.mjs || true
+            else node scripts/alert.mjs || true; fi
+            if [ "$i" -lt 10 ]; then sleep 300; fi
+          done
         env:
           ALERT_KEY: ${{ secrets.ALERT_KEY }}
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
-          TW: ${{ github.event.inputs.tw }}
-          TEST: ${{ github.event.inputs.test }}
-          DIGEST: ${{ github.event.inputs.digest }}
+          TW_IN: ${{ github.event.inputs.tw }}
+          TEST_IN: ${{ github.event.inputs.test }}
       - uses: actions/cache/save@v4
         if: always()
         with:
