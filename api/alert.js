@@ -25,10 +25,9 @@ function pick(rows, dict, mkt, min = 3) {
   for (const r of rows) {
     classify(r, dict);
     if (!(RANK[r.catLevel] >= min)) continue;
-    const c = r.choch || r.div?.choch || {};
     const name = mkt === 'crypto' ? r.base || r.symbol : `${r.code} ${r.name}`;
     out.push({
-      id: [mkt, r.symbol || r.code, r.cat, c.stage || '', c.key ?? '', c.low1 ?? ''].join('|'),
+      id: [mkt, r.symbol || r.code, r.cat, r.chochId || ''].join('|'),
       mkt, name, cat: CATS[r.cat].label, level: r.catLevel,
       price: r.price ?? r.close ?? null,
       why: r.catWhy.slice(0, 4),

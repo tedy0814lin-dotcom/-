@@ -2,7 +2,7 @@
 // 抓個股近 4 個月日 K，算日線 MACD 背離與型態（大漲大跌、箱型突破）。一次最多 8 檔（證交所會擋太快的請求）。
 import { requireUser, getJSON, sleep } from './_lib.js';
 import { divergence, pattern } from '../lib/indicators.js';
-import { structure, STRUCT_TW, choch, harmonic } from '../lib/structure.js';
+import { structure, STRUCT_TW, chochOB } from '../lib/structure.js';
 import { harmonicCD } from '../lib/harmonic.js';
 
 const TWSE = 'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
@@ -58,23 +58,70 @@ async function history(code) {
   return bars;
 }
 
+// 1 小時 K（Yahoo，要帶瀏覽器 UA，不然常被擋）：抓近一年，順便合成較長的日 K 給 CHoCH 用
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+const hcache = new Map(); // code → { at, data }
+async function yahooHour(code) {
+  const now = Date.now() / 1000;
+  for (const sfx of ['TW', 'TWO']) {
+    let j;
+    try { j = await getJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${code}.${sfx}?interval=60m&range=1y`, { timeout: 12000, retries: 1, headers: { 'User-Agent': UA } }); } catch { continue; }
+    const r = j.chart?.result?.[0], q = r?.indicators?.quote?.[0];
+    if (!q || !r.timestamp?.length) continue;
+    const bars = [];
+    r.timestamp.forEach((t, i) => {
+      const b = { t, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i] };
+      if (b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0 && t + 3600 <= now) bars.push(b); // 還沒走完的那根不算
+    });
+    if (bars.length) return bars;
+  }
+  return [];
+}
+export async function hourData(code) {
+  const hit = hcache.get(code);
+  if (hit && Date.now() - hit.at < 20 * 60e3) return hit.data;
+  const h = await yahooHour(code);
+  let data = null;
+  if (h.length >= 120) {
+    const days = new Map();
+    for (const b of h) {
+      const k = Math.floor((b.t + 28800) / 86400), d = days.get(k);
+      if (!d) days.set(k, { o: b.o, h: b.h, l: b.l, c: b.c });
+      else { d.h = Math.max(d.h, b.h); d.l = Math.min(d.l, b.l); d.c = b.c; }
+    }
+    const tpe = new Date(Date.now() + 8 * 3600e3), today = Math.floor((Date.now() / 1000 + 28800) / 86400);
+    const daily = [...days.entries()].filter(([k]) => k < today || tpe.getUTCHours() >= 14).map(([, d]) => d);
+    const b1 = h.slice(-300);
+    data = {
+      chochOB: chochOB(b1, { RR: 5, longOnly: true }), // 台股只做多，目標 5R（回測最好）
+      harmCD: harmonicCD(b1).filter((x) => x.dir === 1),
+      dailyOB: daily.length >= 120 ? chochOB(daily.slice(-300), { RR: 5, longOnly: true }) : undefined,
+    };
+  }
+  hcache.set(code, { at: Date.now(), data });
+  return data;
+}
+
 // 一檔股票的日線分析（警報排程也會用）
 export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)) {
+  let h1 = null;
+  try { h1 = await hourData(code); } catch {}
+  const withH1 = (d) => ({ ...d, h1, chochOB: h1 && h1.dailyOB !== undefined ? h1.dailyOB : d.chochOB });
   const hit = cache.get(code);
-  if (hit && hit.day === day) return hit.data;
+  if (hit && hit.day === day) return withH1(hit.data);
   const bars = await history(code);
   // 日線：20 日箱型、往回 60 日找大漲大跌
   const data = {
     ...divergence(bars, { lookback: 70, w: 3, recent: 12 }),
     pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
     st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
-    choch: choch(bars), // 台股一天交易 4.5 小時，日 K ≈ 一根 4H
+    chochOB: chochOB(bars, { RR: 5, longOnly: true }), // 日線 CHoCH 訂單塊（只做多）；有 Yahoo 一年資料時改用較長的那份
     // 諧波 CD 段（反著用：B 進場、C 停損、D 止盈）。台股回測只有做多有效（做空 -0.15R），所以只留做多
     harmCD: harmonicCD(bars).filter((x) => x.dir === 1),
     bars: bars.length,
   };
   cache.set(code, { day, data });
-  return data;
+  return withH1(data);
 }
 
 export default async function handler(req, res) {
