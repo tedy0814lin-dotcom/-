@@ -9,6 +9,8 @@ import { TW_SIGNALS, twPick, applyTwHist } from '/lib/twCore.js';
 const SORTS = {
   crypto: [
     ['cat', '機會強度（分類）'],
+    ['harmFirst', '諧波 CD 段優先'],
+    ['chochFirst', 'SMC 結構轉變優先'],
     ['score', '大戶動能分數'],
     ['patFirst', '轉折／突破訊號優先'],
     ['coilFirst', '蓄力警報優先'],
@@ -25,6 +27,8 @@ const SORTS = {
   ],
   tw: [
     ['cat', '機會強度（分類）'],
+    ['harmFirst', '諧波 CD 段優先'],
+    ['chochFirst', 'SMC 結構轉變優先'],
     ['total', '三大法人今日買超'],
     ['patFirst', '轉折／突破訊號優先'],
     ['coilFirst', '築底警報優先'],
@@ -202,6 +206,9 @@ function sortRows(rows) {
     marginDrop: (r) => -(r.marginChg ?? 0),
     cvdLow: (r) => -(r.cvdRatio ?? 0),
     patFirst: (r) => (r.signals.some((k) => ['baseBreak', 'botTurn', 'topTurn', 'topWarn', 'boxBreakDown', 'dBoxLong', 'dBoxShort', 'boxLong', 'boxShort', 'hiBoxBreak', 'loBoxBreak', 'pullLong', 'pullShort', 'retestLong', 'retestShort', 'revRetestLong', 'revRetestShort'].includes(k)) ? 1e9 : 0) + (r.score ?? Math.abs(r.total5 ?? 0)),
+    // 諧波優先：剛觸發的 > 進行中 > 等待中（離 B 越近越前面）
+    harmFirst: (r) => { const h = harmList(r); if (!h.length) return -1e12; const t = h.some((x) => x.state === 'on' && x.ago <= 3) ? 3e9 : h.some((x) => x.state === 'on') ? 2e9 : 1e9; return t - Math.min(...h.map((x) => Math.abs(x.dist || 0))) * 1e6; },
+    chochFirst: (r) => ((r.signals || []).some((k) => k.startsWith('chochBos')) ? 2e9 : (r.signals || []).some((k) => k.startsWith('choch')) ? 1e9 : 0) + (r.catScore || 0),
     coilFirst: (r) => (r.signals.some((k) => k.startsWith('coil')) ? 1e9 : 0) + (r.score ?? r.ratio5 ?? 0),
   }[key] || ((r) => r[key] ?? -Infinity);
   return [...rows].sort((a, b) => get(b) - get(a));
@@ -213,16 +220,23 @@ function visibleRows() {
   const q = state.q.trim().toUpperCase();
   let rows = d.rows;
   if (q) rows = rows.filter((r) => (r.base || r.code).toUpperCase().includes(q) || (r.name || '').includes(state.q.trim()));
-  if (state.cat) rows = rows.filter((r) => r.cat === state.cat);
+  if (state.cat) rows = rows.filter((r) => (SPECIAL[state.cat] ? SPECIAL[state.cat](r) : r.cat === state.cat));
   return sortRows(rows);
 }
+
+// 特別篩選：諧波 CD 段（觸發或等待中）、SMC CHoCH 結構轉變
+const harmList = (r) => r.harmCD || r.div?.harmCD || [];
+const SPECIAL = {
+  harm: (r) => harmList(r).length > 0,
+  choch: (r) => (r.signals || []).some((k) => k.startsWith('choch')),
+};
 
 // ---------- 畫面 ----------
 function renderChips() {
   const rows = state.data[state.tab]?.rows || [];
-  const n = (c) => rows.filter((r) => r.cat === c).length;
+  const n = (c) => rows.filter((r) => (SPECIAL[c] ? SPECIAL[c](r) : r.cat === c)).length;
   const chip = (c, label) => `<button class="chip ${c ? 'chip-' + c : ''}" type="button" data-cat="${c || ''}" aria-pressed="${state.cat === c}">${label}<b>${c ? n(c) : rows.filter((r) => r.cat).length}</b></button>`;
-  $('chips').innerHTML = `${chip(null, '全部有訊號')}<span class="chip-sep">交易機會</span>${chip('long', '做多機會')}${chip('short', '做空機會')}<span class="chip-sep">潛在反轉</span>${chip('bottom', '見底轉強')}${chip('top', '見頂轉弱')}`;
+  $('chips').innerHTML = `${chip(null, '全部有訊號')}<span class="chip-sep">交易機會</span>${chip('long', '做多機會')}${chip('short', '做空機會')}<span class="chip-sep">潛在反轉</span>${chip('bottom', '見底轉強')}${chip('top', '見頂轉弱')}<span class="chip-sep">型態</span>${chip('harm', '諧波 CD 段')}${chip('choch', 'SMC 結構轉變')}`;
 }
 
 function renderStatus() {
@@ -326,7 +340,7 @@ function render() {
   const d = state.data[state.tab];
   const empty = $('empty');
   empty.hidden = !d || rows.length > 0;
-  if (d && !rows.length) empty.textContent = state.cat ? `目前沒有「${CATS[state.cat].label}」的標的。沒有訊號是常態，代表現在沒有明確機會。` : '找不到符合的代號或名稱。';
+  if (d && !rows.length) empty.textContent = state.cat ? `目前沒有「${CATS[state.cat]?.label || { harm: '諧波 CD 段', choch: 'SMC 結構轉變' }[state.cat]}」的標的。沒有訊號是常態，代表現在沒有明確機會。` : '找不到符合的代號或名稱。';
   $('more').hidden = rows.length <= state.limit;
   $('more').textContent = `顯示更多（還有 ${rows.length - state.limit} 檔）`;
 }
