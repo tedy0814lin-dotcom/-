@@ -69,7 +69,8 @@ export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toI
     pat: pattern(bars, { box: 20, runWin: 60, boxMax: 15 }),
     st: structure(bars, bars, STRUCT_TW), // 日線大箱 / 短箱 / 趨勢回踩
     choch: choch(bars), // 台股一天交易 4.5 小時，日 K ≈ 一根 4H
-    harmCD: harmonicCD(bars), // 諧波 CD 段（反著用：B 進場、C 停損、D 止盈）
+    // 諧波 CD 段（反著用：B 進場、C 停損、D 止盈）。台股回測只有做多有效（做空 -0.15R），所以只留做多
+    harmCD: harmonicCD(bars).filter((x) => x.dir === 1),
     bars: bars.length,
   };
   cache.set(code, { day, data });
