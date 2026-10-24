@@ -1,5 +1,5 @@
 // 排程警報（推播到 LINE）
-// 強以上（強、非常強）：每次掃描（每 15 分鐘）有新的就推；台北時間 0～9 點不推
+// 強以上（強、非常強）：每次掃描（約每 5 分鐘）有新的就推；台北時間 0～9 點不推
 // 需要的環境變數：SITE、ALERT_KEY、LINE_TOKEN；手動執行可加 TW=1（強制掃台股）、TEST=1（測試訊息）
 import fs from 'node:fs';
 
@@ -46,7 +46,9 @@ const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.write
 // 台北時間 0:00～9:00 睡覺不推；這段時間出現、到 9 點還有效的，9 點後第一次掃描會一起推
 const quiet = hour < 9;
 // 台股：平日 9～13 點盤中每小時、17 點（法人資料出來）、21 點（融資資料出來）掃
-const doTw = process.env.TW === '1' || (weekday && ([9, 10, 11, 12, 13, 17, 21].includes(hour) && tpe.getUTCMinutes() < 15));
+const twSlot = 'twscan|' + day + '|' + hour; // 同一個小時只掃一次台股
+const doTw = process.env.TW === '1' || (weekday && [9, 10, 11, 12, 13, 17, 21].includes(hour) && !state[twSlot]);
+if (doTw) state[twSlot] = now;
 
 const crypto = [], tw = [];
 try { crypto.push(...(await get('/api/alert?m=crypto&min=2')).items); }
