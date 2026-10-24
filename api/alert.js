@@ -27,7 +27,7 @@ function pick(rows, dict, mkt, min = 3) {
     if (!(RANK[r.catLevel] >= min)) continue;
     const name = mkt === 'crypto' ? r.base || r.symbol : `${r.code} ${r.name}`;
     out.push({
-      id: [mkt, r.symbol || r.code, r.cat, r.chochId || ''].join('|'),
+      id: [mkt, r.symbol || r.code, r.cat, r.chochId || '', r.harmId || ''].join('|'),
       mkt, name, cat: CATS[r.cat].label, level: r.catLevel,
       price: r.price ?? r.close ?? null,
       why: r.catWhy.slice(0, 4),
@@ -42,7 +42,7 @@ function pick(rows, dict, mkt, min = 3) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!authed(req)) return res.status(401).json({ error: '金鑰不對' });
-  const min = req.query.min === '1' ? 1 : 3;
+  const min = req.query.min === '1' ? 1 : req.query.min === '2' ? 2 : 3;
   try {
     if (req.query.m === 'crypto') {
       const d = await buildCrypto(120, { getJSON, pool });
