@@ -208,7 +208,7 @@ function sortRows(rows) {
     patFirst: (r) => (r.signals.some((k) => ['baseBreak', 'botTurn', 'topTurn', 'topWarn', 'boxBreakDown', 'dBoxLong', 'dBoxShort', 'boxLong', 'boxShort', 'hiBoxBreak', 'loBoxBreak', 'pullLong', 'pullShort', 'retestLong', 'retestShort', 'revRetestLong', 'revRetestShort'].includes(k)) ? 1e9 : 0) + (r.score ?? Math.abs(r.total5 ?? 0)),
     // 諧波優先：剛觸發的 > 進行中 > 等待中（離 B 越近越前面）
     harmFirst: (r) => { const h = harmList(r); if (!h.length) return -1e12; const t = h.some((x) => x.state === 'on' && x.ago <= 3) ? 3e9 : h.some((x) => x.state === 'on') ? 2e9 : 1e9; return t - Math.min(...h.map((x) => Math.abs(x.dist || 0))) * 1e6; },
-    chochFirst: (r) => ((r.signals || []).some((k) => k.startsWith('chochBos')) ? 2e9 : (r.signals || []).some((k) => k.startsWith('choch')) ? 1e9 : 0) + (r.catScore || 0),
+    chochFirst: (r) => ((r.signals || []).some((k) => k.startsWith('chochHarm')) ? 2e9 : (r.signals || []).some((k) => k.startsWith('choch')) ? 1e9 : 0) + (r.catScore || 0),
     coilFirst: (r) => (r.signals.some((k) => k.startsWith('coil')) ? 1e9 : 0) + (r.score ?? r.ratio5 ?? 0),
   }[key] || ((r) => r[key] ?? -Infinity);
   return [...rows].sort((a, b) => get(b) - get(a));
@@ -225,7 +225,7 @@ function visibleRows() {
 }
 
 // 特別篩選：諧波 CD 段（觸發或等待中）、SMC CHoCH 結構轉變
-const harmList = (r) => [...(r.harmCD || r.div?.harmCD || []), ...(r.harmCD1h || [])];
+const harmList = (r) => [...(r.harmCD || r.div?.harmCD || []), ...(r.harmCD1h || r.div?.h1?.harmCD || [])];
 const SPECIAL = {
   harm: (r) => harmList(r).length > 0,
   choch: (r) => (r.signals || []).some((k) => k.startsWith('choch')),
