@@ -29,10 +29,14 @@ jobs:
           key: alert-state-${{ github.run_id }}
           restore-keys: alert-state-
       - run: |
-          for i in $(seq 1 10); do
-            if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" node scripts/alert.mjs || true
-            else node scripts/alert.mjs || true; fi
-            if [ "$i" -lt 10 ]; then sleep 300; fi
+          # 用實際經過時間控制：最多跑 45 分鐘，確保在 60 分鐘逾時前結束、把「推過哪些」存回快取（避免重複推播）
+          START=$(date +%s); i=0
+          while true; do
+            i=$((i+1))
+            if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
+            else timeout 600 node scripts/alert.mjs || true; fi
+            if [ $(( $(date +%s) - START + 300 )) -gt 2700 ]; then break; fi
+            sleep 300
           done
         env:
           ALERT_KEY: ${{ secrets.ALERT_KEY }}
