@@ -20,14 +20,49 @@ function authed(req) {
 // 只留夠強的（預設只要「非常強」；min=1 連「強」「中」也要，給每日摘要用）
 // 整理成要推播的內容；id 用來避免同一個訊號重複通知
 const RANK = { 非常強: 3, 強: 2, 中: 1 };
+const CAP_R = 4; // 目標最多 4R（太遠的目標拿不到）
+
+// 找出這個訊號實際用的進場計畫（數字），給推播判斷「還來不來得及」
+function mainPlan(r, mkt, dir) {
+  const ob = mkt === 'crypto'
+    ? [[r.chochOB1h, 1, '1H'], [r.chochOB, 4, '4H']]
+    : [[r.div?.h1?.chochOB, 1, '1H'], [r.div?.chochOB, 24, '日線']];
+  const hm = mkt === 'crypto'
+    ? [[r.harmCD1h, 1, '1H'], [r.harmCD, 4, '4H']]
+    : [[r.div?.h1?.harmCD, 1, '1H'], [r.div?.harmCD, 24, '日線']];
+  const cap = (entry, stop, target) => {
+    const risk = Math.abs(entry - stop);
+    if (!(risk > 0)) return null;
+    const far = Math.min(Math.abs(target - entry), CAP_R * risk);
+    return { entry, stop, target: entry + dir * far, tp1: entry + dir * Math.min(2 * risk, far) };
+  };
+  for (const [o, h, tf] of ob) {
+    if (!o || o.dir !== dir) continue;
+    const wait = o.state === 'wait';
+    return { src: tf + ' CHoCH 訂單塊', tf, wait, bars: wait ? o.ago : o.fillAgo, hours: (wait ? o.ago : o.fillAgo) * h, ...cap(o.entry, o.stop, o.target) };
+  }
+  for (const [list, h, tf] of hm) {
+    for (const x of list || []) {
+      if (x.dir !== dir || !(x.state === 'wait' || x.ago <= 3)) continue;
+      const wait = x.state === 'wait';
+      return { src: tf + ' 諧波 CD 段', tf, wait, bars: wait ? null : x.ago, hours: wait ? null : x.ago * h, ...cap(x.entry, x.stop, x.target) };
+    }
+  }
+  return null;
+}
+
 function pick(rows, dict, mkt, min = 3) {
   const out = [];
   for (const r of rows) {
     classify(r, dict);
     if (!(RANK[r.catLevel] >= min)) continue;
     const name = mkt === 'crypto' ? r.base || r.symbol : `${r.code} ${r.name}`;
+    const dir = CATS[r.cat].dir;
     out.push({
       id: [mkt, r.symbol || r.code, r.cat, r.chochId || '', r.harmId || ''].join('|'),
+      // 防重複用：同一檔、同方向
+      key: [mkt, r.symbol || r.code, dir > 0 ? 'L' : 'S'].join('|'),
+      dir, plan2: mainPlan(r, mkt, dir),
       mkt, name, cat: CATS[r.cat].label, level: r.catLevel,
       price: r.price ?? r.close ?? null,
       why: r.catWhy.slice(0, 4),
