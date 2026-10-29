@@ -426,9 +426,9 @@ async function enrichTwMacd() {
   if (!d || d.macdDone) return;
   d.macdDone = true;
   const codes = twPick(d.rows);
-  // 一次 4 檔、同時 3 批；某一批失敗（逾時）就跳過，不要整個停掉
+  // 全部有量的股票都掃：一次 8 檔、同時 4 批；某一批失敗（逾時）就跳過，不要整個停掉
   const batches = [];
-  for (let i = 0; i < codes.length; i += 4) batches.push(codes.slice(i, i + 4));
+  for (let i = 0; i < codes.length; i += 8) batches.push(codes.slice(i, i + 8));
   let next = 0;
   const work = async () => {
     while (next < batches.length) {
@@ -445,7 +445,7 @@ async function enrichTwMacd() {
       } catch (e) { if (e.message === '未登入') return; }
     }
   };
-  await Promise.all([work(), work(), work()]);
+  await Promise.all([work(), work(), work(), work()]);
   notifyNew('tw');
 }
 
