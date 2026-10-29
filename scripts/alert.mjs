@@ -61,10 +61,18 @@ catch (e) { console.error('加密掃描失敗', e.message); }
 if (doTw) {
   try {
     const { codes } = await get('/api/alert?m=tw&step=pick');
-    for (let i = 0; i < codes.length; i += 8) {
-      try { tw.push(...(await get('/api/alert?m=tw&min=2&codes=' + codes.slice(i, i + 8).join(','))).items); }
-      catch (e) { console.error('台股掃描失敗', e.message); }
-    }
+    // 全部有量的股票（幾百檔）：一次 8 檔、同時 4 個請求
+    const chunks = [];
+    for (let i = 0; i < codes.length; i += 8) chunks.push(codes.slice(i, i + 8));
+    let k = 0;
+    await Promise.all([0, 1, 2, 3].map(async () => {
+      while (k < chunks.length) {
+        const c = chunks[k++];
+        try { tw.push(...(await get('/api/alert?m=tw&min=2&codes=' + c.join(','))).items); }
+        catch (e) { console.error('台股掃描失敗', e.message); }
+      }
+    }));
+    console.log('台股掃描 ' + codes.length + ' 檔');
   } catch (e) { console.error('台股清單失敗', e.message); }
 }
 
