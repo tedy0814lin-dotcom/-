@@ -27,8 +27,9 @@ function mainPlan(r, mkt, dir) {
   // 加密：用得分最高的那個策略的計畫（2026-10-29 打分機制）
   const sp = r.plans?.[r.mainKey];
   if (sp) {
-    const names = { vegasLong: '維加斯 4H', macdBull2: 'MACD 底背離 4H', macdBear2: 'MACD 頂背離 4H', harmUp: '諧波 D 點 4H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱' };
-    return { src: names[r.mainKey] || r.mainKey, tf: sp.tf, wait: sp.wait, bars: sp.bars, hours: sp.bars != null ? sp.bars * 4 : null, entry: sp.entry, stop: sp.stop, target: sp.target };
+    const names = { harmUpVegas: '諧波＋維加斯 4H', harmUp: '諧波 D 點 4H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱', crtLong: 'CRT 30 分', crtShort: 'CRT 30 分' };
+    const hPer = sp.tf === '30m' ? 0.5 : 4;
+    return { src: names[r.mainKey] || r.mainKey, tf: sp.tf, wait: sp.wait, bars: sp.bars, hours: sp.bars != null ? Math.round(sp.bars * hPer * 10) / 10 : null, entry: sp.entry, stop: sp.stop, target: sp.target };
   }
   const ob = mkt === 'crypto'
     ? [[r.chochOB1h, 1, '1H'], [r.chochOB, 4, '4H']]
