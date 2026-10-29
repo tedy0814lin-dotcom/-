@@ -3,7 +3,9 @@
 import { requireUser, getJSON, sleep } from './_lib.js';
 import { divergence, pattern } from '../lib/indicators.js';
 import { structure, STRUCT_TW, chochOB } from '../lib/structure.js';
-import { harmonicCD } from '../lib/harmonic.js';
+import { harmonicCD, harmonic } from '../lib/harmonic.js';
+import { vegas } from '../lib/vegas.js';
+import { tunnel } from '../lib/cryptoCore.js';
 
 const TWSE = 'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
 const cache = new Map(); // code → { day, data }
@@ -77,10 +79,27 @@ async function yahooHour(code) {
   }
   return [];
 }
+// 日 K 三年（Yahoo）：給日線諧波、維加斯通道用（EMA338 需要 400 根以上）
+async function yahooDaily3y(code) {
+  const now = Date.now() / 1000;
+  for (const sfx of ['TW', 'TWO']) {
+    let j;
+    try { j = await getJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${code}.${sfx}?interval=1d&range=3y`, { timeout: 12000, retries: 1, headers: { 'User-Agent': UA } }); } catch { continue; }
+    const r = j.chart?.result?.[0], q = r?.indicators?.quote?.[0];
+    if (!q || !r.timestamp?.length) continue;
+    const bars = [];
+    r.timestamp.forEach((t, i) => {
+      const b = { t, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i] };
+      if (b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0 && t + 5.5 * 3600 <= now) bars.push(b); // 今天還沒收盤的不算
+    });
+    if (bars.length) return bars;
+  }
+  return [];
+}
 export async function hourData(code) {
   const hit = hcache.get(code);
   if (hit && Date.now() - hit.at < 20 * 60e3) return hit.data;
-  const h = await yahooHour(code);
+  const [h, dly] = await Promise.all([yahooHour(code), yahooDaily3y(code).catch(() => [])]);
   let data = null;
   if (h.length >= 120) {
     const days = new Map();
@@ -97,6 +116,18 @@ export async function hourData(code) {
       harmCD: harmonicCD(b1).filter((x) => x.dir === 1),
       dailyOB: daily.length >= 120 ? chochOB(daily.slice(-300), { RR: 5, longOnly: true }) : undefined,
     };
+    // 2026-10-29 台股回測（100 檔、日線 10 年、60 分 2 年、扣手續費＋證交稅）後保留的策略用的資料
+    const h4 = []; // 台股 4H＝連續 4 根 60 分 K（從最新往回切）
+    for (let i = h.length - 4; i >= 0; i -= 4) { const g = h.slice(i, i + 4); h4.unshift({ o: g[0].o, h: Math.max(...g.map((x) => x.h)), l: Math.min(...g.map((x) => x.l)), c: g[3].c }); }
+    data.harm4 = h4.length >= 60 ? harmonic(h4.slice(-300)) : null;
+    data.cd4 = h4.length >= 60 ? harmonicCD(h4.slice(-300)).filter((x) => x.dir === 1) : [];
+  }
+  if (dly.length >= 120) {
+    data = data || {};
+    data.harmD = harmonic(dly.slice(-300));
+    data.cdD = harmonicCD(dly.slice(-300)).filter((x) => x.dir === 1);
+    data.vgD = vegas(dly);
+    data.tunD = tunnel(dly);
   }
   hcache.set(code, { at: Date.now(), data });
   return data;
