@@ -29,6 +29,29 @@ function grade(r, m) {
       if (n.volUp) sc += 5;
       if (tf === '15m') notes.push('當沖');
     }
+    // 2026-10-29 回測（加密 4H 4 年、台股日線 10 年，扣手續費）加減分，只用在加密 4H、台股日線
+    if ((m === 'crypto' && tf === '4h') || (m === 'tw' && tf === '1d')) {
+      if (m === 'crypto' && n.dir > 0) {
+        if (n.dist != null && n.dist < 2) { sc += 10; notes.push('進場離大通道 <2ATR（回測 +0.19R）'); }
+        if (n.spread != null && n.spread < 1) { sc += 8; notes.push('通道還沒拉開 <1ATR（回測 +0.20R）'); }
+        if (n.spread != null && n.spread >= 2) { sc -= 8; notes.push('通道拉太開（回測較差）'); }
+      }
+      if (m === 'crypto' && n.dir < 0) {
+        if (n.spread != null && n.spread < 1) { sc += 12; notes.push('通道還沒拉開 <1ATR（做空回測 +0.81R，樣本 153）'); }
+        if (n.tunnel === '大') { sc += 8; notes.push('大通道（做空回測 +0.33R）'); }
+      }
+      if (m === 'tw' && n.dir > 0) {
+        if (n.tunnel === '大') { sc += 10; notes.push('大通道（台股回測 +0.55R，隨機做多 +0.20R）'); }
+        if (n.spread != null && n.spread < 2) { sc += 6; notes.push('通道距離 <2ATR（回測較好）'); }
+        if (n.spread != null && n.spread >= 2 && n.spread < 4) { sc -= 8; notes.push('通道距離 2～4ATR（回測幾乎沒優勢）'); }
+      }
+      // 諧波共振：同方向、回測有效的型態；D 在通道上再加分
+      const h = v.harm, good = m === 'crypto' ? (n.dir > 0 ? ['Gartley', 'Butterfly', 'Crab', 'Deep Crab'] : []) : (n.dir > 0 ? ['Bat', 'Crab', 'Gartley', 'Cypher'] : []);
+      if (h && h.dir === n.dir && h.ago <= 10 && good.includes(h.name)) {
+        sc += 10; notes.push(`諧波 ${h.name} 同方向${h.inSmall || h.inBig ? '，D 在' + (h.inBig ? '大' : '小') + '通道' : ''}`);
+        if (h.inSmall || h.inBig) sc += 5;
+      }
+    }
     sc = Math.max(0, Math.min(100, Math.round(sc)));
     if (!best || sc > best.sc) best = { sc, tf, n, notes };
   });
@@ -108,6 +131,8 @@ export function createVegasTab({ api, el }) {
           : t.status === '回踩完成' ? `回踩 EMA12 完成，等突破 <b>${px(t.trigger)}</b>（${t.tunnel}通道）`
           : t.status === '已突破EMA12' ? `已站上 EMA12，等回踩（${t.tunnel}通道）` : `碰到${t.tunnel}通道，等突破 EMA12`;
       }
+      const H = v.harm;
+      if (H && H.ago <= 10) now += `${now ? '<br>' : ''}<span class="${H.dir > 0 ? 'up' : 'down'}">諧波 ${esc(H.name)} ${H.dir > 0 ? '看漲' : '看跌'}</span> D ${px(H.D)}（${H.ago} 根前）${H.inBig ? '・D 在大通道' : H.inSmall ? '・D 在小通道' : ''}・停損 ${px(H.stop)}`;
       const s = v.stats;
       const stat = s ? `<span class="muted">訊號勝率 ${s.winRate ?? '—'}%（${s.n}）・小通道反應 ${s.small.rate ?? '—'}%（${s.small.n}）・大通道 ${s.big.rate ?? '—'}%（${s.big.n}）</span>` : '';
       return `<div class="vg-row"><span class="k">${TFN[tf]}</span>${tr}${now ? ' ・ ' + now : ''}<div>${stat}</div></div>`;
