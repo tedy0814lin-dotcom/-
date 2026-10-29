@@ -27,7 +27,7 @@ function mainPlan(r, mkt, dir) {
   // 加密：用得分最高的那個策略的計畫（2026-10-29 打分機制）
   const sp = r.plans?.[r.mainKey];
   if (sp) {
-    const names = { harmUpVegas: '諧波＋維加斯 4H', harmUp: '諧波 D 點 4H', paiRevD: 'PAI 反轉 日線', paiRev12: 'PAI 反轉 12H', cvdoUp12: 'CVD 震盪 12H', cvdoUp4: 'CVD 震盪 4H', cvdoUp4V: 'CVD 放量上穿 4H', cvdFlip12: 'CVD 轉正爆量 12H', cvdFlip4: 'CVD 轉正爆量 4H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱', crtLong: 'CRT 30 分', crtShort: 'CRT 30 分',
+    const names = { harmUpVegas: '諧波＋維加斯 4H', harmUp: '諧波 D 點 4H', paiRevD: 'PAI 反轉 日線', paiRev12: 'PAI 反轉 12H', cvdoUp12: 'CVD 震盪 12H', cvdoUp4: 'CVD 震盪 4H', cvdoUp4V: 'CVD 放量上穿 4H', cvdFlip12: 'CVD 轉正爆量 12H', cvdFlip4: 'CVD 轉正爆量 4H', macdTopDiv4C: 'MACD 連續頂背離 4H', macdTopDiv4: 'MACD 頂背離 4H', macdTopDiv12: 'MACD 頂背離 12H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱', crtLong: 'CRT 30 分', crtShort: 'CRT 30 分',
       twCDVegas: '日線諧波 CD＋維加斯', twHarmDayVegas: '日線諧波＋維加斯', twHarmDay: '日線諧波 D 點', twPai80: '日線 PAI 進入超買', twCvdoUp: '日線 CVD 震盪', twCvdFlip: '日線 CVD 轉正爆量' };
     const hPer = sp.tf === '30m' ? 0.5 : sp.tf === '12H' ? 12 : sp.tf === '1D' ? null : 4;
     return { src: names[r.mainKey] || r.mainKey, tf: sp.tf === '1D' ? '日線' : sp.tf, wait: sp.wait, bars: sp.bars, hours: sp.bars != null && hPer ? Math.round(sp.bars * hPer * 10) / 10 : null, entry: sp.entry, stop: sp.stop, target: sp.target };
