@@ -426,18 +426,26 @@ async function enrichTwMacd() {
   if (!d || d.macdDone) return;
   d.macdDone = true;
   const codes = twPick(d.rows);
-  for (let i = 0; i < codes.length; i += 8) {
-    try {
-      const res = await api(`/api/twhist?codes=${codes.slice(i, i + 8).join(',')}`);
-      for (const r of d.rows) {
-        const m = res[r.code];
-        if (!m || m.error) continue;
-        applyTwHist(r, m);
-      }
-      classifyAll('tw');
-      if (state.tab === 'tw') render();
-    } catch { break; }
-  }
+  // 一次 4 檔、同時 3 批；某一批失敗（逾時）就跳過，不要整個停掉
+  const batches = [];
+  for (let i = 0; i < codes.length; i += 4) batches.push(codes.slice(i, i + 4));
+  let next = 0;
+  const work = async () => {
+    while (next < batches.length) {
+      const b = batches[next++];
+      try {
+        const res = await api(`/api/twhist?codes=${b.join(',')}`);
+        for (const r of d.rows) {
+          const m = res[r.code];
+          if (!m || m.error) continue;
+          applyTwHist(r, m);
+        }
+        classifyAll('tw');
+        if (state.tab === 'tw') render();
+      } catch (e) { if (e.message === '未登入') return; }
+    }
+  };
+  await Promise.all([work(), work(), work()]);
   notifyNew('tw');
 }
 
