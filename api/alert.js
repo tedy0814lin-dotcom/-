@@ -28,7 +28,7 @@ function mainPlan(r, mkt, dir) {
   const sp = r.plans?.[r.mainKey];
   if (sp) {
     const names = { harmUpVegas: '諧波＋維加斯 4H', harmUp: '諧波 D 點 4H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱', crtLong: 'CRT 30 分', crtShort: 'CRT 30 分',
-      twCDVegas: '日線諧波 CD＋維加斯', twHarmDayVegas: '日線諧波＋維加斯', twHarmDay: '日線諧波 D 點' };
+      twCDVegas: '日線諧波 CD＋維加斯', twHarmDayVegas: '日線諧波＋維加斯', twHarmDay: '日線諧波 D 點', twPai80: '日線 PAI 進入超買' };
     const hPer = sp.tf === '30m' ? 0.5 : sp.tf === '1D' ? null : 4;
     return { src: names[r.mainKey] || r.mainKey, tf: sp.tf === '1D' ? '日線' : sp.tf, wait: sp.wait, bars: sp.bars, hours: sp.bars != null && hPer ? Math.round(sp.bars * hPer * 10) / 10 : null, entry: sp.entry, stop: sp.stop, target: sp.target };
   }

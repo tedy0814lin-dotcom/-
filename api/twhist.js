@@ -1,6 +1,7 @@
 // GET /api/twhist?codes=2330,2317
 // 抓個股近 4 個月日 K，算日線 MACD 背離與型態（大漲大跌、箱型突破）。一次最多 8 檔（證交所會擋太快的請求）。
 import { requireUser, getJSON, sleep } from './_lib.js';
+import { paiNow } from '../lib/pai.js';
 import { divergence, pattern } from '../lib/indicators.js';
 import { structure, STRUCT_TW, chochOB } from '../lib/structure.js';
 import { harmonicCD, harmonic } from '../lib/harmonic.js';
@@ -128,6 +129,7 @@ export async function hourData(code) {
     data.cdD = harmonicCD(dly.slice(-300)).filter((x) => x.dir === 1);
     data.vgD = vegas(dly);
     data.tunD = tunnel(dly);
+    data.pai = paiNow(dly.slice(-200));
     data.dly110 = dly.slice(-110).map((b) => ({ o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
   }
   hcache.set(code, { at: Date.now(), data });
