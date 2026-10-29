@@ -193,7 +193,7 @@ function twCard(r) {
       ${metric('融券增減', lotsFmt(r.shortChg), r.shortBal != null ? `餘 ${nf.format(r.shortBal)}` : '', cls(r.shortChg))}
     </div>
     <div class="spark-row"><span class="k">法人 5 日</span>${spark(r.trend, 'bars')}<span class="k num">${r.ratio == null ? '' : '佔量 ' + r.ratio.toFixed(0) + '%'}</span></div>
-    ${catBlock(r, [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.harmPendWhy || []), ...(r.boxWhy || []), ...(r.patWhy || [])])}
+    ${catBlock(r, [...(r.stratWhy || []), ...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.harmPendWhy || []), ...(r.boxWhy || []), ...(r.patWhy || [])])}
   </article>`;
 }
 
