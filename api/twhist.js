@@ -163,9 +163,10 @@ export default async function handler(req, res) {
   const codes = String(req.query.codes || '').split(',').map((c) => c.trim()).filter((c) => /^\d{4}$/.test(c)).slice(0, 8);
   const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const out = {};
-  for (const code of codes) {
+  // 同時抓（全部掃描時一次 8 檔，逐檔抓會逾時）
+  await Promise.all(codes.map(async (code) => {
     try { out[code] = await histData(code, day); } catch (e) { out[code] = { error: e.message }; }
-  }
+  }));
   res.setHeader('Cache-Control', 'private, no-store');
   res.status(200).json(out);
 }

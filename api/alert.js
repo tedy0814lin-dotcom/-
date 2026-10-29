@@ -96,12 +96,12 @@ export default async function handler(req, res) {
     if (req.query.step === 'pick') return res.status(200).json({ date: d.date, codes: twPick(d.rows) });
     const codes = String(req.query.codes || '').split(',').filter((c) => /^\d{4}$/.test(c)).slice(0, 8);
     const rows = [];
-    for (const code of codes) {
+    await Promise.all(codes.map(async (code) => {
       const base = d.rows.find((x) => x.code === code);
-      if (!base) continue;
+      if (!base) return;
       const r = { ...base, signals: [...base.signals] };
       try { applyTwHist(r, await histData(code)); rows.push(r); } catch {}
-    }
+    }));
     res.status(200).json({ date: d.date, items: pick(rows, TW_SIGNALS, 'tw', min) });
   } catch (e) {
     res.status(502).json({ error: e.message });
