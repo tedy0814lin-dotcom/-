@@ -139,11 +139,13 @@ function classifyAll(tab) {
 function catBadge(r) {
   if (!r.cat) return '';
   const c = CATS[r.cat];
-  return `<span class="cat cat-${r.cat} lv-${r.catLevel === '非常強' ? 4 : r.catLevel === '強' ? 3 : r.catLevel === '中' ? 2 : 1}">${c.label}<b>${r.catLevel}</b></span>`;
+  return `<span class="cat cat-${r.cat} lv-${r.catLevel === '非常強' ? 4 : r.catLevel === '強' ? 3 : r.catLevel === '中' ? 2 : 1}">${r.split ? '多空分歧' : c.label}<b>${r.catLevel} ${r.catScore}分</b></span>`;
 }
 function catBlock(r, why) {
   const lines = [];
   if (r.cat) lines.push(`<div class="why why-pat"><span class="muted">依據</span> ${r.catWhy.map(esc).join('・')}</div>`);
+  if (r.chipWhy?.length) lines.push(`<div class="why"><span class="muted">籌碼</span> ${r.chipWhy.map(esc).join('・')}</div>`);
+  else if (r.scene?.length) lines.push(`<div class="why"><span class="muted">籌碼情境</span> ${r.scene.map((x) => esc(x.t)).join('・')}</div>`);
   if (why && why.length) lines.push(`<div class="why">${why.map(esc).join('・')}</div>`);
   if (r.catConflict?.length) lines.push(`<div class="why warn-text">注意：同時有${r.catConflict.map(esc).join('、')}的訊號，方向打架</div>`);
   if (r.otherSignals?.length) lines.push(`<div class="why"><span class="muted">其他</span> ${r.otherSignals.map(esc).join('・')}</div>`);
@@ -170,7 +172,7 @@ function cryptoCard(r) {
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
-    ${catBlock(r, [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.harmPendWhy || []), ...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
+    ${catBlock(r, [...(r.stratWhy || []), ...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
   </article>`;
 }
 
