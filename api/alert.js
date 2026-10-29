@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { getJSON, pool } from './_lib.js';
 import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals } from '../lib/cryptoCore.js';
 import { CATS, classify } from '../lib/categories.js';
-import { TW_SIGNALS, twPick, applyTwHist } from '../lib/twCore.js';
+import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '../lib/twCore.js';
 import { twData } from './twstock.js';
 import { histData } from './twhist.js';
 
@@ -28,7 +28,7 @@ function mainPlan(r, mkt, dir) {
   const sp = r.plans?.[r.mainKey];
   if (sp) {
     const names = { harmUpVegas: '諧波＋維加斯 4H', harmUp: '諧波 D 點 4H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱', crtLong: 'CRT 30 分', crtShort: 'CRT 30 分',
-      twHarmDayVegas: '日線諧波＋維加斯', twHarmCDDay: '日線諧波 CD', twVegasDay: '日線維加斯', twHarm4h: '4H 諧波 D 點', twCD4h: '4H 諧波 CD', twHarmDay: '日線諧波 D 點' };
+      twCDVegas: '日線諧波 CD＋維加斯', twHarmDayVegas: '日線諧波＋維加斯', twHarmDay: '日線諧波 D 點' };
     const hPer = sp.tf === '30m' ? 0.5 : sp.tf === '1D' ? null : 4;
     return { src: names[r.mainKey] || r.mainKey, tf: sp.tf === '1D' ? '日線' : sp.tf, wait: sp.wait, bars: sp.bars, hours: sp.bars != null && hPer ? Math.round(sp.bars * hPer * 10) / 10 : null, entry: sp.entry, stop: sp.stop, target: sp.target };
   }
@@ -63,6 +63,7 @@ function pick(rows, dict, mkt, min = 3) {
   const out = [];
   for (const r of rows) {
     classify(r, dict);
+    if (mkt === 'tw' && !twInRange(r)) continue; // 台股只推 10～200 元
     if (!(RANK[r.catLevel] >= min)) continue;
     const name = mkt === 'crypto' ? r.base || r.symbol : `${r.code} ${r.name}`;
     const dir = CATS[r.cat].dir;
