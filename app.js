@@ -3,7 +3,7 @@ import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals,
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { createVegasTab } from '/vegasTab.js';
-import { TW_SIGNALS, twPick, applyTwHist } from '/lib/twCore.js';
+import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '/lib/twCore.js';
 
 
 const SORTS = {
@@ -134,7 +134,11 @@ const dictOf = (tab) => (tab === 'crypto' ? CRYPTO_SIGNALS : TW_SIGNALS);
 function classifyAll(tab) {
   const d = state.data[tab];
   if (!d) return;
-  for (const r of d.rows) classify(r, dictOf(tab));
+  for (const r of d.rows) {
+    classify(r, dictOf(tab));
+    // 台股只看股價 10～200 元（太貴、太便宜的不出訊號，搜尋還是找得到）
+    if (tab === 'tw' && !twInRange(r)) { r.cat = null; r.catLevel = ''; r.catScore = 0; }
+  }
 }
 function catBadge(r) {
   if (!r.cat) return '';
