@@ -89,7 +89,7 @@ async function yahooDaily3y(code) {
     if (!q || !r.timestamp?.length) continue;
     const bars = [];
     r.timestamp.forEach((t, i) => {
-      const b = { t, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i] };
+      const b = { t, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: (q.volume?.[i] || 0) / 1000 };
       if (b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0 && t + 5.5 * 3600 <= now) bars.push(b); // 今天還沒收盤的不算
     });
     if (bars.length) return bars;
@@ -128,6 +128,7 @@ export async function hourData(code) {
     data.cdD = harmonicCD(dly.slice(-300)).filter((x) => x.dir === 1);
     data.vgD = vegas(dly);
     data.tunD = tunnel(dly);
+    data.dly110 = dly.slice(-110).map((b) => ({ o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
   }
   hcache.set(code, { at: Date.now(), data });
   return data;
@@ -140,7 +141,9 @@ export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toI
   const withH1 = (d) => ({ ...d, h1, chochOB: h1 && h1.dailyOB !== undefined ? h1.dailyOB : d.chochOB });
   const hit = cache.get(code);
   if (hit && hit.day === day) return withH1(hit.data);
-  const bars = await history(code);
+  // 有 Yahoo 日 K 就直接用（快很多）；沒有才去證交所一個月一個月抓
+  const bars = h1?.dly110?.length >= 60 ? h1.dly110 : await history(code);
+  if (h1) delete h1.dly110;
   // 日線：20 日箱型、往回 60 日找大漲大跌
   const data = {
     ...divergence(bars, { lookback: 70, w: 3, recent: 12 }),
