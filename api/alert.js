@@ -24,6 +24,12 @@ const CAP_R = 4; // 目標最多 4R（太遠的目標拿不到）
 
 // 找出這個訊號實際用的進場計畫（數字），給推播判斷「還來不來得及」
 function mainPlan(r, mkt, dir) {
+  // 加密：用得分最高的那個策略的計畫（2026-10-29 打分機制）
+  const sp = r.plans?.[r.mainKey];
+  if (sp) {
+    const names = { vegasLong: '維加斯 4H', macdBull2: 'MACD 底背離 4H', macdBear2: 'MACD 頂背離 4H', harmUp: '諧波 D 點 4H', harmCDLong: '諧波 CD 4H', harmCDShort: '諧波 CD 4H', dBoxLong: '日線大箱' };
+    return { src: names[r.mainKey] || r.mainKey, tf: sp.tf, wait: sp.wait, bars: sp.bars, hours: sp.bars != null ? sp.bars * 4 : null, entry: sp.entry, stop: sp.stop, target: sp.target };
+  }
   const ob = mkt === 'crypto'
     ? [[r.chochOB1h, 1, '1H'], [r.chochOB, 4, '4H']]
     : [[r.div?.h1?.chochOB, 1, '1H'], [r.div?.chochOB, 24, '日線']];
@@ -63,12 +69,12 @@ function pick(rows, dict, mkt, min = 3) {
       // 防重複用：同一檔、同方向
       key: [mkt, r.symbol || r.code, dir > 0 ? 'L' : 'S'].join('|'),
       dir, plan2: mainPlan(r, mkt, dir),
-      mkt, name, cat: CATS[r.cat].label, level: r.catLevel,
+      mkt, name, cat: CATS[r.cat].label + '・' + r.catScore + ' 分', level: r.catLevel, score: r.catScore,
       price: r.price ?? r.close ?? null,
-      why: r.catWhy.slice(0, 4),
+      why: [...r.catWhy.slice(0, 4), ...(r.chipWhy || []).slice(0, 3).map((x) => '籌碼' + x)],
       choch: (r.chochWhy || []).slice(0, 4),
       // 進場／停損／目標：優先用 CHoCH 的計畫，沒有就用諧波或箱體的
-      plan: [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.boxWhy || [])].filter((x) => /^(進場|停損|目標|風報比)/.test(x)).slice(0, 4),
+      plan: r.stratWhy?.length ? r.stratWhy.slice(0, 2) : [...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.boxWhy || [])].filter((x) => /^(進場|停損|目標|風報比)/.test(x)).slice(0, 4),
     });
   }
   return out;
