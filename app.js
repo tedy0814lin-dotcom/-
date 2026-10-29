@@ -149,10 +149,8 @@ function catBlock(r, why) {
   const lines = [];
   if (r.cat) lines.push(`<div class="why why-pat"><span class="muted">依據</span> ${r.catWhy.map(esc).join('・')}</div>`);
   if (r.chipWhy?.length) lines.push(`<div class="why"><span class="muted">籌碼</span> ${r.chipWhy.map(esc).join('・')}</div>`);
-  else if (r.scene?.length) lines.push(`<div class="why"><span class="muted">籌碼情境</span> ${r.scene.map((x) => esc(x.t)).join('・')}</div>`);
   if (why && why.length) lines.push(`<div class="why">${why.map(esc).join('・')}</div>`);
   if (r.catConflict?.length) lines.push(`<div class="why warn-text">注意：同時有${r.catConflict.map(esc).join('、')}的訊號，方向打架</div>`);
-  if (r.otherSignals?.length) lines.push(`<div class="why"><span class="muted">其他</span> ${r.otherSignals.map(esc).join('・')}</div>`);
   return lines.join('');
 }
 
@@ -176,7 +174,7 @@ function cryptoCard(r) {
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
-    ${catBlock(r, [...(r.stratWhy || []), ...(r.boxWhy || []), ...(r.patWhy || []), ...(r.coilWhy || [])])}
+    ${catBlock(r, r.stratWhy || [])}
   </article>`;
 }
 
@@ -197,7 +195,7 @@ function twCard(r) {
       ${metric('融券增減', lotsFmt(r.shortChg), r.shortBal != null ? `餘 ${nf.format(r.shortBal)}` : '', cls(r.shortChg))}
     </div>
     <div class="spark-row"><span class="k">法人 5 日</span>${spark(r.trend, 'bars')}<span class="k num">${r.ratio == null ? '' : '佔量 ' + r.ratio.toFixed(0) + '%'}</span></div>
-    ${catBlock(r, [...(r.stratWhy || []), ...(r.chochWhy || []), ...(r.harmWhy || []), ...(r.harmPendWhy || []), ...(r.boxWhy || []), ...(r.patWhy || [])])}
+    ${catBlock(r, r.stratWhy || [])}
   </article>`;
 }
 
