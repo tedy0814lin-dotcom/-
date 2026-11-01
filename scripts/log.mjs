@@ -64,7 +64,7 @@ try {
     const cand = { s: x.s, k: x.k, tf: x.tf, dir: x.dir, stop: x.stop, t: now };
     if (isDup(db.items, cand)) continue;
     added++;
-    const it = { id, s: x.s, k: x.k, tf: x.tf, dir: x.dir, entry: x.entry, stop: x.stop, target: x.target, wait: x.wait, t: now, st: x.wait ? 'pending' : 'open', b24: btc24 ?? null, bUp: btcUp ?? null };
+    const it = { id, s: x.s, k: x.k, tf: x.tf, dir: x.dir, entry: x.entry, stop: x.stop, target: x.target, wait: x.wait, t: now, st: x.wait ? 'pending' : 'open', b24: btc24 ?? null, bUp: btcUp ?? null, np: x.np ?? null, tl: x.tl ?? null, fu: x.fu ?? null, o24: x.o24 ?? null, t24: x.t24 ?? null };
     if (!x.wait) {
       // 市價單：用掃到這一刻的價格當成交價；價格已經越過停損或目標就不算
       const f = x.px, bad = !(f > 0) || (f - x.stop) * x.dir <= 0 || (x.target - f) * x.dir <= 0;
