@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import { getJSON, pool } from './_lib.js';
 import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals } from '../lib/cryptoCore.js';
-import { CATS, classify } from '../lib/categories.js';
+import { CATS, classify, STRATS } from '../lib/categories.js';
 import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '../lib/twCore.js';
 import { twData } from './twstock.js';
 import { histData } from './twhist.js';
@@ -94,9 +94,13 @@ export default async function handler(req, res) {
       const items = [];
       for (const r of d.rows) {
         r.signals = cryptoSignals(r);
+        const dirOf = (p) => (p.target > p.entry ? 1 : -1);
+        const scored = Object.entries(r.plans || {}).filter(([kk, p]) => STRATS.crypto[kk] && Number.isFinite(p.target) && Number.isFinite(p.entry)).map(([kk, p]) => [kk, dirOf(p)]);
+        const num = (v) => (Number.isFinite(+v) && v != null ? +(+v).toFixed(4) : null);
         for (const [k, p] of Object.entries(r.plans || {})) {
           if (![p.entry, p.stop, p.target].every(Number.isFinite) || p.entry === p.stop) continue;
-          items.push({ s: r.symbol, k, tf: p.tf, dir: p.target > p.entry ? 1 : -1, entry: p.entry, stop: p.stop, target: p.target, wait: !!p.wait, bars: p.bars ?? null, px: r.price });
+          const dir = dirOf(p), np = scored.filter(([kk, dd]) => kk !== k && dd === dir).length; // 同時成立的其他計分策略（同方向）
+          items.push({ s: r.symbol, k, tf: p.tf, dir, entry: p.entry, stop: p.stop, target: p.target, wait: !!p.wait, bars: p.bars ?? null, px: r.price, np, tl: num(r.topLS), fu: num(r.funding), o24: num(r.oiChg24), t24: num(r.topLSChg) });
         }
       }
       return res.status(200).json({ at: Date.now(), n: d.rows.length, btc24: d.rows[0]?.btc24 ?? null, btcUp: d.rows[0]?.btcUp ?? null, items });
