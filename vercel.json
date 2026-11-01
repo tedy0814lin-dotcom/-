@@ -1,7 +1,16 @@
 {
-  "regions": ["hnd1"],
+  "regions": [
+    "hnd1"
+  ],
   "cleanUrls": true,
   "functions": {
-    "api/*.js": { "maxDuration": 60 }
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "data": false
+    }
   }
 }

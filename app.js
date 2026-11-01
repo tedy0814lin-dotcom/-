@@ -3,6 +3,7 @@ import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals,
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { createVegasTab } from '/vegasTab.js';
+import { createLogTab } from '/logTab.js';
 import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '/lib/twCore.js';
 
 
@@ -61,7 +62,7 @@ const state = {
 
 try {
   const saved = JSON.parse(localStorage.getItem('wr_prefs') || '{}');
-  if (['tw', 'crypto', 'vegas'].includes(saved.tab)) state.tab = saved.tab;
+  if (['tw', 'crypto', 'vegas', 'log'].includes(saved.tab)) state.tab = saved.tab;
   if (saved.sort && saved.v === 2) Object.assign(state.sort, saved.sort);
 } catch {}
 function savePrefs() {
@@ -327,8 +328,10 @@ function markSeen() {
 function render() {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === state.tab)));
   $('trust-view').hidden = state.tab !== 'vegas';
-  $('main-view').hidden = state.tab === 'vegas';
+  $('log-view').hidden = state.tab !== 'log';
+  $('main-view').hidden = state.tab === 'vegas' || state.tab === 'log';
   if (state.tab === 'vegas') { vg.render(); return; }
+  if (state.tab === 'log') { lg.render(); return; }
   $('guide-crypto').hidden = state.tab !== 'crypto';
   $('guide-tw').hidden = state.tab !== 'tw';
   $('sort').innerHTML = SORTS[state.tab].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
@@ -482,12 +485,14 @@ async function load(tab, refresh = false) {
 
 // ---------- 事件 ----------
 const vg = createVegasTab({ api, el: $('trust-view') });
+const lg = createLogTab({ api, el: $('log-view') });
 
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
   if (state.tab === t.dataset.tab) return;
   state.tab = t.dataset.tab; state.cat = null; state.limit = 60; savePrefs();
   render();
   if (state.tab === 'vegas') { if (!vg.loaded) vg.load(); return; }
+  if (state.tab === 'log') { if (!lg.loaded) lg.load(); return; }
   if (!state.data[state.tab]) load(state.tab);
 }));
 $('chips').addEventListener('click', (e) => {
@@ -513,7 +518,7 @@ setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
   render();
-  if (state.tab === 'vegas') vg.load(); else load(state.tab);
+  if (state.tab === 'vegas') vg.load(); else if (state.tab === 'log') lg.load(); else load(state.tab);
 }).catch(() => {});
 render();
 
