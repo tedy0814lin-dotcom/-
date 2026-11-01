@@ -62,6 +62,22 @@ async function history(code) {
   return bars;
 }
 
+// 大盤濾網（2026-11-01 台股 1,969 檔回測）：加權指數收盤 > 60 日均線（用昨天以前的收盤）才給順勢做多的分數
+//   PAI 進入超買：之上 +0.22R（每年都正）、之下 −0.31R；CVD 轉正爆量：之上 +0.15R、之下 −0.17R
+let twiiCache = { at: 0, up: null };
+export async function twiiUp() {
+  if (Date.now() - twiiCache.at < 30 * 60e3 && twiiCache.up !== null) return twiiCache.up;
+  try {
+    const j = await getJSON('https://query2.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&range=1y', { timeout: 12000, retries: 1, headers: { 'User-Agent': UA } });
+    const r = j.chart?.result?.[0], q = r?.indicators?.quote?.[0], now = Date.now() / 1000;
+    const c = (r?.timestamp || []).map((t, i) => (t + 5.5 * 3600 <= now ? q.close[i] : null)).filter((x) => x > 0);
+    if (c.length < 61) return null;
+    const ma = c.slice(-60).reduce((a, b) => a + b, 0) / 60;
+    twiiCache = { at: Date.now(), up: c[c.length - 1] > ma };
+    return twiiCache.up;
+  } catch { return null; }
+}
+
 // 1 小時 K（Yahoo，要帶瀏覽器 UA，不然常被擋）：抓近一年，順便合成較長的日 K 給 CHoCH 用
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const hcache = new Map(); // code → { at, data }
@@ -143,7 +159,8 @@ export async function hourData(code) {
 export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)) {
   let h1 = null;
   try { h1 = await hourData(code); } catch {}
-  const withH1 = (d) => ({ ...d, h1, chochOB: h1 && h1.dailyOB !== undefined ? h1.dailyOB : d.chochOB });
+  const mktUp = await twiiUp();
+  const withH1 = (d) => ({ ...d, h1, mktUp, chochOB: h1 && h1.dailyOB !== undefined ? h1.dailyOB : d.chochOB });
   const hit = cache.get(code);
   if (hit && hit.day === day) return withH1(hit.data);
   // 有 Yahoo 日 K 就直接用（快很多）；沒有才去證交所一個月一個月抓
