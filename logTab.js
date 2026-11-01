@@ -106,7 +106,7 @@ export function createLogTab({ api, el }) {
         <span class="spacer"></span><span class="muted">${upd ? '更新於 ' + esc(upd) : '還沒有資料'}</span>
         <button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
-      <p class="muted">每 15 分鐘自動記錄一次網站所有策略「成立」的訊號（含不計分的觀察策略，例如維加斯通道做多／做空），之後追到停損或目標為止，並照回測的規則計算：進場＝掃到訊號當下的價格（掛單類等價格回到掛單價）、來回手續費 0.1%、同一根 K 棒同時碰到停損與目標算停損、最多追 14 天。R 是扣費後的結果。累積到 ${MIN_N} 筆以上、平均 ≥ +${PASS.toFixed(2)}R、前後半段都為正，才建議把觀察策略改成計分；這是即時（未來）資料，比回測更可信，但需要時間累積。</p>
+      <p class="muted">每 15 分鐘自動記錄一次網站所有策略「成立」的訊號（含不計分的觀察策略，例如維加斯通道做多／做空），之後追到停損或目標為止，並照回測的規則計算：進場＝掃到訊號當下的價格（掛單類等價格回到掛單價）、來回手續費 0.1%、同一根 K 棒同時碰到停損與目標算停損、最多追 14 天（4H 策略 40 天、12H 與日線策略 60 天，跟回測一致）。R 是扣費後的結果。累積到 ${MIN_N} 筆以上、平均 ≥ +${PASS.toFixed(2)}R、前後半段都為正，才建議把觀察策略改成計分；這是即時（未來）資料，比回測更可信，但需要時間累積。</p>
       <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13.5px">
         <thead><tr><th align="left">策略</th><th>狀態</th><th>記錄</th><th>已結算</th><th>持有中</th><th>勝率</th><th>平均 R</th><th>90% 誤差</th><th>前／後半段</th><th align="left">判斷</th></tr></thead>
         <tbody>${tbody || '<tr><td colspan="10" class="muted">還沒有記錄。排程每 15 分鐘跑一次，過一陣子就會出現。</td></tr>'}</tbody></table></div>
