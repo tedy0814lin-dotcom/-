@@ -40,8 +40,18 @@ prepare();
 let db = { items: [] };
 try { db = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
 const now = Date.now();
-const have = new Set(db.items.map((x) => x.id));
 const rnd = (v) => +Number(v).toPrecision(6);
+// 同一個訊號會連續好幾次掃到（例如 MACD 底背離會持續 15 根 K 棒、進場價是即時價格會一直變），不能重複記：
+// 同一檔、同策略、同時區、同方向，停損價相同（差 < 0.2%），而且前一筆是 48 小時內記的、或還沒結算 → 算同一個
+const sameSig = (a, b) => a.s === b.s && a.k === b.k && a.tf === b.tf && a.dir === b.dir && Math.abs(a.stop - b.stop) / b.stop < 0.002;
+const isDup = (kept, x) => kept.some((e) => sameSig(e, x) && (Math.abs(x.t - e.t) < 48 * 3600e3 || e.st === 'open' || e.st === 'pending'));
+{ // 清掉以前已經重複記的
+  const kept = [];
+  for (const x of [...db.items].sort((a, b) => a.t - b.t)) if (!isDup(kept, x)) kept.push(x);
+  if (kept.length !== db.items.length) console.log(`清掉重複記錄 ${db.items.length - kept.length} 筆`);
+  db.items = kept;
+}
+const have = new Set(db.items.map((x) => x.id));
 
 // 1) 新訊號
 try {
@@ -50,7 +60,10 @@ try {
   for (const x of items) {
     const id = [x.s, x.k, x.tf, rnd(x.entry), rnd(x.stop)].join('|');
     if (have.has(id)) continue;
-    have.add(id); added++;
+    have.add(id);
+    const cand = { s: x.s, k: x.k, tf: x.tf, dir: x.dir, stop: x.stop, t: now };
+    if (isDup(db.items, cand)) continue;
+    added++;
     const it = { id, s: x.s, k: x.k, tf: x.tf, dir: x.dir, entry: x.entry, stop: x.stop, target: x.target, wait: x.wait, t: now, st: x.wait ? 'pending' : 'open' };
     if (!x.wait) {
       // 市價單：用掃到這一刻的價格當成交價；價格已經越過停損或目標就不算
