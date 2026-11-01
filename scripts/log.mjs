@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 const SITE = process.env.SITE || 'https://whale-radar-three.vercel.app';
 const KEY = process.env.ALERT_KEY;
 const DIR = 'datalog', FILE = DIR + '/signals.json';
-const FEE = 0.001, MAX_STOP = 0.25, WAIT_MS = 48 * 3600e3, HOLD_MS = 14 * 864e5, KEEP_MS = 120 * 864e5;
+const FEE = 0.001, MAX_STOP = 0.25, WAIT_MS = 48 * 3600e3, HOLD_MS = 14 * 864e5, KEEP_MS = 1100 * 864e5;
 if (!KEY) { console.log('沒有 ALERT_KEY，略過數據記錄'); process.exit(0); }
 
 const git = (...a) => execFileSync('git', a, { cwd: DIR, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
