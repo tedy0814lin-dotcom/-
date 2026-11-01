@@ -55,7 +55,7 @@ const have = new Set(db.items.map((x) => x.id));
 
 // 1) 新訊號
 try {
-  const { items } = await get('/api/alert?m=log');
+  const { items, btc24, btcUp } = await get('/api/alert?m=log');
   let added = 0;
   for (const x of items) {
     const id = [x.s, x.k, x.tf, rnd(x.entry), rnd(x.stop)].join('|');
@@ -64,7 +64,7 @@ try {
     const cand = { s: x.s, k: x.k, tf: x.tf, dir: x.dir, stop: x.stop, t: now };
     if (isDup(db.items, cand)) continue;
     added++;
-    const it = { id, s: x.s, k: x.k, tf: x.tf, dir: x.dir, entry: x.entry, stop: x.stop, target: x.target, wait: x.wait, t: now, st: x.wait ? 'pending' : 'open' };
+    const it = { id, s: x.s, k: x.k, tf: x.tf, dir: x.dir, entry: x.entry, stop: x.stop, target: x.target, wait: x.wait, t: now, st: x.wait ? 'pending' : 'open', b24: btc24 ?? null, bUp: btcUp ?? null };
     if (!x.wait) {
       // 市價單：用掃到這一刻的價格當成交價；價格已經越過停損或目標就不算
       const f = x.px, bad = !(f > 0) || (f - x.stop) * x.dir <= 0 || (x.target - f) * x.dir <= 0;
@@ -78,14 +78,55 @@ try {
   console.log(`數據記錄：掃到 ${items.length} 個計畫，新增 ${added}`);
 } catch (e) { console.error('數據記錄取訊號失敗', e.message); }
 
-// 2) 追蹤沒結束的
-const live = db.items.filter((x) => x.st === 'pending' || x.st === 'open');
+// 2) 追蹤＋分析：結算後還繼續追到 14 天，才能回答「停損後有沒有又走到目標（停損太近？）」「停損／止盈放別的會怎樣（設定問題 vs 策略問題）」
+// 每筆記錄：sp 停損距離（占進場價 %）、mfe 結算前最多賺到幾 R、eb 幾根 15 分 K 就出場、recov 停損後 14 天內是否又到原目標、
+//          btc 進場到出場 BTC 漲跌 %、b24／bUp 進場時 BTC 24h 漲跌與是否在日線 EMA50 上、g 停損×止盈假設表（新風險為單位的扣費後 R）
+const GS = [1, 1.5, 2], GT = [1, 2, 3, 4, 6];
+const need = db.items.filter((x) => x.st === 'pending' || x.st === 'open' || (['win', 'loss', 'timeout'].includes(x.st) && !x.fin && x.tFill));
 const bySym = {};
-for (const x of live) (bySym[x.s] ||= []).push(x);
-const net = (x, exit) => {
-  const risk = Math.abs(x.fill - x.stop);
-  return x.dir * (exit - x.fill) / risk - FEE * x.fill / risk;
-};
+for (const x of need) (bySym[x.s] ||= []).push(x);
+const feeR = (x, k) => FEE * x.fill / (k * Math.abs(x.fill - x.stop));
+
+function scan(x, bars) {
+  const d = x.dir, risk = Math.abs(x.fill - x.stop), cells = GS.flatMap((sm) => GT.map((T) => ({ sm, T, v: null })));
+  let mfe = 0, n = 0, exit = null, recov = false, lastC = null, lastT = 0;
+  for (const [t, h, l, c] of bars) {
+    if (t < x.tFill) continue;
+    n++; lastC = c; lastT = t;
+    const fillBar = x.wait && t === x.tFill;           // 掛單成交的那根：不知道先後，只看不利方向
+    const fav = fillBar ? 0 : (d > 0 ? (h - x.fill) : (x.fill - l)) / risk;
+    const adv = (d > 0 ? (x.fill - l) : (h - x.fill)) / risk;
+    for (const k of cells) {
+      if (k.v != null) continue;
+      if (adv >= k.sm) k.v = -1 - feeR(x, k.sm);
+      else if (fav >= k.T * k.sm) k.v = k.T - feeR(x, k.sm);
+    }
+    if (!exit) {
+      if (adv >= 1) exit = { st: 'loss', t, price: x.stop, n };
+      else if (!fillBar && (d > 0 ? h >= x.target : l <= x.target)) exit = { st: 'win', t, price: x.target, n };
+      else if (t - x.tFill > HOLD_MS) exit = { st: 'timeout', t, price: c, n };
+      else mfe = Math.max(mfe, fav);
+    } else if (exit.st === 'loss' && !recov && (d > 0 ? h >= x.target : l <= x.target)) recov = true;
+  }
+  const fin = lastT - x.tFill >= HOLD_MS;
+  if (fin) for (const k of cells) if (k.v == null) k.v = d * (lastC - x.fill) / (k.sm * risk) - feeR(x, k.sm);
+  x.sp = +(risk / x.fill).toFixed(4); x.mfe = +mfe.toFixed(2); x.g = cells.map((k) => (k.v == null ? null : +k.v.toFixed(2)));
+  if (fin) x.fin = true;
+  if (exit) {
+    x.st = exit.st; x.tEnd = exit.t; x.eb = exit.n;
+    x.R = +(d * (exit.price - x.fill) / risk - FEE * x.fill / risk).toFixed(3);
+    if (exit.st === 'loss') x.recov = fin || recov ? recov : null;
+  }
+}
+
+let btcBars = null;
+async function btcRet(x) {
+  if (!btcBars) { try { btcBars = (await get(`/api/alert?m=klines&s=BTCUSDT&from=${Math.min(...need.filter((y) => y.tFill).map((y) => y.tFill)) - 36e5}`)).k; } catch { btcBars = []; } }
+  const at = (t) => { let c = null; for (const b of btcBars) { if (b[0] <= t) c = b[3]; else break; } return c; };
+  const a = at(x.tFill), z = at(x.tEnd);
+  return a && z ? +((z / a - 1) * 100).toFixed(2) : null;
+}
+
 for (const [sym, list] of Object.entries(bySym)) {
   let bars;
   try {
@@ -93,23 +134,21 @@ for (const [sym, list] of Object.entries(bySym)) {
     bars = (await get(`/api/alert?m=klines&s=${sym}&from=${from}`)).k;
   } catch (e) { console.error('K 線失敗', sym, e.message); continue; }
   for (const x of list) {
-    for (const [t, h, l, c] of bars) {
-      if (t < (x.tFill || x.t)) continue;
-      let filledNow = false;
-      if (x.st === 'pending') {
+    if (x.st === 'pending') {
+      for (const [t, h, l] of bars) {
+        if (t < x.t) continue;
         const touch = x.dir > 0 ? l <= x.entry : h >= x.entry;
         if (!touch) { if (t - x.t > WAIT_MS) { x.st = 'expired'; x.tEnd = t; break; } continue; }
-        x.fill = x.entry; x.tFill = t; x.st = 'open'; filledNow = true;
-        if (Math.abs(x.fill - x.stop) / x.fill > MAX_STOP) { x.st = 'invalid'; break; }
+        x.fill = x.entry; x.tFill = t; x.st = 'open';
+        if (Math.abs(x.fill - x.stop) / x.fill > MAX_STOP) x.st = 'invalid';
+        break;
       }
-      const hitS = x.dir > 0 ? l <= x.stop : h >= x.stop;
-      // 掛單成交的那根 K 棒不知道是先成交還是先到目標，保守起見只看停損
-      const hitT = !filledNow && (x.dir > 0 ? h >= x.target : l <= x.target);
-      if (hitS) { x.st = 'loss'; x.tEnd = t; x.R = +net(x, x.stop).toFixed(3); break; }
-      if (hitT) { x.st = 'win'; x.tEnd = t; x.R = +net(x, x.target).toFixed(3); break; }
-      if (t - x.tFill > HOLD_MS) { x.st = 'timeout'; x.tEnd = t; x.R = +net(x, c).toFixed(3); break; }
+      if (x.st === 'pending' && now - x.t > WAIT_MS) { x.st = 'expired'; x.tEnd = now; }
     }
-    if (x.st === 'pending' && now - x.t > WAIT_MS) { x.st = 'expired'; x.tEnd = now; }
+    if (x.fill != null && ['open', 'win', 'loss', 'timeout'].includes(x.st)) {
+      scan(x, bars);
+      if (x.tEnd && x.btc === undefined && ['win', 'loss', 'timeout'].includes(x.st)) { const r = await btcRet(x); if (r != null) x.btc = r; }
+    }
   }
 }
 
