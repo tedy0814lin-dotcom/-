@@ -8,6 +8,20 @@ const sgn = (v, d = 2) => (v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(d)
 const ST = { win: '達標', loss: '停損', timeout: '逾時結算', open: '持有中', pending: '等掛單', expired: '掛單沒成交', invalid: '無效' };
 const DONE = ['win', 'loss', 'timeout'];
 const MIN_N = 30, PASS = 0.10;
+const GS = [1, 1.5, 2], GT = [1, 2, 3, 4, 6]; // 要跟 scripts/log.mjs 一樣
+// 虧損原因（一筆可以有多個）：mkt 進場到出場 BTC 往不利方向走 ≥1%；tight 停損後 14 天內又走到原目標（停損太近）；wick 1 小時內就被停損；
+// far 結算前曾賺到 ≥1R 卻沒到目標（止盈太遠）；fee 停損距離 <0.5%（手續費佔比大）；none 以上都不是且最多只賺到 0.5R（訊號本身沒走出來）
+const TAGS = [['mkt', '大盤逆向'], ['tight', '停損後又到目標'], ['wick', '1 小時內被停損'], ['far', '曾賺 ≥1R 沒止盈'], ['fee', '停損不到 0.5%'], ['none', '訊號沒走出來']];
+function lossTags(x) {
+  const t = [];
+  if (x.btc != null && x.btc * x.dir <= -1) t.push('mkt');
+  if (x.recov === true) t.push('tight');
+  if (x.eb != null && x.eb <= 4) t.push('wick');
+  if (x.mfe != null && x.mfe >= 1) t.push('far');
+  if (x.sp != null && x.sp < 0.005) t.push('fee');
+  if (!t.includes('mkt') && !t.includes('tight') && !t.includes('far') && (x.mfe ?? 0) < 0.5) t.push('none');
+  return t;
+}
 
 export function createLogTab({ api, el }) {
   const st = { data: null, loading: false, error: '', open: null, scoredOnly: false };
@@ -61,6 +75,26 @@ export function createLogTab({ api, el }) {
       <td class="num ${r.s.mean > 0 ? 'up' : r.s.mean < 0 ? 'down' : ''}">${sgn(r.s.mean)}R</td>
       <td class="num">${r.s.se != null ? '±' + (1.645 * r.s.se).toFixed(2) : '—'}</td>
       <td class="num">${r.s.first == null ? '—' : sgn(r.s.first) + ' / ' + sgn(r.s.second)}</td><td>${verdict(r.s, r.scored)}</td></tr>`).join('');
+    // 虧損原因表＋停損／止盈假設表
+    const lossRows = Object.entries(groups).map(([g, list]) => {
+      const L = list.filter((x) => x.st === 'loss'); if (L.length < 3) return null;
+      const [k, tf] = g.split('|'), cnt = Object.fromEntries(TAGS.map(([t]) => [t, 0])); let rk = 0, rn = 0;
+      for (const x of L) { for (const t of lossTags(x)) cnt[t]++; if (x.recov != null) { rn++; if (x.recov) rk++; } }
+      const avg = (f) => { const v = L.map(f).filter((y) => y != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+      return { k, tf, n: L.length, cnt, rk, rn, sp: avg((x) => x.sp), mfe: avg((x) => x.mfe) };
+    }).filter(Boolean).sort((a, b) => b.n - a.n);
+    const pc = (v, n) => (n ? (v / n * 100).toFixed(0) + '%' : '—');
+    const lossHtml = lossRows.length ? `<h3 style="margin:18px 0 6px">為什麼虧（每筆停損可以同時有多個原因）</h3>
+      <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th align="left">策略</th><th>虧損筆數</th>${TAGS.map(([, n]) => `<th>${n}</th>`).join('')}<th>平均停損距離</th><th>停損前平均曾賺</th></tr></thead><tbody>${lossRows.map((r) => `<tr data-k="${esc(r.k)}"><td>${esc(CRYPTO_SIGNALS[r.k]?.label || r.k)}<div class="muted">${esc(r.k)}・${esc(r.tf)}</div></td><td class="num">${r.n}</td>${TAGS.map(([t]) => `<td class="num">${t === 'tight' ? pc(r.rk, r.rn) + (r.rn < r.n ? '<span class="muted">（' + r.rn + '筆已追滿）</span>' : '') : pc(r.cnt[t], r.n)}</td>`).join('')}<td class="num">${r.sp != null ? (r.sp * 100).toFixed(1) + '%' : '—'}</td><td class="num">${r.mfe != null ? r.mfe.toFixed(2) + 'R' : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="muted">「停損後又到目標」高 ＝ 方向其實對、停損太近被洗掉；「曾賺 ≥1R 沒止盈」高 ＝ 止盈太遠；「大盤逆向」高 ＝ 受 BTC 影響；「訊號沒走出來」高 ＝ 策略本身的問題。</p>` : '';
+    const gItems = items.filter((x) => Array.isArray(x.g) && (!st.open || x.k === st.open));
+    let gridHtml = '';
+    if (gItems.length) {
+      const cell = (i) => { const v = gItems.map((x) => x.g[i]).filter((y) => y != null); return v.length ? { m: v.reduce((a, b) => a + b, 0) / v.length, n: v.length } : null; };
+      gridHtml = `<h3 style="margin:18px 0 6px">如果停損／止盈放別的位置（${st.open ? esc(st.open) : '全部策略合計'}，${gItems.length} 筆，扣費後平均 R）</h3>
+        <div style="overflow-x:auto"><table class="tbl" style="border-collapse:collapse;font-size:13px"><thead><tr><th align="left">停損放原本的幾倍距離 ＼ 止盈放新風險的幾倍</th>${GT.map((T) => `<th>${T}R</th>`).join('')}</tr></thead><tbody>${GS.map((sm, a) => `<tr><td>${sm === 1 ? '1 倍（原本）' : sm + ' 倍'}</td>${GT.map((T, b) => { const c = cell(a * GT.length + b); return c ? `<td class="num ${c.m > 0.05 ? 'up' : c.m < -0.05 ? 'down' : ''}">${sgn(c.m)}<span class="muted"> (${c.n})</span></td>` : '<td class="muted">—</td>'; }).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="muted">括號是已經有結果的筆數。這是「事後換設定」的模擬，從同一批訊號挑最好的格子會高估；要採用某個設定，必須再用歷史資料回測、而且新資料要也成立才行。點上面的策略列可以只看那個策略。</p>`;
+    }
     const recent = [...items].filter((x) => !st.open || x.k === st.open).sort((a, b) => b.t - a.t).slice(0, 40);
     const trows = recent.map((x) => `<tr><td>${new Date(x.t).toLocaleString('zh-TW', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
       <td>${esc(x.s.replace(/USDT$/, ''))}</td><td>${esc(CRYPTO_SIGNALS[x.k]?.label || x.k)}</td><td>${x.dir > 0 ? '多' : '空'}</td>
@@ -76,6 +110,7 @@ export function createLogTab({ api, el }) {
       <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13.5px">
         <thead><tr><th align="left">策略</th><th>狀態</th><th>記錄</th><th>已結算</th><th>持有中</th><th>勝率</th><th>平均 R</th><th>90% 誤差</th><th>前／後半段</th><th align="left">判斷</th></tr></thead>
         <tbody>${tbody || '<tr><td colspan="10" class="muted">還沒有記錄。排程每 15 分鐘跑一次，過一陣子就會出現。</td></tr>'}</tbody></table></div>
+      ${lossHtml}${gridHtml}
       <h3 style="margin:18px 0 6px">最近 40 筆${st.open ? '（' + esc(st.open) + '）' : ''}</h3>
       <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr><th align="left">時間</th><th align="left">幣</th><th align="left">策略</th><th>方向</th><th>進場</th><th>停損</th><th>目標</th><th align="left">狀態</th><th>R</th></tr></thead>
