@@ -99,7 +99,7 @@ export default async function handler(req, res) {
           items.push({ s: r.symbol, k, tf: p.tf, dir: p.target > p.entry ? 1 : -1, entry: p.entry, stop: p.stop, target: p.target, wait: !!p.wait, bars: p.bars ?? null, px: r.price });
         }
       }
-      return res.status(200).json({ at: Date.now(), n: d.rows.length, items });
+      return res.status(200).json({ at: Date.now(), n: d.rows.length, btc24: d.rows[0]?.btc24 ?? null, btcUp: d.rows[0]?.btcUp ?? null, items });
     }
     // 數據記錄用：這檔從某個時間起的 15 分 K（[時間, 高, 低, 收]），GitHub 主機連不到幣安，所以經過這裡
     if (req.query.m === 'klines') {
