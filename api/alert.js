@@ -88,6 +88,27 @@ export default async function handler(req, res) {
   if (!authed(req)) return res.status(401).json({ error: '金鑰不對' });
   const min = req.query.min === '1' ? 1 : req.query.min === '2' ? 2 : 3;
   try {
+    // 數據記錄用：所有策略（含不計分的觀察策略）目前成立的進出場計畫
+    if (req.query.m === 'log') {
+      const d = await buildCrypto(120, { getJSON, pool });
+      const items = [];
+      for (const r of d.rows) {
+        r.signals = cryptoSignals(r);
+        for (const [k, p] of Object.entries(r.plans || {})) {
+          if (![p.entry, p.stop, p.target].every(Number.isFinite) || p.entry === p.stop) continue;
+          items.push({ s: r.symbol, k, tf: p.tf, dir: p.target > p.entry ? 1 : -1, entry: p.entry, stop: p.stop, target: p.target, wait: !!p.wait, bars: p.bars ?? null, px: r.price });
+        }
+      }
+      return res.status(200).json({ at: Date.now(), n: d.rows.length, items });
+    }
+    // 數據記錄用：這檔從某個時間起的 15 分 K（[時間, 高, 低, 收]），GitHub 主機連不到幣安，所以經過這裡
+    if (req.query.m === 'klines') {
+      const sym = String(req.query.s || '');
+      if (!/^[A-Z0-9]{2,20}USDT$/.test(sym)) return res.status(400).json({ error: '代號不對' });
+      const from = Math.max(0, Number(req.query.from) || 0);
+      const k = await getJSON(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=15m&startTime=${from}&limit=1500`, { timeout: 12000 });
+      return res.status(200).json({ k: k.map((x) => [x[0], +x[2], +x[3], +x[4]]).slice(0, -1) }); // 去掉還沒收的最後一根
+    }
     if (req.query.m === 'crypto') {
       const d = await buildCrypto(120, { getJSON, pool });
       for (const r of d.rows) r.signals = cryptoSignals(r);
