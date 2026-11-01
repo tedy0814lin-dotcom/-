@@ -1,6 +1,6 @@
 // 數據記錄：把網站所有策略（含不計分的觀察策略，例如維加斯通道）成立的訊號存下來，
 // 之後自動追蹤到停損／目標，算扣手續費後的實際 R，結果存在 repo 的 data 分支 signals.json（網站「數據記錄」分頁讀它）。
-// 規則跟回測一致：加密來回手續費 0.1%、停損 > 25% 的不算、同一根 K 棒停損目標都碰到算停損（保守）、最多追 14 天。
+// 規則跟回測一致：加密來回手續費 0.1%、停損 > 25% 的不算、同一根 K 棒停損目標都碰到算停損（保守）、最多追 14 天（4H 40 天、12H 與日線 60 天）。
 // 需要的環境變數：SITE、ALERT_KEY；要推回 GitHub 還要 GITHUB_TOKEN、GITHUB_REPOSITORY（Actions 會自動給）
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 const SITE = process.env.SITE || 'https://whale-radar-three.vercel.app';
 const KEY = process.env.ALERT_KEY;
 const DIR = 'datalog', FILE = DIR + '/signals.json';
-const FEE = 0.001, MAX_STOP = 0.25, WAIT_MS = 48 * 3600e3, HOLD_MS = 14 * 864e5, KEEP_MS = 1100 * 864e5;
+const FEE = 0.001, MAX_STOP = 0.25, WAIT_MS = 48 * 3600e3, HOLD_D = { '4H': 40, '12H': 60, '1D': 60 }, holdMs = (x) => (HOLD_D[x.tf] || 14) * 864e5, KEEP_MS = 1100 * 864e5;
 if (!KEY) { console.log('沒有 ALERT_KEY，略過數據記錄'); process.exit(0); }
 
 const git = (...a) => execFileSync('git', a, { cwd: DIR, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
@@ -104,11 +104,11 @@ function scan(x, bars) {
     if (!exit) {
       if (adv >= 1) exit = { st: 'loss', t, price: x.stop, n };
       else if (!fillBar && (d > 0 ? h >= x.target : l <= x.target)) exit = { st: 'win', t, price: x.target, n };
-      else if (t - x.tFill > HOLD_MS) exit = { st: 'timeout', t, price: c, n };
+      else if (t - x.tFill > holdMs(x)) exit = { st: 'timeout', t, price: c, n };
       else mfe = Math.max(mfe, fav);
     } else if (exit.st === 'loss' && !recov && (d > 0 ? h >= x.target : l <= x.target)) recov = true;
   }
-  const fin = lastT - x.tFill >= HOLD_MS;
+  const fin = lastT - x.tFill >= holdMs(x);
   if (fin) for (const k of cells) if (k.v == null) k.v = d * (lastC - x.fill) / (k.sm * risk) - feeR(x, k.sm);
   x.sp = +(risk / x.fill).toFixed(4); x.mfe = +mfe.toFixed(2); x.g = cells.map((k) => (k.v == null ? null : +k.v.toFixed(2)));
   if (fin) x.fin = true;
