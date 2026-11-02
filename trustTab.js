@@ -121,7 +121,7 @@ export function createTrustTab({ api, el, getTw }) {
       const why = [];
       if (r.cumVal >= 1) {
         if (sellStreak >= 2) why.push(`投信連賣 ${sellStreak} 天`);
-        if (r.last5Val != null && r.last5Val <= -0.1 * r.cumVal) why.push(`近 5 日賣掉約 ${Math.round((-r.last5Val / r.cumVal) * 100)}% 部位`);
+        if (r.last5Val != null && r.last5Val <= -0.1 * r.cumVal) why.push(-r.last5Val >= r.cumVal ? '近 5 日賣超已超過半年累計估算（估算部位不足，實際持股更大）' : `近 5 日賣掉約 ${Math.round((-r.last5Val / r.cumVal) * 100)}% 部位`);
       }
       if (why.length) {
         if (r.tw && r.tw.foreign < 0) why.push('外資同步賣');
