@@ -180,7 +180,15 @@ export function createTrustTab({ api, el, getTw }) {
     const d0 = st.days[0], d1 = st.days[n - 1];
     const fmt = (s) => `${s.slice(0, 4)}/${s.slice(4, 6)}/${s.slice(6)}`;
 
+    // XQ 選股條件（簡化版）：只能算「週漲跌幅」「近 5 日收盤增幅」兩項（用掃描到的台股 5 日漲跌幅）；買賣家數差、內外盤比沒有免費資料
+    const byId = new Map(rows.map((r) => [r.code, r]));
+    const pool = (getTw()?.rows || []).filter((x) => x.chg5 != null && x.volume >= 1000).map((x) => ({ x, r: byId.get(x.code) }));
+    const toRow = ({ x, r }) => ({ code: x.code, name: x.name, mkt: r?.mkt || '', cap: r?.cap ?? null, close: x.close ?? r?.close ?? null, chg: x.chg ?? r?.chg ?? null, today: r?.today ?? 0, chg5: x.chg5, cumVal: r?.cumVal ?? null });
+    const xqLong = [...pool].sort((a, b) => b.x.chg5 - a.x.chg5).slice(0, 10).map(toRow);
+    const xqShort = [...pool].sort((a, b) => a.x.chg5 - b.x.chg5).slice(0, 10).map(toRow);
+    const c5 = { h: '近 5 日', num: true, f: (r) => `<span class="${cls(r.chg5)}">${signed(r.chg5, 1)}%</span>` };
     el.innerHTML = `
+      <div class="status" style="border:1px solid var(--down)">⚠ 這一頁的策略<b>還沒有回測</b>（證交所歷史投信資料抓不到），先當參考，不計分、不推播。資料累積夠、回測通過後才會拿掉這個提醒。</div>
       <div class="toolbar"><div class="status" style="width:auto;flex:1">投信資料 ${fmt(d0)}–${fmt(d1)}，共 ${n} 個交易日（上櫃抓到 ${st.tpexDays} 天）${st.loading ? '・' + esc(st.progress || '更新中…') : ''}</div><button class="refresh" id="trust-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '更新最新資料'}</button></div>
       ${status}
       <section class="panel ${exit.length ? 'warn' : ''}">
@@ -198,6 +206,14 @@ export function createTrustTab({ api, el, getTw }) {
       <section class="panel">
         <div class="panel-head"><strong>第 2 招：投信新認養股</strong><span class="muted small">半年前投信持股市值 &lt; 1 億，半年累計買到 3–15 億</span></div>
         ${n < 80 ? `<div class="muted small">資料只有 ${n} 天，至少要 80 個交易日才判斷。</div>` : table(adopt, [C.stock, C.cap, C.close, C.today, C.streak, C.early, C.cumVal, C.trend])}
+      </section>
+      <section class="panel">
+        <div class="panel-head"><strong>XQ 選股條件（簡化版）</strong><span class="muted small">原條件：買賣家數差排名 10，且「內外盤比、週漲跌幅、近 5 日收盤增幅」各前 10 名中符合 1 項以上；做空反過來</span></div>
+        <div class="muted small">這裡只能算漲幅這兩項（用近 5 日漲跌幅代替週漲幅與還原 5 日增幅，只排成交量 ≥1,000 張的股票），<b>缺買賣家數差與內外盤比</b>，所以不等於 XQ 的結果，只當漲幅排行參考。</div>
+        <h4>做多：近 5 日漲幅前 10 名</h4>
+        ${table(xqLong, [C.stock, C.cap, C.close, c5, C.today, C.cumVal])}
+        <h4>做空（反向）：近 5 日跌幅前 10 名</h4>
+        ${table(xqShort, [C.stock, C.cap, C.close, c5, C.today, C.cumVal])}
       </section>
       <details class="guide">
         <summary>投信策略怎麼算</summary>
