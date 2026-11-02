@@ -156,12 +156,14 @@ db.items = db.items.filter((x) => now - x.t < KEEP_MS);
 db.updated = now;
 fs.mkdirSync(DIR, { recursive: true });
 fs.writeFileSync(FILE, JSON.stringify(db));
+// data 分支的每次推送不要觸發 Vercel 部署（部署次數有每日上限，之前每 15 分鐘一次會把額度用光、擋住 main 的更新）
+fs.writeFileSync(DIR + '/vercel.json', JSON.stringify({ git: { deploymentEnabled: false } }));
 const cnt = {}; for (const x of db.items) cnt[x.st] = (cnt[x.st] || 0) + 1;
 console.log('數據記錄現況', JSON.stringify(cnt));
 
 if (fs.existsSync(DIR + '/.git')) {
   try {
-    git('add', 'signals.json');
+    git('add', 'signals.json', 'vercel.json');
     if (git('status', '--porcelain').trim()) {
       git('commit', '-q', '-m', '數據記錄 ' + new Date(now).toISOString().slice(0, 16));
       try { git('push', '-q', 'origin', 'data'); } catch { git('pull', '--rebase', '-q', 'origin', 'data'); git('push', '-q', 'origin', 'data'); }
