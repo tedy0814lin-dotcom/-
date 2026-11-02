@@ -3,7 +3,7 @@ import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals,
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { createVegasTab } from '/vegasTab.js';
-import { createTrustTab } from '/trustTab.js';
+import { createPickTab } from '/pickTab.js';
 import { createLogTab } from '/logTab.js';
 import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '/lib/twCore.js';
 
@@ -488,14 +488,14 @@ async function load(tab, refresh = false) {
 
 // ---------- 事件 ----------
 const vg = createVegasTab({ api, el: $('trust-view') });
-const trust = createTrustTab({ api, el: $('trust2-view'), getTw: () => state.data.tw });
+const trust = createPickTab({ api, el: $('trust2-view') });
 const lg = createLogTab({ api, el: $('log-view') });
 
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
   if (state.tab === t.dataset.tab) return;
   state.tab = t.dataset.tab; state.cat = null; state.limit = 60; savePrefs();
   render();
-  if (state.tab === 'trust') { if (!trust.loaded) trust.load(); if (!state.data.tw) load('tw'); return; }
+  if (state.tab === 'trust') { if (!trust.loaded) trust.load(); return; }
   if (state.tab === 'vegas') { if (!vg.loaded) vg.load(); return; }
   if (state.tab === 'log') { if (!lg.loaded) lg.load(); return; }
   if (!state.data[state.tab]) load(state.tab);
@@ -523,7 +523,7 @@ setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
   render();
-  if (state.tab === 'trust') { trust.load(); load('tw'); } else if (state.tab === 'vegas') vg.load(); else if (state.tab === 'log') lg.load(); else load(state.tab);
+  if (state.tab === 'trust') { trust.load(); } else if (state.tab === 'vegas') vg.load(); else if (state.tab === 'log') lg.load(); else load(state.tab);
 }).catch(() => {});
 render();
 
