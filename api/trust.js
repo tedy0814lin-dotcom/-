@@ -1,7 +1,14 @@
 // GET /api/trust?from=20261001&to=20261015
 // 區間內每個交易日的「投信買賣超（張）」，上市（證交所）＋上櫃（櫃買中心）。
 // 一次最多 12 個交易日，避免執行太久或被交易所擋。前端會分段呼叫並把舊資料存起來。
+import crypto from 'node:crypto';
 import { requireUser, getJSON, sleep } from './_lib.js';
+
+// 排程（GitHub Actions）抓歷史用：帶 x-alert-key 也可以，不用登入
+function keyOk(req) {
+  const want = process.env.ALERT_KEY || '', got = String(req.headers['x-alert-key'] || '');
+  return want.length >= 16 && got.length === want.length && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
 
 const num = (s) => {
   const v = Number(String(s ?? '').replace(/[,\s]/g, ''));
@@ -69,18 +76,19 @@ function weekdays(from, to) {
 }
 
 export default async function handler(req, res) {
-  if (!requireUser(req, res)) return;
+  if (!keyOk(req) && !requireUser(req, res)) return;
   const from = String(req.query.from || ''), to = String(req.query.to || '');
   if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) return res.status(400).json({ error: '日期格式要是 YYYYMMDD' });
   const days = [], names = {}, net = {};
   let tpexOk = 0;
+  const tpexMiss = [];
   for (const ymd of weekdays(from, to).slice(0, 12)) {
     let a = null, b = null;
     try { a = await twse(ymd); } catch (e) { if (String(e.message).includes('格式')) return res.status(502).json({ error: e.message }); }
     await sleep(Number(process.env.WR_SLEEP ?? 300));
     if (!a) continue; // 證交所沒資料 = 休市
     b = await tpex(ymd);
-    if (b) tpexOk++;
+    if (b) tpexOk++; else tpexMiss.push(ymd);
     await sleep(Number(process.env.WR_SLEEP ?? 300));
     const idx = days.length;
     days.push(ymd);
@@ -95,5 +103,5 @@ export default async function handler(req, res) {
   // 補 0，讓每檔的陣列長度一致
   for (const k in net) for (let i = 0; i < days.length; i++) net[k][i] = net[k][i] || 0;
   res.setHeader('Cache-Control', 'private, no-store');
-  res.status(200).json({ from, to, days, names, net, tpexDays: tpexOk });
+  res.status(200).json({ from, to, days, names, net, tpexDays: tpexOk, tpexMiss });
 }
