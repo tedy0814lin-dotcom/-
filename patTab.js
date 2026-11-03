@@ -54,7 +54,7 @@ export function createPatTab({ api, el }) {
   function tblForming(rows) {
     if (!rows.length) return '<div class="muted small">目前沒有符合的型態。</div>';
     return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>股票</th><th>型態</th><th class="n">收盤</th><th class="n">頸線（突破價）</th><th class="n">距頸線</th><th class="n">停損參考</th><th class="n">成形</th><th class="n">剩餘等待</th></tr></thead><tbody>${
-      rows.map((f) => `<tr><td>${nm(f.code)}</td><td>${esc(PAT_NAME[f.kind] || f.kind)}</td><td class="n num">${px(f.last)}</td><td class="n num">${px(f.neck)}</td><td class="n num">${f.distPct.toFixed(1)}%</td><td class="n num">${px(f.stop)}<span class="muted small">（${((1 - f.stop / f.last) * 100).toFixed(1)}%）</span></td><td class="n num">${f.bornAgo} 根前</td><td class="n num">${f.left} 根</td></tr>`).join('')
+      rows.map((f) => `<tr><td>${nm(f.code)}</td><td>${esc(PAT_NAME[f.kind] || f.kind)}</td><td class="n num">${px(f.last)}</td><td class="n num">${px(f.neck)}</td><td class="n num">${f.distPct.toFixed(1)}%</td><td class="n num">${px(f.stop)}<span class="muted small">（${((1 - f.stop / f.last) * 100).toFixed(1)}%）</span></td><td class="n num">${f.bornAgo} 根前</td><td class="n num">${f.left == null ? '—' : f.left + ' 根'}</td></tr>`).join('')
     }</tbody></table></div>`;
   }
   function tblFormed(rows) {
