@@ -4,6 +4,7 @@ import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchan
 import { CATS, classify } from '/lib/categories.js';
 import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
+import { createPatTab } from '/patTab.js';
 import { createLogTab } from '/logTab.js';
 import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '/lib/twCore.js';
 
@@ -61,7 +62,7 @@ const state = {
 
 try {
   const saved = JSON.parse(localStorage.getItem('wr_prefs') || '{}');
-  if (['tw', 'crypto', 'vegas', 'log', 'trust'].includes(saved.tab)) state.tab = saved.tab;
+  if (['tw', 'crypto', 'vegas', 'log', 'trust', 'twpat'].includes(saved.tab)) state.tab = saved.tab;
   if (saved.sort && saved.v === 2) Object.assign(state.sort, saved.sort);
 } catch {}
 function savePrefs() {
@@ -328,8 +329,10 @@ function render() {
   $('trust-view').hidden = state.tab !== 'vegas';
   $('log-view').hidden = state.tab !== 'log';
   $('trust2-view').hidden = state.tab !== 'trust';
-  $('main-view').hidden = state.tab === 'vegas' || state.tab === 'log' || state.tab === 'trust';
+  $('pat-view').hidden = state.tab !== 'twpat';
+  $('main-view').hidden = state.tab === 'vegas' || state.tab === 'log' || state.tab === 'trust' || state.tab === 'twpat';
   if (state.tab === 'trust') { trust.render(); return; }
+  if (state.tab === 'twpat') { pat.render(); return; }
   if (state.tab === 'vegas') { vg.render(); return; }
   if (state.tab === 'log') { lg.render(); return; }
   $('guide-crypto').hidden = state.tab !== 'crypto';
@@ -488,12 +491,14 @@ async function load(tab, refresh = false) {
 const vg = createVegasTab({ api, el: $('trust-view') });
 const trust = createPickTab({ api, el: $('trust2-view') });
 const lg = createLogTab({ api, el: $('log-view') });
+const pat = createPatTab({ api, el: $('pat-view') });
 
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
   if (state.tab === t.dataset.tab) return;
   state.tab = t.dataset.tab; state.cat = null; state.limit = 60; savePrefs();
   render();
   if (state.tab === 'trust') { if (!trust.loaded) trust.load(); return; }
+  if (state.tab === 'twpat') { if (!pat.loaded) pat.load(); return; }
   if (state.tab === 'vegas') { if (!vg.loaded) vg.load(); return; }
   if (state.tab === 'log') { if (!lg.loaded) lg.load(); return; }
   if (!state.data[state.tab]) load(state.tab);
@@ -521,7 +526,7 @@ setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
   render();
-  if (state.tab === 'trust') { trust.load(); } else if (state.tab === 'vegas') vg.load(); else if (state.tab === 'log') lg.load(); else load(state.tab);
+  if (state.tab === 'trust') { trust.load(); } else if (state.tab === 'twpat') pat.load(); else if (state.tab === 'vegas') vg.load(); else if (state.tab === 'log') lg.load(); else load(state.tab);
 }).catch(() => {});
 render();
 
