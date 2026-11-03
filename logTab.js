@@ -7,7 +7,7 @@ const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFi
 const sgn = (v, d = 2) => (v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(d));
 const ST = { win: '達標', loss: '停損', timeout: '逾時結算', open: '持有中', pending: '等掛單', expired: '掛單沒成交', invalid: '無效' };
 const DONE = ['win', 'loss', 'timeout'];
-const MIN_N = 30, PASS = 0.10;
+const MIN_N = 100, SHOW_N = 30, PASS = 0.10; // 實盤紀錄一筆賺賠的標準差約 1.5～2R，30 筆的平均誤差就有 ±0.3R，所以滿 100 筆才下結論
 const GS = [1, 1.5, 2], GT = [1, 2, 3, 4, 6]; // 要跟 scripts/log.mjs 一樣
 // 虧損原因（一筆可以有多個）：mkt 進場到出場 BTC 往不利方向走 ≥1%；tight 停損後 14 天內又走到原目標（停損太近）；wick 1 小時內就被停損；
 // far 結算前曾賺到 ≥1R 卻沒到目標（止盈太遠）；fee 停損距離 <0.5%（手續費佔比大）；none 以上都不是且最多只賺到 0.5R（訊號本身沒走出來）
@@ -32,29 +32,36 @@ export function createLogTab({ api, el }) {
     st.loading = false; render();
   }
 
-  function stats(list) {
+  function stats(list, ab) {
     const done = list.filter((x) => DONE.includes(x.st) && x.R != null);
-    const n = done.length, rs = done.map((x) => x.R);
-    const mean = n ? rs.reduce((a, b) => a + b, 0) / n : null;
-    const sd = n > 1 ? Math.sqrt(rs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : null;
-    const half = Math.floor(n / 2);
-    const byT = [...done].sort((a, b) => a.tEnd - b.tEnd);
-    const m = (a) => (a.length ? a.reduce((s, x) => s + x.R, 0) / a.length : null);
+    // 近 180 天的明細＋更早的月彙總（記錄不設上限，舊的只留 n／賺的筆數／R 總和／R 平方和）
+    const units = done.map((x) => ({ t: x.tEnd || x.t, n: 1, s: x.R, q: x.R * x.R, w: x.R > 0 ? 1 : 0 }));
+    for (const [mo, bk] of Object.entries(ab || {})) units.push({ t: Date.parse(mo + '-15'), n: bk.n, s: bk.s, q: bk.q, w: bk.w });
+    units.sort((a, b) => a.t - b.t);
+    const sum = (f) => units.reduce((a, u) => a + u[f], 0);
+    const n = sum('n'), S = sum('s'), Q = sum('q'), W = sum('w');
+    const mean = n ? S / n : null;
+    const sd = n > 1 ? Math.sqrt(Math.max(0, (Q - n * mean * mean) / (n - 1))) : null;
+    let acc = 0, fs = 0; const target = n / 2;
+    for (const u of units) { if (acc >= target) break; const take = Math.min(u.n, target - acc); fs += u.s * (take / u.n); acc += take; }
     return {
-      total: list.length, n, mean, se: sd != null ? sd / Math.sqrt(n) : null,
-      win: n ? done.filter((x) => x.R > 0).length / n : null,
-      first: n >= 6 ? m(byT.slice(0, half)) : null, second: n >= 6 ? m(byT.slice(half)) : null,
+      total: list.length + Object.values(ab || {}).reduce((a, bk) => a + bk.n, 0), n, mean, se: sd != null ? sd / Math.sqrt(n) : null,
+      win: n ? W / n : null,
+      first: n >= 6 ? fs / acc : null, second: n >= 6 ? (S - fs) / (n - acc) : null,
       live: list.filter((x) => x.st === 'open' || x.st === 'pending').length,
       skipped: list.filter((x) => x.st === 'expired' || x.st === 'invalid').length,
     };
   }
 
   function verdict(s, scored) {
-    if (s.n < MIN_N) return `<span class="muted">樣本不足（${s.n}/${MIN_N}）</span>`;
-    const lo = s.mean - 1.645 * s.se;
+    if (s.n < SHOW_N) return `<span class="muted">樣本不足（${s.n}/${MIN_N}）</span>`;
+    const lo = s.mean - 1.645 * s.se, hi = s.mean + 1.645 * s.se;
+    const rng = `目前平均 ${sgn(s.mean)}R，90% 區間 ${sgn(lo)}～${sgn(hi)}R`;
+    if (s.n < MIN_N) return `<span class="muted">樣本偏少（${s.n}/${MIN_N}），${rng}，還不能判定</span>`;
     const ok = s.mean >= PASS && s.first > 0 && s.second > 0;
-    if (scored) return ok ? '<span class="up">仍有效</span>' : '<span class="down">即時表現不如回測，要檢討</span>';
-    return ok ? `<span class="up">達標，可考慮計分</span>${lo <= 0 ? '<span class="muted">（區間仍含 0）</span>' : ''}` : '<span class="muted">未達標</span>';
+    if (scored) return ok ? '<span class="up">仍有效</span>' : hi < PASS ? '<span class="down">即時表現不如回測，要檢討</span>' : `<span class="muted">沒達標但區間仍含回測期望（${rng}），繼續觀察</span>`;
+    if (ok) return `<span class="up">達標，可考慮計分</span>${lo <= 0 ? '<span class="muted">（區間仍含 0）</span>' : ''}`;
+    return hi < PASS ? '<span class="muted">未達標</span>' : `<span class="muted">尚不明確（${rng}）</span>`;
   }
 
   function render() {
@@ -63,8 +70,10 @@ export function createLogTab({ api, el }) {
     const scoredKeys = new Set(Object.keys(STRATS.crypto));
     const groups = {};
     for (const x of items) (groups[x.k + '|' + x.tf] ||= []).push(x);
+    const arch = d?.arch || {};
+    for (const key of Object.keys(arch)) groups[key] ||= [];
     const rows = Object.entries(groups).map(([g, list]) => {
-      const [k, tf] = g.split('|'); const s = stats(list), scored = scoredKeys.has(k);
+      const [k, tf] = g.split('|'); const s = stats(list, arch[g]), scored = scoredKeys.has(k);
       return { k, tf, scored, s, label: CRYPTO_SIGNALS[k]?.label || k };
     }).filter((r) => !st.scoredOnly || r.scored)
       .sort((a, b) => (b.k.startsWith('vegas') - a.k.startsWith('vegas')) || (b.s.n - a.s.n));
