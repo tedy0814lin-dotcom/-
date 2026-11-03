@@ -12,7 +12,6 @@ const SORTS = {
   crypto: [
     ['cat', '機會強度（分類）'],
     ['harmFirst', '諧波 CD 段優先'],
-    ['chochFirst', 'SMC 結構轉變優先'],
     ['score', '大戶動能分數'],
     ['patFirst', '轉折／突破訊號優先'],
     ['coilFirst', '蓄力警報優先'],
@@ -30,7 +29,6 @@ const SORTS = {
   tw: [
     ['cat', '機會強度（分類）'],
     ['harmFirst', '諧波 CD 段優先'],
-    ['chochFirst', 'SMC 結構轉變優先'],
     ['total', '三大法人今日買超'],
     ['patFirst', '轉折／突破訊號優先'],
     ['coilFirst', '築底警報優先'],
@@ -230,11 +228,10 @@ function visibleRows() {
   return sortRows(rows);
 }
 
-// 特別篩選：諧波 CD 段（觸發或等待中）、SMC CHoCH 結構轉變
+// 特別篩選：諧波 CD 段（觸發或等待中）
 const harmList = (r) => [...(r.harmCD || r.div?.harmCD || []), ...(r.harmCD1h || r.div?.h1?.harmCD || [])];
 const SPECIAL = {
   harm: (r) => harmList(r).length > 0,
-  choch: (r) => (r.signals || []).some((k) => k.startsWith('choch')),
 };
 
 // ---------- 畫面 ----------
@@ -242,7 +239,7 @@ function renderChips() {
   const rows = state.data[state.tab]?.rows || [];
   const n = (c) => rows.filter((r) => (SPECIAL[c] ? SPECIAL[c](r) : r.cat === c)).length;
   const chip = (c, label) => `<button class="chip ${c ? 'chip-' + c : ''}" type="button" data-cat="${c || ''}" aria-pressed="${state.cat === c}">${label}<b>${c ? n(c) : rows.filter((r) => r.cat).length}</b></button>`;
-  $('chips').innerHTML = `${chip(null, '全部有訊號')}<span class="chip-sep">交易機會</span>${chip('long', '做多機會')}${chip('short', '做空機會')}<span class="chip-sep">潛在反轉</span>${chip('bottom', '見底轉強')}${chip('top', '見頂轉弱')}<span class="chip-sep">型態</span>${chip('harm', '諧波 CD 段')}${chip('choch', 'SMC 結構轉變')}`;
+  $('chips').innerHTML = `${chip(null, '全部有訊號')}<span class="chip-sep">交易機會</span>${chip('long', '做多機會')}${chip('short', '做空機會')}<span class="chip-sep">潛在反轉</span>${chip('bottom', '見底轉強')}${chip('top', '見頂轉弱')}<span class="chip-sep">型態</span>${chip('harm', '諧波 CD 段')}`;
 }
 
 function renderStatus() {
@@ -338,6 +335,7 @@ function render() {
   $('guide-crypto').hidden = state.tab !== 'crypto';
   $('guide-tw').hidden = state.tab !== 'tw';
   $('sort').innerHTML = SORTS[state.tab].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  if (!SORTS[state.tab].some(([v]) => v === state.sort[state.tab])) state.sort[state.tab] = SORTS[state.tab][0][0]; // 舊的「SMC 結構轉變優先」已拿掉
   $('sort').value = state.sort[state.tab];
   $('refresh').disabled = state.loading[state.tab];
   $('refresh').textContent = state.loading[state.tab] ? '更新中…' : '重新整理';
@@ -350,7 +348,7 @@ function render() {
   const d = state.data[state.tab];
   const empty = $('empty');
   empty.hidden = !d || rows.length > 0;
-  if (d && !rows.length) empty.textContent = state.cat ? `目前沒有「${CATS[state.cat]?.label || { harm: '諧波 CD 段', choch: 'SMC 結構轉變' }[state.cat]}」的標的。沒有訊號是常態，代表現在沒有明確機會。` : '找不到符合的代號或名稱。';
+  if (d && !rows.length) empty.textContent = state.cat ? `目前沒有「${CATS[state.cat]?.label || { harm: '諧波 CD 段' }[state.cat]}」的標的。沒有訊號是常態，代表現在沒有明確機會。` : '找不到符合的代號或名稱。';
   $('more').hidden = rows.length <= state.limit;
   $('more').textContent = `顯示更多（還有 ${rows.length - state.limit} 檔）`;
 }
