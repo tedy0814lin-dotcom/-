@@ -152,7 +152,19 @@ for (const [sym, list] of Object.entries(bySym)) {
   }
 }
 
-db.items = db.items.filter((x) => now - x.t < KEEP_MS);
+// 記錄不設上限：結算超過 180 天的交易，把「筆數、賺的筆數、R 總和、R 平方和」依月份累加進 db.arch（永久保留、統計照算），
+// 明細（價格、虧損原因等）只留近 180 天，這樣檔案不會越長越大、網站不會因為檔案太大讀不出來
+const ARCH_MS = 180 * 864e5;
+db.arch ||= {};
+db.items = db.items.filter((x) => {
+  const te = x.tEnd || x.t;
+  if (['win', 'loss', 'timeout'].includes(x.st) && x.R != null && now - te >= ARCH_MS) {
+    const b = ((db.arch[x.k + '|' + x.tf] ||= {})[new Date(te).toISOString().slice(0, 7)] ||= { n: 0, w: 0, s: 0, q: 0 });
+    b.n++; if (x.R > 0) b.w++; b.s += x.R; b.q += x.R * x.R;
+    return false;
+  }
+  return !(['expired', 'invalid'].includes(x.st) && now - x.t >= ARCH_MS); // 沒成交、無效的舊訊號不是交易，直接丟
+});
 db.updated = now;
 fs.mkdirSync(DIR, { recursive: true });
 fs.writeFileSync(FILE, JSON.stringify(db));
