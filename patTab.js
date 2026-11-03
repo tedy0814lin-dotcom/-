@@ -29,7 +29,7 @@ export function createPatTab({ api, el }) {
       const codes = rows.map((r) => r.code);
       for (let i = 0; i < codes.length; i += BATCH) {
         st.progress = `掃描日線型態 ${Math.min(i + BATCH, codes.length)}/${codes.length}…第一次約 1～2 分鐘，今天之後直接用快取`; render();
-        const j = await api(`/api/twpat?codes=${codes.slice(i, i + BATCH).join(',')}`);
+        const j = await api(`/api/twhist?pat=1&codes=${codes.slice(i, i + BATCH).join(',')}`);
         Object.assign(st.results, j.results); st.miss += (j.miss || []).length; st.scanned = Math.min(i + BATCH, codes.length);
       }
       st.day = day; st.loaded = true; st.progress = '';
