@@ -12,6 +12,38 @@ function cacheSet(id, v) {
   try { Object.keys(localStorage).filter((k) => k.startsWith('wr_pat_') && !k.startsWith(KEY)).forEach((k) => localStorage.removeItem(k)); localStorage.setItem(KEY + id, JSON.stringify(v)); } catch {}
 }
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
+
+// 成交量分布（VPVR）：把每根的量依 高—低 範圍分攤到價格格子裡，分買（收漲）賣（收跌）；回傳 POC 與價值區（70%）
+let VP = true; // 由 render 依使用者開關設定
+const VP_ROWS = 50, VP_VA = 0.70;
+function volumeProfile(bars, lo, hi) {
+  if (!(hi > lo)) return null;
+  const up = new Float64Array(VP_ROWS), dn = new Float64Array(VP_ROWS), step = (hi - lo) / VP_ROWS;
+  let tot = 0;
+  for (const b of bars) {
+    const v = b[4]; if (!(v > 0)) continue;
+    const bl = Math.max(lo, b[2]), bh = Math.min(hi, b[1]); if (bh <= bl) { // 影線在範圍外就塞收盤那格
+      const k = Math.min(VP_ROWS - 1, Math.max(0, Math.floor((b[3] - lo) / step))); (b[3] >= b[0] ? up : dn)[k] += v; tot += v; continue;
+    }
+    const span = bh - bl, a = b[3] >= b[0] ? up : dn;
+    const k0 = Math.floor((bl - lo) / step), k1 = Math.min(VP_ROWS - 1, Math.floor((bh - lo) / step));
+    for (let k = Math.max(0, k0); k <= k1; k++) {
+      const cl = lo + k * step, ch = cl + step, ov = Math.min(ch, bh) - Math.max(cl, bl);
+      if (ov > 0) { a[k] += v * ov / span; tot += v * ov / span; }
+    }
+  }
+  if (tot <= 0) return null;
+  const vol = Array.from({ length: VP_ROWS }, (_, k) => up[k] + dn[k]);
+  let poc = 0; for (let k = 1; k < VP_ROWS; k++) if (vol[k] > vol[poc]) poc = k;
+  let loI = poc, hiI = poc, acc = vol[poc];
+  while (acc < VP_VA * tot && (loI > 0 || hiI < VP_ROWS - 1)) {
+    const L = loI > 0 ? vol[loI - 1] : -1, H = hiI < VP_ROWS - 1 ? vol[hiI + 1] : -1;
+    if (H >= L) acc += vol[++hiI]; else acc += vol[--loI];
+  }
+  const vmax = Math.max(...vol);
+  return { up, dn, vol, vmax, step, lo, poc, val: lo + loI * step, vah: lo + (hiI + 1) * step,
+    pocP: lo + (poc + 0.5) * step, hvn: vol.map((v) => v >= 0.7 * vmax), lvn: vol.map((v) => v > 0 && v <= 0.3 * vmax) };
+}
 const KINDS = [
   ['double_bottom', '雙底／雙頂'], ['triple_bottom', '三重底／三重頂'], ['inv_HS', '頭肩底／頭肩頂'], ['rectangle', '矩形整理'], ['asc_triangle', '上升／下降三角形'],
   ['sym_triangle', '對稱三角形'], ['falling_wedge', '下降／上升楔形'], ['rounded_bottom', '圓弧底／圓弧頂'], ['v_bottom', 'V 底／倒 V 頂'], ['broadening', '擴散三角形'], ['diamond', '菱形'],
@@ -77,6 +109,29 @@ function chartRaw(card) {
   let s = `<svg viewBox="0 0 ${Wd} ${Ht}" class="pc" role="img" aria-label="${esc(card.code + ' ' + it.name + ' K 線圖')}">`;
   // 價格格線
   for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4, y = Y(v); s += `<line x1="${px0}" x2="${Wd - pr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="pc-g"/><text x="${Wd - pr + 4}" y="${(y + 3).toFixed(1)}" class="pc-t">${px(v)}</text>`; }
+  // 成交量分布（VPVR）：畫在右側、疊在 K 棒後面
+  const xr = Wd - pr;
+  if (VP) {
+    const vp = volumeProfile(bars, lo, hi);
+    if (vp) {
+      const PW = 185, bh = (ph / VP_ROWS) * 0.86;
+      // 價值區底色
+      s += `<rect x="${px0}" y="${Y(vp.vah).toFixed(1)}" width="${(xr - px0).toFixed(1)}" height="${Math.max(0, Y(vp.val) - Y(vp.vah)).toFixed(1)}" class="pc-va"/>`;
+      // 水平量條：賣（金）靠右、買（藍）接續往左疊，總長＝該格總量
+      for (let k = 0; k < VP_ROWS; k++) {
+        const t = vp.vol[k]; if (!(t > 0)) continue;
+        const yc = Y(vp.lo + (k + 0.5) * vp.step), y = (yc - bh / 2).toFixed(1);
+        const wTot = (t / vp.vmax) * PW, wDn = (vp.dn[k] / vp.vmax) * PW, wUp = (vp.up[k] / vp.vmax) * PW;
+        const op = vp.hvn[k] ? ' pc-vp-hi' : '';
+        if (wDn > 0) s += `<rect x="${(xr - wDn).toFixed(1)}" y="${y}" width="${wDn.toFixed(1)}" height="${bh.toFixed(1)}" class="pc-vp-dn${op}"/>`;
+        if (wUp > 0) s += `<rect x="${(xr - wTot).toFixed(1)}" y="${y}" width="${wUp.toFixed(1)}" height="${bh.toFixed(1)}" class="pc-vp-up${op}"/>`;
+        if (vp.lvn[k]) s += `<line x1="${(xr - PW).toFixed(1)}" x2="${xr}" y1="${yc.toFixed(1)}" y2="${yc.toFixed(1)}" class="pc-vp-lvn"/>`;
+      }
+      // POC、價值區上下緣
+      s += `<line x1="${px0}" x2="${xr}" y1="${Y(vp.pocP).toFixed(1)}" y2="${Y(vp.pocP).toFixed(1)}" class="pc-poc"/><text x="${px0 + 3}" y="${(Y(vp.pocP) - 3).toFixed(1)}" class="pc-t pc-poc-t">POC ${px(vp.pocP)}</text>`;
+      for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${px0}" x2="${xr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="pc-val-ln"/><text x="${px0 + 3}" y="${(Y(v) - 3).toFixed(1)}" class="pc-t pc-val-t">${lab}</text>`;
+    }
+  }
   // 日期
   for (const i of [0, 1, 2, 3, 4, 5, 6].map((k) => Math.round((k * (N - 1)) / 6))) s += `<text x="${X(i).toFixed(1)}" y="${Ht - 2}" class="pc-t" text-anchor="${i === 0 ? 'start' : i === N - 1 ? 'end' : 'middle'}">${esc(r.dates[i] || '')}</text>`;
   // K 棒＋量
@@ -88,7 +143,6 @@ function chartRaw(card) {
     s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${yv(b[4]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Ht - 16 - yv(b[4])).toFixed(1)}" class="${cls} pc-v"/>`;
   });
   // 頸線／停損／收斂線／轉折點
-  const xr = Wd - pr;
   if (it.neckLine) { const a = it.neckLine, i0 = Math.max(0, Math.min(a.i, N - 1)); s += `<line x1="${X(i0).toFixed(1)}" y1="${Y(a.v + a.s * (i0 - a.i)).toFixed(1)}" x2="${xr}" y2="${Y(a.v + a.s * (N - 1 - a.i)).toFixed(1)}" class="pc-neck"/>`; }
   else if (it.neck && it.state !== 'candle' && !it.lines) s += `<line x1="${px0}" x2="${xr}" y1="${Y(it.neck).toFixed(1)}" y2="${Y(it.neck).toFixed(1)}" class="pc-neck"/>`;
   if (it.lines) for (const L of [it.lines.u, it.lines.l]) { const t0 = Math.max(0, it.lines.t0); s += `<line x1="${X(t0).toFixed(1)}" y1="${Y(L[0] * (t0 + off) + L[1]).toFixed(1)}" x2="${xr}" y2="${Y(L[0] * (N - 1 + off) + L[1]).toFixed(1)}" class="pc-tri"/>`; }
@@ -112,7 +166,7 @@ function chartRaw(card) {
 }
 
 export function createPatTab({ api, el }) {
-  const st = { market: 'tw', tf: '4h', loading: false, progress: '', error: '', loaded: false, results: {}, names: {}, scanned: 0, total: 0, miss: 0, day: '', kind: '', dir: 0, state: '', need: '', page: 1 };
+  const st = { market: 'tw', tf: '4h', loading: false, progress: '', error: '', loaded: false, results: {}, names: {}, scanned: 0, total: 0, miss: 0, day: '', kind: '', dir: 0, state: '', need: '', page: 1, vp: (() => { try { return localStorage.getItem('wr_pat_vp') !== '0'; } catch { return true; } })() };
 
   async function load(force = false) {
     if (st.loading && !st.switching) return;
@@ -195,6 +249,7 @@ export function createPatTab({ api, el }) {
       return;
     }
     const { cards, total } = list();
+    VP = st.vp;
     const sel = (id, val, opts, label) => `<select id="${id}" class="sort" aria-label="${label}">${opts.map(([v, t]) => `<option value="${v}" ${String(val) === String(v) ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
     const shown = cards.slice(0, st.page * PAGE);
     el.innerHTML = `
@@ -208,6 +263,7 @@ export function createPatTab({ api, el }) {
         ${sel('pat-state', st.state, [['', '全部狀態'], ['formed', '已經形成'], ['forming', '正在形成']], '狀態')}
         ${sel('pat-kind', st.kind, [['', '全部型態'], ...KIND_OPTS], '型態')}
         ${sel('pat-need', st.need, [['', '不限確認'], ['any', '至少一項確認'], ['vol', '有量'], ['candle', '有 K 棒型態'], ['div', '有 MACD 背離'], ['div2', '持續背離（連續 2 段以上）'], ['pass', '只看回測通過（加密 12H／日線底部早進場）']], '確認條件')}
+        <label class="pc-vp-tg"><input type="checkbox" id="pat-vp" ${st.vp ? 'checked' : ''}> 成交量分布</label>
       </div>
       ${status}
       <div class="status err" style="border:1px solid var(--down)">${st.market === 'cx'
@@ -219,6 +275,7 @@ export function createPatTab({ api, el }) {
         <summary>怎麼判斷的、圖上的線是什麼</summary>
         <dl>
           <dt>圖上畫的</dt><dd>K 棒（綠漲紅跌，跟網站其他頁一致）＋成交量；折線與圓點＝型態的高低轉折點；金色虛線＝頸線（突破／跌破價）；紅色點線＝停損參考；收斂／擴散三角形畫上下兩條趨勢線；三角箭頭＝突破（跌破）那一根；方框＝K 棒型態。</dd>
+          <dt>成交量分布（VPVR，右側量條）</dt><dd>把畫面裡每根 K 棒的成交量，依它的最高～最低價分攤到各個價位，累積成右邊的橫向量條：<b>藍＝收漲的量</b>、<b>金＝收跌的量</b>。胖的地方＝高量區（HVN，大家成交密集、常是支撐壓力）；細的地方＝低量真空帶（LVN，價格容易快速穿過）。<b class="pc-poc" style="border:0">— —</b> 粉紅線＝POC（成交量最大的價位）；VAH／VAL＝價值區（涵蓋 70% 成交量）的上下緣。<b>這只是參考位，不是買賣訊號</b>——回測顯示單獨照它做並不會賺，POC／價值區適合當「容易停頓或反轉的位置」來輔助判斷。上面的「成交量分布」勾選框可以關掉。</dd>
           <dt>找高低點</dt><dd>用 ATR 之字轉折：價格反向走超過 2～3 倍 ATR 才確認一個高點或低點，反轉後才確認，不會偷看未來。偏空型態是把價格上下翻轉後用同一套偵測。</dd>
           <dt>正在形成／已經形成</dt><dd>型態成形後最多等 15 根日線；收盤站上（跌破）頸線就算突破。「已經形成」只列最近 6 根內突破的。收斂三角形另外用趨勢線擬合（上下線收斂、至少 85% 收盤在兩線內）。</dd>
           <dt>確認</dt><dd>量＝突破（跌破）那天成交量 ≥ 前 20 日均量 ${VOLX} 倍（正在形成則看近 5 日均量 ≥ ${VOL5X} 倍）。K 棒型態＝最近 2 根內、方向相同。MACD 背離＝柱狀體「一段一段的波峰」比較（價格更高／低、柱狀體更低／高），最近 10 根內確認；連續 2 段以上才標「持續」。</dd>
@@ -231,6 +288,7 @@ export function createPatTab({ api, el }) {
     const tfs = el.querySelector('#pat-tf'); if (tfs) tfs.onchange = (e) => switchTo('cx', e.target.value);
     const bind = (id, key, num) => { el.querySelector('#' + id).onchange = (e) => { st[key] = num ? +e.target.value : e.target.value; st.page = 1; render(); }; };
     bind('pat-dir', 'dir', true); bind('pat-state', 'state'); bind('pat-kind', 'kind'); bind('pat-need', 'need');
+    el.querySelector('#pat-vp').onchange = (e) => { st.vp = e.target.checked; try { localStorage.setItem('wr_pat_vp', st.vp ? '1' : '0'); } catch {} render(); };
     const more = el.querySelector('#pat-more'); if (more) more.onclick = () => { st.page++; render(); };
   }
 
