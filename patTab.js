@@ -2,7 +2,7 @@
 // 型態：底部／向上突破 7 種＋圓弧底、V 底、擴散三角形、菱形，以及它們的偏空版（頭部／向下跌破，用鏡像偵測）；另有 K 棒型態（吞噬、孕線、錘子線、射擊之星、晨星／黃昏之星、貫穿／烏雲罩頂、平頭頂／底）。
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
-const KEY = 'wr_pat_v4_';
+const KEY = 'wr_pat_v5_';
 const MINV = 1000, TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -55,7 +55,15 @@ function cardsOf(code, r) {
 }
 
 // ---- K 線圖 ----
-function chart(card) { return chartRaw(card); }
+// 預設畫最近 100 根；型態的轉折點比較早就往前延伸到型態起點前 5 根（最多 160 根）
+function chart(card) {
+  const { r, it } = card, N0 = r.bars.length;
+  const idx = [...(it.pts || []).map((p) => p[0]), it.neckLine ? it.neckLine.i : N0, it.lines ? it.lines.t0 : N0].filter((v) => v >= 0);
+  const s0 = Math.max(0, Math.min(N0 - 100, idx.length ? Math.min(...idx) - 5 : N0));
+  const R = { ...r, bars: r.bars.slice(s0), dates: r.dates.slice(s0), off: r.off + s0, candles: r.candles.map((c) => ({ ...c, i: c.i - s0 })) };
+  const I = { ...it, pts: (it.pts || []).map(([i, y]) => [i - s0, y]), neckLine: it.neckLine ? { ...it.neckLine, i: it.neckLine.i - s0 } : null, lines: it.lines ? { ...it.lines, t0: it.lines.t0 - s0 } : null };
+  return chartRaw({ ...card, r: R, it: I });
+}
 function chartRaw(card) {
   const { r, it } = card, bars = r.bars, N = bars.length;
   const Wd = 1000, Ht = 440, Hv = 70, pl = 6, pr = 44, pt = 8, pb = 16 + Hv + 6;
@@ -96,6 +104,7 @@ function chartRaw(card) {
     const P = it.pts.filter(([i]) => i >= 0 && i < N);
     if (P.length > 1) s += `<polyline points="${P.map(([i, y]) => `${X(i).toFixed(1)},${Y(y).toFixed(1)}`).join(' ')}" class="pc-zz"/>`;
     for (const [i, y] of P) s += `<circle cx="${X(i).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="3.5" class="pc-pt"/>`;
+    if (P.length) { const [i0, y0] = P[0]; s += `<text x="${X(i0).toFixed(1)}" y="${(it.dir > 0 ? Y(y0) + 16 : Y(y0) - 8).toFixed(1)}" class="pc-t pc-pn">${esc(it.name)}</text>`; }
   }
   if (it.state === 'formed' && it.ago != null) { const i = N - 1 - it.ago; s += `<path d="M${X(i).toFixed(1)} ${(it.dir > 0 ? Y(bars[i][2]) + 9 : Y(bars[i][1]) - 9).toFixed(1)} l-4 ${it.dir > 0 ? 7 : -7} h8 z" class="pc-brk"/>`; }
   // K 棒型態框
