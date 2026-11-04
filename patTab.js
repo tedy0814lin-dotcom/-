@@ -2,8 +2,8 @@
 // 型態：底部／向上突破 7 種＋圓弧底、V 底、擴散三角形、菱形，以及它們的偏空版（頭部／向下跌破，用鏡像偵測）；另有 K 棒型態（吞噬、孕線、錘子線、射擊之星、晨星／黃昏之星、貫穿／烏雲罩頂、平頭頂／底）。
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
-const KEY = 'wr_pat_v2_';
-const TOP = 300, BATCH = 15, PAGE = 24, VOLX = 1.5, VOL5X = 1.3;
+const KEY = 'wr_pat_v3_';
+const TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 24, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const cacheGet = (day) => { try { return JSON.parse(localStorage.getItem(KEY + day)); } catch { return null; } };
@@ -97,31 +97,42 @@ function chart(card) {
 }
 
 export function createPatTab({ api, el }) {
-  const st = { loading: false, progress: '', error: '', loaded: false, results: {}, names: {}, scanned: 0, total: 0, miss: 0, day: '', kind: '', dir: 0, state: '', need: '', page: 1 };
+  const st = { market: 'tw', tf: '4h', loading: false, progress: '', error: '', loaded: false, results: {}, names: {}, scanned: 0, total: 0, miss: 0, day: '', kind: '', dir: 0, state: '', need: '', page: 1 };
 
   async function load(force = false) {
-    if (st.loading) return;
-    const day = taipeiDay();
-    const c = !force && cacheGet(day);
+    if (st.loading && !st.switching) return;
+    const seq = (st.seq = (st.seq || 0) + 1); st.switching = false;
+    const mkt = st.market, tf = st.tf, id = mkt === 'tw' ? 'tw' : 'cx_' + tf, stamp = bucket(mkt, tf);
+    const c = !force && cacheGet(id, stamp);
     if (c) { Object.assign(st, c, { loaded: true, error: '', progress: '' }); render(); return; }
-    st.loading = true; st.error = ''; st.results = {}; st.miss = 0; render();
+    st.loading = true; st.error = ''; st.results = {}; st.miss = 0; st.loaded = false; render();
     try {
-      st.progress = '正在取得台股清單…'; render();
-      const tw = await api('/api/twstock');
-      const rows = (tw.rows || []).filter((r) => r.volume >= 1000 && r.close >= 10 && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, TOP);
-      st.names = Object.fromEntries(rows.map((r) => [r.code, r.name])); st.total = rows.length; st.scanned = 0;
-      const codes = rows.map((r) => r.code);
-      for (let i = 0; i < codes.length; i += BATCH) {
-        st.progress = `掃描日線型態 ${Math.min(i + BATCH, codes.length)}/${codes.length}…第一次約 1～2 分鐘，今天之後直接用快取`; render();
-        const j = await api(`/api/twhist?pat=1&codes=${codes.slice(i, i + BATCH).join(',')}`);
-        Object.assign(st.results, j.results); st.miss += (j.miss || []).length; st.scanned = Math.min(i + BATCH, codes.length);
+      let codes, batch;
+      if (mkt === 'tw') {
+        st.progress = '正在取得台股清單…'; render();
+        const tw = await api('/api/twstock');
+        const rows = (tw.rows || []).filter((r) => r.volume >= 1000 && r.close >= 10 && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, TOP);
+        st.names = Object.fromEntries(rows.map((r) => [r.code, r.name])); codes = rows.map((r) => r.code); batch = BATCH;
+      } else {
+        st.progress = '正在取得幣安永續合約清單…'; render();
+        const l = await api('/api/twhist?pat=1&market=crypto&list=1&top=' + CTOP);
+        codes = l.symbols || []; st.names = Object.fromEntries(codes.map((x) => [x, ''])); batch = CBATCH;
       }
-      st.day = day; st.loaded = true; st.progress = '';
-      cacheSet(day, { results: st.results, names: st.names, scanned: st.scanned, total: st.total, miss: st.miss, day });
+      st.total = codes.length; st.scanned = 0;
+      for (let i = 0; i < codes.length; i += batch) {
+        st.progress = `掃描${mkt === 'tw' ? '日線' : tf.toUpperCase()}型態 ${Math.min(i + batch, codes.length)}/${codes.length}…第一次約 1～2 分鐘，之後用快取`; render();
+        const q = mkt === 'tw' ? `/api/twhist?pat=1&codes=${codes.slice(i, i + batch).join(',')}` : `/api/twhist?pat=1&market=crypto&tf=${tf}&symbols=${codes.slice(i, i + batch).join(',')}`;
+        const j = await api(q);
+        if (seq !== st.seq) return; // 中途切換市場：丟掉這次結果
+        Object.assign(st.results, j.results); st.miss += (j.miss || []).length; st.scanned = Math.min(i + batch, codes.length);
+      }
+      st.day = mkt === 'tw' ? stamp : new Date().toLocaleString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' }); st.loaded = true; st.progress = '';
+      cacheSet(id, { stamp, results: st.results, names: st.names, scanned: st.scanned, total: st.total, miss: st.miss, day: st.day });
     } catch (e) {
       st.error = `更新失敗：${e.message}`; st.progress = '';
-    } finally { st.loading = false; render(); }
+    } finally { if (seq === st.seq) { st.loading = false; render(); } }
   }
+  function switchTo(mkt, tf) { st.switching = true; st.market = mkt; st.tf = tf; st.page = 1; st.kind = ''; st.results = {}; st.loaded = false; load(); }
 
   function list() {
     let cards = [];
@@ -149,7 +160,7 @@ export function createPatTab({ api, el }) {
     const stTxt = it.state === 'formed' ? (it.ago === 0 ? '剛突破' : `${it.ago} 根前${bull ? '突破' : '跌破'}`) : it.state === 'forming' ? `正在形成・距${bull ? '頸線' : '頸線（跌破價）'} ${it.distPct == null ? '—' : it.distPct.toFixed(1) + '%'}` : 'K 棒型態';
     const info = it.state === 'candle' ? '' : `<div class="pc-info muted small">頸線 <b class="num">${px(it.neck)}</b>・停損參考 <b class="num">${px(it.stop)}</b>（${(Math.abs(1 - it.stop / r.close) * 100).toFixed(1)}%）・收盤 <b class="num">${px(r.close)}</b></div>`;
     return `<article class="pc-card">
-      <header><div><b class="num">${esc(code)}</b> ${esc(st.names[code] || '')}</div>
+      <header><div><b class="num">${esc(st.market === 'tw' ? code : code.replace(/USDT$/, ''))}</b> ${esc(st.names[code] || (st.market === 'tw' ? '' : 'USDT 永續・' + st.tf.toUpperCase()))}</div>
         <div class="pc-tags"><span class="pc-k ${bull ? 'up' : 'down'}">${bull ? '偏多' : '偏空'}</span><span class="pc-name">${esc(it.name)}</span><span class="muted small">${esc(stTxt)}</span></div></header>
       ${chart(c)}
       <div class="pc-conf">${c.tags.length ? c.tags.map((t) => `<span class="pc-c ${t.k}">${esc(t.t)}</span>`).join('') : '<span class="muted small">沒有量、K 棒或 MACD 背離確認</span>'}</div>
@@ -159,12 +170,22 @@ export function createPatTab({ api, el }) {
   function render() {
     if (!el.isConnected) return;
     const status = st.error ? `<div class="status err">${esc(st.error)}</div>` : '';
-    if (!st.loaded) { el.innerHTML = `<div class="status">${esc(st.progress || (st.loading ? '準備中…' : ''))}</div>${status}`; return; }
+    if (!st.loaded) {
+      const o = (v, t) => `<option value="${v}" ${st.market === v ? 'selected' : ''}>${t}</option>`;
+      el.innerHTML = `<div class="toolbar"><select id="pat-mkt" class="sort" aria-label="市場">${o('tw', '台股（日線）')}${o('cx', '加密貨幣')}</select>${st.market === 'cx' ? `<select id="pat-tf" class="sort" aria-label="時區">${['4h', '12h', '1d'].map((v) => `<option value="${v}" ${st.tf === v ? 'selected' : ''}>${v === '1d' ? '日線' : v.toUpperCase()}</option>`).join('')}</select>` : ''}<button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>重新掃描</button></div><div class="status">${esc(st.progress || (st.loading ? '準備中…' : ''))}</div>${status}`;
+      el.querySelector('#pat-refresh').onclick = () => load(true);
+      el.querySelector('#pat-mkt').onchange = (e) => { st.market = e.target.value; switchTo(e.target.value, st.tf); };
+      const t0 = el.querySelector('#pat-tf'); if (t0) t0.onchange = (e) => { switchTo('cx', e.target.value); };
+      return;
+    }
     const { cards, total } = list();
     const sel = (id, val, opts, label) => `<select id="${id}" class="sort" aria-label="${label}">${opts.map(([v, t]) => `<option value="${v}" ${String(val) === String(v) ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
     const shown = cards.slice(0, st.page * PAGE);
     el.innerHTML = `
-      <div class="toolbar"><div class="status" style="width:auto;flex:1">掃描成交量前 ${st.total} 檔上市股票（日線）・日期 ${esc(st.day)}・共 ${total} 張，符合 ${cards.length} 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
+      <div class="toolbar">
+        ${sel('pat-mkt', st.market, [['tw', '台股（日線）'], ['cx', '加密貨幣']], '市場')}
+        ${st.market === 'cx' ? sel('pat-tf', st.tf, [['4h', '4H'], ['12h', '12H'], ['1d', '日線']], '時區') : ''}
+        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量前 ${st.total} 檔上市股票（日線）` : `幣安 USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 ${cards.length} 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
         <button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>
       <div class="toolbar">
         ${sel('pat-dir', st.dir, [[0, '偏多＋偏空'], [1, '只看偏多'], [-1, '只看偏空']], '方向')}
@@ -173,7 +194,7 @@ export function createPatTab({ api, el }) {
         ${sel('pat-need', st.need, [['', '不限確認'], ['any', '至少一項確認'], ['vol', '有量'], ['candle', '有 K 棒型態'], ['div', '有 MACD 背離'], ['div2', '持續背離（連續 2 段以上）']], '確認條件')}
       </div>
       ${status}
-      <div class="status err" style="border:1px solid var(--down)">只供看圖參考：台股日線型態回測（約 1,900 檔、2020–2026，扣 0.585%、只做多）沒有任何一個型態通過門檻，K 棒型態也沒有逐一回測，所以這裡<b>不計分、不推播</b>，不要當作進場訊號。排序＝確認越多越前面（有量、同方向 K 棒型態、同方向 MACD 背離、持續背離）。</div>
+      <div class="status err" style="border:1px solid var(--down)">${st.market === 'cx' ? '只供看圖參考：加密貨幣只有 4H 的雙底、收斂三角形、矩形、上升三角形與 12H 雙底通過回測（已在「加密貨幣」頁計分）；其他型態與 K 棒型態都沒有回測，' : ''}台股日線型態回測（約 1,900 檔、2020–2026，扣 0.585%、只做多）沒有任何一個型態通過門檻，K 棒型態也沒有逐一回測，所以這裡<b>不計分、不推播</b>，不要當作進場訊號。排序＝確認越多越前面（有量、同方向 K 棒型態、同方向 MACD 背離、持續背離）。</div>
       <div class="pc-grid">${shown.map(cardHtml).join('') || '<div class="muted small">目前沒有符合的型態。</div>'}</div>
       ${shown.length < cards.length ? `<div style="text-align:center;margin:12px"><button class="refresh" id="pat-more" type="button">再顯示 ${Math.min(PAGE, cards.length - shown.length)} 張（還有 ${cards.length - shown.length} 張）</button></div>` : ''}
       <details class="guide">
@@ -187,6 +208,8 @@ export function createPatTab({ api, el }) {
         </dl>
       </details>`;
     el.querySelector('#pat-refresh').onclick = () => load(true);
+    el.querySelector('#pat-mkt').onchange = (e) => switchTo(e.target.value, st.tf);
+    const tfs = el.querySelector('#pat-tf'); if (tfs) tfs.onchange = (e) => switchTo('cx', e.target.value);
     const bind = (id, key, num) => { el.querySelector('#' + id).onchange = (e) => { st[key] = num ? +e.target.value : e.target.value; st.page = 1; render(); }; };
     bind('pat-dir', 'dir', true); bind('pat-state', 'state'); bind('pat-kind', 'kind'); bind('pat-need', 'need');
     const more = el.querySelector('#pat-more'); if (more) more.onclick = () => { st.page++; render(); };
