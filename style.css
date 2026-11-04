@@ -206,7 +206,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 }
 
 /* 台股型態頁：K 線圖卡片 */
-.pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; margin: 12px 0; }
+.pc-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 12px 0; }
 .pc-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 10px 8px; min-width: 0; }
 .pc-card header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 10px; align-items: baseline; margin-bottom: 4px; }
 .pc-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -216,9 +216,9 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .pc-name { font-weight: 600; }
 .pc { width: 100%; height: auto; display: block; }
 .pc-g { stroke: var(--line); stroke-width: .5; }
-.pc-t { fill: var(--muted); font-size: 9px; font-family: var(--font-num); }
+.pc-t { fill: var(--muted); font-size: 11px; font-family: var(--font-num); }
 .pc-ts { fill: var(--down); }
-.pc-tb { fill: var(--accent); font-family: var(--font-body); font-size: 10px; }
+.pc-tb { fill: var(--accent); font-family: var(--font-body); font-size: 12px; }
 .pc-u { fill: var(--up); } .pc-d { fill: var(--down); }
 .pc-us { stroke: var(--up); stroke-width: 1; } .pc-ds { stroke: var(--down); stroke-width: 1; }
 .pc-v { opacity: .45; }
