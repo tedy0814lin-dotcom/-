@@ -15,9 +15,6 @@ const CARDS = [
   { id: 'pk', mk: '台股', tf: '日線', side: '做多', by: '台股選股', title: '大單推升',
     note: '每筆平均成交股數暴增＋當日大漲＋站上月線：少數大戶在買，不是散戶搶進；隔天開盤買。',
     stats: [['回測筆數', '1,114'], ['每筆平均', '+2.45%'], ['勝過同日平均', '+2.36%'], ['勝率', '33%']] },
-  { id: 'pt', mk: '加密', tf: '12H／日線', side: '做多', by: '你的規則', title: '底部型態早進場', link: 'twpat',
-    note: '三角、菱形、雙底、矩形底在型態成形時就進場（抄底部）；逐型態挑參數，驗證期贏過 BTC 的才標「回測通過」。在「型態」頁看圖。',
-    stats: [['回測通過', '7 種'], ['進場', '型態成形時'], ['停損', '頸線下'], ['看圖', '型態頁']] },
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -37,7 +34,7 @@ export function createStrategyTab({ api, el, goto }) {
       <div class="st-tags"><span>${esc(c.mk)}</span><span>${esc(c.tf)}</span><span>${esc(c.side)}</span></div>
       <p>${esc(c.note)}</p>
       <dl class="st-stats">${c.stats.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd class="num">${esc(v)}</dd></div>`).join('')}</dl>
-      ${c.link ? '<div class="st-go">前往型態頁 →</div>' : ''}</button>`).join('');
+      </button>`).join('');
   }
   function show() {
     cards();
@@ -45,8 +42,6 @@ export function createStrategyTab({ api, el, goto }) {
     if (kids[sub]) kids[sub].render();
   }
   function pick(id) {
-    const c = CARDS.find((x) => x.id === id);
-    if (c?.link) { goto(c.link); return; }
     sub = id;
     try { localStorage.setItem(LS, sub); } catch {}
     show();
