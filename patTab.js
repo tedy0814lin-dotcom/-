@@ -2,7 +2,7 @@
 // 型態：底部／向上突破 7 種＋圓弧底、V 底、擴散三角形、菱形，以及它們的偏空版（頭部／向下跌破，用鏡像偵測）；另有 K 棒型態（吞噬、孕線、錘子線、射擊之星、晨星／黃昏之星、貫穿／烏雲罩頂、平頭頂／底）。
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
-const KEY = 'wr_pat_v7_';
+const KEY = 'wr_pat_v8_';
 const MINV = 1000, TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -32,12 +32,12 @@ function cardsOf(code, r) {
     if (d) tags.push({ t: `MACD ${dir > 0 ? '底' : '頂'}背離${d.k >= 2 ? `（持續 ×${d.k}）` : ''}`, k: d.k >= 2 ? 'div2' : 'div' });
     return tags;
   };
-  const PASS = { eRect12: '12H 矩形底部早進場：驗證期 372 筆 +0.50R', eTri12: '12H 三重底早進場：驗證期 351 筆 +0.50R', eDbl12: '12H 雙底早進場：驗證期 611 筆 +0.28R（觀察）', eRect1d: '日線矩形底部早進場：驗證期 85 筆 +0.71R', eTri1d: '日線三重底早進場：驗證期 74 筆 +1.00R', eDbl1d: '日線雙底早進場：驗證期 170 筆 +0.69R' };
+  const PASS = { eTri12: '12H 三重底早進場：驗證期 347 筆 +0.51R', eDia12: '12H 菱形底早進場：驗證期 135 筆 +0.42R', eDbl12: '12H 雙底早進場：驗證期 1,260 筆 +0.25R（觀察，沒贏 BTC）', eRect12: '12H 矩形底部早進場：驗證期 1,039 筆 +0.28R（觀察，沒贏 BTC）', eRect1d: '日線矩形底部早進場：驗證期 267 筆 +0.64R', eTri1d: '日線三重底早進場：驗證期 176 筆 +0.67R', eDbl1d: '日線雙底早進場：驗證期 199 筆 +0.86R' };
   for (const it of r.items) {
     const tags = conf(it.dir, it);
     const ps = it.dir > 0 && it.state === 'forming' ? (r.early || []).filter((e) => e.kind === it.kind) : [];
     for (const e of ps) tags.unshift({ t: `回測通過・${PASS[e.key] || e.key}（${e.ago ? '前一根' : '剛'}成形，下一根開盤進、停損 ${px(e.stop)}、4R）`, k: 'pass' }); out.push({ code, r, it, tags, score: tags.length + (tags.some((x) => x.k === 'div2') ? 1 : 0) + (ps.length ? 10 : 0) }); }
-  const EN = { rectangle: '矩形整理（底部）', triple_bottom: '三重底', double_bottom: '雙底' };
+  const EN = { rectangle: '矩形整理（底部）', triple_bottom: '三重底', double_bottom: '雙底', diamond: '菱形（底部）' };
   for (const e of r.early || []) {
     if (r.items.some((x) => x.dir > 0 && x.state === 'forming' && x.kind === e.kind)) continue;
     const it = { dir: 1, kind: e.kind, name: (EN[e.kind] || e.kind) + '・底部早進場', state: 'forming', distPct: e.neck ? (e.neck / r.close - 1) * 100 : null, neck: e.neck, stop: e.stop, pts: e.pts || [], neckLine: e.neckLine || null, lines: null };
@@ -211,7 +211,7 @@ export function createPatTab({ api, el }) {
       </div>
       ${status}
       <div class="status err" style="border:1px solid var(--down)">${st.market === 'cx'
-        ? '加密貨幣：綠底「回測通過」＝12H／日線的矩形、三重底、雙底「底部早進場」（型態一成形就進、不等突破；幣安前 150 名回測，2025-11 之後驗證通過，已在「加密貨幣」頁計分與推播）。2022、2025 兩個空頭年接近 0 或虧損。其他型態與 K 棒型態沒有通過回測，只供看圖。'
+        ? '加密貨幣：綠底「回測通過」＝底部早進場（型態一成形就進、不等突破；每個型態各自挑參數，2025-11 之後驗證通過，全期也贏同期持有 BTC）：12H 三重底、菱形底，日線雙底、矩形、三重底；12H 雙底、矩形只算觀察。已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。其他型態與 K 棒型態沒有通過回測，只供看圖。'
         : '台股：日線型態（突破進場與底部早進場都測過，約 1,900 檔、2020–2026、扣 0.585%）沒有一個贏過同期持有 0050，K 棒型態也沒有逐一回測，所以<b>不計分、不推播</b>，只供看圖。'}排序＝回測通過最前，其次確認越多越前面（有量、同方向 K 棒型態、同方向 MACD 背離、持續背離）。</div>
       <div class="pc-grid">${shown.map(cardHtml).join('') || '<div class="muted small">目前沒有符合的型態。</div>'}</div>
       ${shown.length < cards.length ? `<div style="text-align:center;margin:12px"><button class="refresh" id="pat-more" type="button">再顯示 ${Math.min(PAGE, cards.length - shown.length)} 張（還有 ${cards.length - shown.length} 張）</button></div>` : ''}
@@ -222,7 +222,7 @@ export function createPatTab({ api, el }) {
           <dt>找高低點</dt><dd>用 ATR 之字轉折：價格反向走超過 2～3 倍 ATR 才確認一個高點或低點，反轉後才確認，不會偷看未來。偏空型態是把價格上下翻轉後用同一套偵測。</dd>
           <dt>正在形成／已經形成</dt><dd>型態成形後最多等 15 根日線；收盤站上（跌破）頸線就算突破。「已經形成」只列最近 6 根內突破的。收斂三角形另外用趨勢線擬合（上下線收斂、至少 85% 收盤在兩線內）。</dd>
           <dt>確認</dt><dd>量＝突破（跌破）那天成交量 ≥ 前 20 日均量 ${VOLX} 倍（正在形成則看近 5 日均量 ≥ ${VOL5X} 倍）。K 棒型態＝最近 2 根內、方向相同。MACD 背離＝柱狀體「一段一段的波峰」比較（價格更高／低、柱狀體更低／高），最近 10 根內確認；連續 2 段以上才標「持續」。</dd>
-          <dt>回測通過（綠底標籤）</dt><dd>只有加密貨幣 12H／日線的矩形、三重底、雙底「底部早進場」：型態一成形（最後一個低點被 2～3 倍 ATR 反彈確認）就在下一根開盤進場，不等突破頸線，停損＝型態低點下 0.1 ATR、4R 出場。幣安前 150 名 2020–2026 回測，前 75% 挑、後 25%（2025-11 之後）驗證通過，也已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。台股同樣方法沒有贏過同期持有 0050，所以台股沒有通過的。</dd>
+          <dt>回測通過（綠底標籤）</dt><dd>只有加密貨幣「底部早進場」（12H 三重底、菱形底；日線雙底、矩形、三重底；12H 雙底、矩形為觀察）：型態一成形（最後一個低點被 2～3 倍 ATR 反彈確認）就在下一根開盤進場，不等突破頸線，停損＝型態低點下 0.1 ATR、4R 出場。幣安前 150 名 2020–2026 回測，前 75% 挑、後 25%（2025-11 之後）驗證通過，也已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。每個型態在 27 組參數裡各自挑。台股同樣方法（雙底＋MACD 背離最好，驗證期 401 筆 +0.19R）每筆仍輸同期持有 0050，所以台股沒有通過的。</dd>
           <dt>限制</dt><dd>只掃當日成交量 ≥${MINV} 張、股價 ≥10 元的股票（最多 ${TOP} 檔，含上櫃）；Yahoo 資料偶爾缺漏。偵測邏輯與加密貨幣頁同一套（已和 Python 回測逐根對照）；加密貨幣 4H／12H 有部分型態通過回測，台股日線沒有。</dd>
         </dl>
       </details>`;
