@@ -6,11 +6,12 @@ const KEY = 'wr_pat_v3_';
 const TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 24, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
-const cacheGet = (day) => { try { return JSON.parse(localStorage.getItem(KEY + day)); } catch { return null; } };
-function cacheSet(day, v) {
-  try { Object.keys(localStorage).filter((k) => k.startsWith('wr_pat_') && k !== KEY + day).forEach((k) => localStorage.removeItem(k)); localStorage.setItem(KEY + day, JSON.stringify(v)); } catch {}
+const bucket = (mkt, tf) => (mkt === 'tw' ? taipeiDay() : String(Math.floor(Date.now() / ((tf === '4h' ? 10 : 30) * 60e3))));
+const cacheGet = (id, stamp) => { try { const c = JSON.parse(localStorage.getItem(KEY + id)); return c && c.stamp === stamp ? c : null; } catch { return null; } };
+function cacheSet(id, v) {
+  try { Object.keys(localStorage).filter((k) => k.startsWith('wr_pat_') && !k.startsWith(KEY)).forEach((k) => localStorage.removeItem(k)); localStorage.setItem(KEY + id, JSON.stringify(v)); } catch {}
 }
-const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v.toFixed(2));
+const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
 const KINDS = [
   ['double_bottom', '雙底／雙頂'], ['triple_bottom', '三重底／三重頂'], ['inv_HS', '頭肩底／頭肩頂'], ['rectangle', '矩形整理'], ['asc_triangle', '上升／下降三角形'],
   ['sym_triangle', '對稱三角形'], ['falling_wedge', '下降／上升楔形'], ['rounded_bottom', '圓弧底／圓弧頂'], ['v_bottom', 'V 底／倒 V 頂'], ['broadening', '擴散三角形'], ['diamond', '菱形'],
