@@ -2,7 +2,7 @@
 // 型態：底部／向上突破 7 種＋圓弧底、V 底、擴散三角形、菱形，以及它們的偏空版（頭部／向下跌破，用鏡像偵測）；另有 K 棒型態（吞噬、孕線、錘子線、射擊之星、晨星／黃昏之星、貫穿／烏雲罩頂、平頭頂／底）。
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
-const KEY = 'wr_pat_v6_';
+const KEY = 'wr_pat_v7_';
 const MINV = 1000, TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -15,7 +15,7 @@ const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFi
 const KINDS = [
   ['double_bottom', '雙底／雙頂'], ['triple_bottom', '三重底／三重頂'], ['inv_HS', '頭肩底／頭肩頂'], ['rectangle', '矩形整理'], ['asc_triangle', '上升／下降三角形'],
   ['sym_triangle', '對稱三角形'], ['falling_wedge', '下降／上升楔形'], ['rounded_bottom', '圓弧底／圓弧頂'], ['v_bottom', 'V 底／倒 V 頂'], ['broadening', '擴散三角形'], ['diamond', '菱形'],
-  ['conv_asc', '收斂三角形'], ['conv_desc', '收斂三角形（下降）'], ['conv_sym', '收斂三角形（對稱）'], ['candle', '只有 K 棒型態'],
+  ['conv_asc', '收斂三角形'], ['conv_desc', '收斂三角形（下降）'], ['conv_sym', '收斂三角形（對稱）'],
 ];
 const KIND_OPTS = KINDS.filter(([k]) => k !== 'conv_desc' && k !== 'conv_sym');
 const kindMatch = (it, k) => !k || it.kind === k || (k === 'conv_asc' && /^conv_(asc|desc|sym)$/.test(it.kind)) || (k === 'falling_wedge' && /^conv_(fwedge|rwedge)$/.test(it.kind));
@@ -43,13 +43,6 @@ function cardsOf(code, r) {
     const it = { dir: 1, kind: e.kind, name: (EN[e.kind] || e.kind) + '・底部早進場', state: 'forming', distPct: e.neck ? (e.neck / r.close - 1) * 100 : null, neck: e.neck, stop: e.stop, pts: e.pts || [], neckLine: e.neckLine || null, lines: null };
     const tags = [{ t: `回測通過・${PASS[e.key] || e.key}（${e.ago ? '前一根' : '剛'}成形，下一根開盤進、停損 ${px(e.stop)}、4R）`, k: 'pass' }, ...conf(1, it)];
     out.push({ code, r, it, tags, score: tags.length + 10 });
-  }
-  for (const dir of [1, -1]) {
-    if (r.items.some((x) => x.dir === dir)) continue;
-    const cs = r.candles.filter((c) => c.dir === dir);
-    if (!cs.length) continue;
-    const tags = conf(dir, null);
-    out.push({ code, r, it: { dir, kind: 'candle', name: cs.map((c) => c.name).join('＋'), state: 'candle', pts: [], neckLine: null, lines: null }, tags, score: tags.length + (tags.some((x) => x.k === 'div2') ? 1 : 0) });
   }
   return out;
 }
@@ -163,7 +156,7 @@ export function createPatTab({ api, el }) {
     cards = cards.filter((c) => {
       if (st.dir && c.it.dir !== st.dir) return false;
       if (st.state && c.it.state !== st.state) return false;
-      if (st.kind === 'candle' ? c.it.kind !== 'candle' : !kindMatch(c.it, st.kind)) return false;
+      if (!kindMatch(c.it, st.kind)) return false;
       const has = (k) => c.tags.some((t) => t.k === k);
       if (st.need === 'vol' && !has('vol')) return false;
       if (st.need === 'candle' && !has('candle')) return false;
@@ -212,7 +205,7 @@ export function createPatTab({ api, el }) {
         <button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>
       <div class="toolbar">
         ${sel('pat-dir', st.dir, [[0, '偏多＋偏空'], [1, '只看偏多'], [-1, '只看偏空']], '方向')}
-        ${sel('pat-state', st.state, [['', '全部狀態'], ['formed', '已經形成'], ['forming', '正在形成'], ['candle', '只有 K 棒']], '狀態')}
+        ${sel('pat-state', st.state, [['', '全部狀態'], ['formed', '已經形成'], ['forming', '正在形成']], '狀態')}
         ${sel('pat-kind', st.kind, [['', '全部型態'], ...KIND_OPTS], '型態')}
         ${sel('pat-need', st.need, [['', '不限確認'], ['any', '至少一項確認'], ['vol', '有量'], ['candle', '有 K 棒型態'], ['div', '有 MACD 背離'], ['div2', '持續背離（連續 2 段以上）'], ['pass', '只看回測通過（加密 12H／日線底部早進場）']], '確認條件')}
       </div>
