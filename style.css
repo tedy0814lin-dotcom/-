@@ -236,3 +236,4 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .pc-c.div, .pc-c.div2 { color: var(--up); border-color: var(--up); }
 .pc-c.div2 { background: var(--chip-up); font-weight: 600; }
 .pc-info { margin-top: 4px; }
+.pc-c.pass { color: var(--accent-ink); background: var(--up); border-color: var(--up); font-weight: 600; }
