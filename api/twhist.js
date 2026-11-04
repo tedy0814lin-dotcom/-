@@ -9,6 +9,7 @@ import { harmonicCD, harmonic } from '../lib/harmonic.js';
 import { vegas } from '../lib/vegas.js';
 import { tunnel } from '../lib/cryptoCore.js';
 import { twPat } from '../lib/twPatApi.js';
+import { claudeScan } from '../lib/claudeApi.js';
 
 const TWSE = 'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
 const cache = new Map(); // code → { day, data }
@@ -184,6 +185,7 @@ export async function histData(code, day = new Date(Date.now() + 8 * 3600e3).toI
 export default async function handler(req, res) {
   if (!requireUser(req, res)) return;
   if (req.query.pat) return twPat(req, res); // 台股型態頁（lib/twPatApi.js）
+  if (req.query.cs) return claudeScan(req, res); // Claude 策略頁（lib/claudeApi.js）
   const codes = String(req.query.codes || '').split(',').map((c) => c.trim()).filter((c) => /^\d{4}$/.test(c)).slice(0, 8);
   const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const out = {};

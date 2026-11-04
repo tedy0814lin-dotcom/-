@@ -238,3 +238,10 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .pc-c.div2 { background: var(--chip-up); font-weight: 600; }
 .pc-info { margin-top: 4px; }
 .pc-c.pass { color: var(--accent-ink); background: var(--up); border-color: var(--up); font-weight: 600; }
+
+/* Claude 策略頁 */
+.cs-rules { margin: 6px 0 10px 1.2em; padding: 0; line-height: 1.7; }
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 10px; }
+.cs-mini { width: 100%; height: auto; display: block; margin: 4px 0; }
+.cs-entry { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; }
+b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
