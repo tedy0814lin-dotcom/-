@@ -2,7 +2,7 @@
 // 型態：底部／向上突破 7 種＋圓弧底、V 底、擴散三角形、菱形，以及它們的偏空版（頭部／向下跌破，用鏡像偵測）；另有 K 棒型態（吞噬、孕線、錘子線、射擊之星、晨星／黃昏之星、貫穿／烏雲罩頂、平頭頂／底）。
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
-const KEY = 'wr_pat_v5_';
+const KEY = 'wr_pat_v6_';
 const MINV = 1000, TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -18,7 +18,7 @@ const KINDS = [
   ['conv_asc', '收斂三角形'], ['conv_desc', '收斂三角形（下降）'], ['conv_sym', '收斂三角形（對稱）'], ['candle', '只有 K 棒型態'],
 ];
 const KIND_OPTS = KINDS.filter(([k]) => k !== 'conv_desc' && k !== 'conv_sym');
-const kindMatch = (it, k) => !k || it.kind === k || (k === 'conv_asc' && /^conv_/.test(it.kind));
+const kindMatch = (it, k) => !k || it.kind === k || (k === 'conv_asc' && /^conv_(asc|desc|sym)$/.test(it.kind)) || (k === 'falling_wedge' && /^conv_(fwedge|rwedge)$/.test(it.kind));
 
 // 把一檔股票拆成卡片：每個型態一張；沒有型態但有 K 棒型態的，K 棒型態自己一張
 function cardsOf(code, r) {
