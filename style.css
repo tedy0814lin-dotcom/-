@@ -245,3 +245,20 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .cs-mini { width: 100%; height: auto; display: block; margin: 4px 0; }
 .cs-entry { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; }
 b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
+
+/* ---------- 策略頁：策略總覽卡片 ---------- */
+.st-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 10px; margin-bottom: 4px; }
+.st-card { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; cursor: pointer; display: grid; gap: 8px; align-content: start; transition: border-color .15s, background .15s; }
+.st-card:hover { border-color: var(--muted); }
+.st-card[aria-selected="true"] { border-color: var(--accent); background: linear-gradient(180deg, var(--chip-flat), var(--panel) 70%); box-shadow: inset 0 2px 0 var(--accent); }
+.st-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.st-title { font-weight: 700; font-size: 15.5px; }
+.st-by { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+.st-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.st-tags span { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+.st-card p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.st-stats { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.st-stats dt { font-size: 11px; color: var(--muted); }
+.st-stats dd { margin: 0; font-size: 14px; font-weight: 600; }
+.st-go { font-size: 12.5px; color: var(--accent); font-weight: 700; }
+#st-cs, #st-vg, #st-pk { margin-top: 4px; }
