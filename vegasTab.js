@@ -40,9 +40,6 @@ function drawVegas(cd, now, tf) {
     s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}" class="${c}"/>`;
     s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${yv(b[4]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Ht - 16 - yv(b[4])).toFixed(1)}" class="${c} pc-v"/>`;
   });
-  // 進場/停損/目標
-  const hl = (v, cls, lab) => v > 0 ? `<line x1="${px0}" x2="${xr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="${cls}"/><text x="${xr - 2}" y="${(Y(v) - 3).toFixed(1)}" text-anchor="end" class="pc-t ${cls}-t">${lab} ${px(v)}</text>` : '';
-  if (now && now.status === '確認') s += hl(now.entry, 'vg-entry', '進') + hl(now.stop, 'vg-stop', '損') + hl(now.target, 'vg-target', '標');
   for (const i of [0, 2, 4, 6].map((k) => Math.round((k * (N - 1)) / 6))) s += `<text x="${X(i).toFixed(1)}" y="${Ht - 2}" class="pc-t" text-anchor="${i === 0 ? 'start' : i >= N - 1 ? 'end' : 'middle'}">${esc(fmtT(cd.t[i], tf))}</text>`;
   return s + '</svg>';
 }

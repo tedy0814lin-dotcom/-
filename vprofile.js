@@ -23,9 +23,8 @@ export function volumeProfile(bars, lo, hi, rows = VP_ROWS, va = 0.70) {
 }
 // 畫出 VPVR：量條在 side（預設左）、價值區底色與 POC／VAH／VAL 橫線滿版，價位標籤在另一側
 export function vpSVG(vp, g) {
-  const { left, right, yOf, rowPix, pw = 180, side = 'left', pxfmt = (v) => v } = g;
+  const { left, right, yOf, rowPix, pw = 180, side = 'left' } = g;
   const bh = Math.max(1, rowPix * 0.86); let s = '';
-  s += `<rect x="${left}" y="${yOf(vp.vah).toFixed(1)}" width="${(right - left).toFixed(1)}" height="${Math.max(0, yOf(vp.val) - yOf(vp.vah)).toFixed(1)}" class="vp-va"/>`;
   for (let k = 0; k < vp.rows; k++) {
     const t = vp.vol[k]; if (!(t > 0)) continue;
     const yc = yOf(vp.lo + (k + 0.5) * vp.step), y = (yc - bh / 2).toFixed(1);
@@ -42,6 +41,5 @@ export function vpSVG(vp, g) {
   }
   const lblX = side === 'left' ? right - 2 : left + 3, anc = side === 'left' ? 'end' : 'start';
   s += `<line x1="${left}" x2="${right}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${(yOf(vp.pocP) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-poc-t">POC</text>`;
-  for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${left}" x2="${right}" y1="${yOf(v).toFixed(1)}" y2="${yOf(v).toFixed(1)}" class="vp-val-ln"/><text x="${lblX}" y="${(yOf(v) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-val-t">${lab}</text>`;
   return s;
 }
