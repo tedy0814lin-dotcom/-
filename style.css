@@ -285,8 +285,9 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .vp-dn.vp-hi { opacity: .6; }
 .vp-lvn { stroke: var(--muted); stroke-width: .8; stroke-dasharray: 2 4; opacity: .35; }
 .vp-va { fill: var(--accent); opacity: .05; }
-.vp-poc { stroke: #e24aa0; stroke-width: 1.4; stroke-dasharray: 6 3; opacity: .85; }
-.vp-poc-t { fill: #e24aa0; font-weight: 600; }
+.vp-poc { stroke: #ffffff; stroke-width: 1.6; stroke-dasharray: 6 3; opacity: 1; }
+.vp-poc-t { fill: #ffffff; font-weight: 700; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .vp-poc { stroke: #111820; } :root:not([data-theme="dark"]) .vp-poc-t { fill: #111820; } }
 .vp-val-ln { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .55; }
 .vp-val-t { fill: var(--muted); }
 

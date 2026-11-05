@@ -40,8 +40,6 @@ function drawVegas(cd, now, tf) {
     s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}" class="${c}"/>`;
     s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${yv(b[4]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Ht - 16 - yv(b[4])).toFixed(1)}" class="${c} pc-v"/>`;
   });
-  // EMA12
-  s += `<polyline points="${cd.e12.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}" class="vg-e12"/>`;
   // 進場/停損/目標
   const hl = (v, cls, lab) => v > 0 ? `<line x1="${px0}" x2="${xr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="${cls}"/><text x="${xr - 2}" y="${(Y(v) - 3).toFixed(1)}" text-anchor="end" class="pc-t ${cls}-t">${lab} ${px(v)}</text>` : '';
   if (now && now.status === '確認') s += hl(now.entry, 'vg-entry', '進') + hl(now.stop, 'vg-stop', '損') + hl(now.target, 'vg-target', '標');
