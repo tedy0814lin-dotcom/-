@@ -26,7 +26,10 @@ function drawVegas(cd, now, tf) {
   for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4, y = Y(v); s += `<line x1="${px0}" x2="${xr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="pc-g"/><text x="${xr + 4}" y="${(y + 3).toFixed(1)}" class="pc-t">${px(v)}</text>`; }
   // 通道帶（大在下層、小在上層）
   const band = (top, bot, cls) => { let u = '', d = ''; for (let i = 0; i < N; i++) { u += `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(top[i]).toFixed(1)} `; } for (let i = N - 1; i >= 0; i--) d += `L${X(i).toFixed(1)} ${Y(bot[i]).toFixed(1)} `; return `<path d="${u}${d}Z" class="${cls}"/>`; };
+  const edge = (arr, cls) => `<polyline points="${arr.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}" class="${cls}"/>`;
+  // 淡填色＋明亮上下緣線：通道清楚但不蓋住 K 棒
   s += band(cd.bTop, cd.bBot, 'vg-tun-b') + band(cd.sTop, cd.sBot, 'vg-tun-s');
+  s += edge(cd.bTop, 'vg-tun-b-ln') + edge(cd.bBot, 'vg-tun-b-ln') + edge(cd.sTop, 'vg-tun-s-ln') + edge(cd.sBot, 'vg-tun-s-ln');
   // VPVR（左）
   const vp = volumeProfile(bars, lo, hi); if (vp) s += vpSVG(vp, { left: px0, right: xr, yOf: Y, rowPix: ph / VP_ROWS, pw: 170, side: 'left', pxfmt: px });
   // K 棒＋量

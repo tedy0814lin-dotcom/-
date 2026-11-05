@@ -296,8 +296,10 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .vg-chart { margin-top: 8px; border: 1px solid var(--line); border-radius: var(--r); padding: 6px; background: var(--panel-2); }
 .vg-tfbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
 .vg-tf[aria-pressed="true"] { border-color: var(--accent); background: var(--chip-flat); color: var(--accent); }
-.vg-tun-s { fill: #3f86c9; opacity: .14; stroke: none; }
-.vg-tun-b { fill: var(--accent); opacity: .12; stroke: none; }
+.vg-tun-s { fill: #3f86c9; opacity: .07; stroke: none; }
+.vg-tun-b { fill: var(--accent); opacity: .06; stroke: none; }
+.vg-tun-s-ln { fill: none; stroke: #4aa3ff; stroke-width: 1.4; opacity: .95; }
+.vg-tun-b-ln { fill: none; stroke: #f0b429; stroke-width: 1.4; opacity: .95; }
 .vg-e12 { fill: none; stroke: #e0863a; stroke-width: 1.2; opacity: .9; }
 .vg-entry { stroke: var(--up); stroke-width: 1.2; stroke-dasharray: 5 3; } .vg-entry-t { fill: var(--up); }
 .vg-stop { stroke: var(--down); stroke-width: 1.2; stroke-dasharray: 4 3; } .vg-stop-t { fill: var(--down); }
