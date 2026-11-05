@@ -130,8 +130,13 @@ export function createVegasTab({ api, el }) {
   }
   async function loadChart(sym, tf) {
     st.charts[sym] = { tf, loading: true }; render();
-    try { const d = await api(`/api/vegas?chart=1&m=${st.m}&s=${encodeURIComponent(sym)}&tf=${tf}`); st.charts[sym] = { tf, data: d }; }
-    catch (e) { st.charts[sym] = { tf, err: e.message }; }
+    const get = () => api(`/api/vegas?chart=1&m=${st.m}&s=${encodeURIComponent(sym)}&tf=${tf}`);
+    try { st.charts[sym] = { tf, data: await get() }; }
+    catch (e1) { // 幣安偶爾限流（429），隔 1.5 秒自動再試一次
+      await new Promise((r) => setTimeout(r, 1500));
+      if (st.charts[sym]?.tf !== tf) return;
+      try { st.charts[sym] = { tf, data: await get() }; } catch (e2) { st.charts[sym] = { tf, err: e2.message }; }
+    }
     render();
   }
 
