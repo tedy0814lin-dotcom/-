@@ -77,9 +77,14 @@ async function chartData(m, sym, tf) {
     return vegasChart(await yahooBars(sym, iv, range), 150);
   }
   const iv = tf === '1d' ? '1d' : tf; // 加密：15m / 1h / 4h
-  // 幣安合約偶爾把雲端 IP 暫時封鎖（HTTP 418/429）→ 依序改用 Bybit 永續、幣安現貨（價格幾乎相同）
+  // 先用 BingX；沒有該幣或被限流 → 幣安合約 → Bybit 永續 → 幣安現貨（價格幾乎相同）
   const bnRows = (k) => k.slice(0, -1).map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[7], t: +x[0] }));
   const srcs = [
+    async () => { // BingX 永續（圖面與 BingX 一致）；newest first，最新一根未收盤
+      const j = await getJSON(`https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=${sym.replace(/USDT$/, '')}-USDT&interval=${iv}&limit=1000`, { timeout: 10000, retries: 1 });
+      const l = j?.data; if (!Array.isArray(l) || l.length < 700) throw new Error('BingX 沒有資料');
+      return l.slice(1).reverse().map((x) => ({ o: +x.open, h: +x.high, l: +x.low, c: +x.close, v: +x.volume * +x.close, t: +x.time }));
+    },
     async () => bnRows(await getJSON(`${BN}/fapi/v1/klines?symbol=${sym}&interval=${iv}&limit=1500`, { timeout: 10000, retries: 0 })),
     async () => {
       const j = await getJSON(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=${{ '15m': 15, '1h': 60, '4h': 240, '1d': 'D' }[iv]}&limit=1000`, { timeout: 10000, retries: 0 });
