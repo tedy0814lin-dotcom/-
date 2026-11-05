@@ -24,7 +24,7 @@ function lossTags(x) {
 }
 
 export function createLogTab({ api, el }) {
-  const st = { data: null, loading: false, error: '', open: null, scoredOnly: false, filter: 'all', more: false, sd: null, sLoading: false, sError: '' };
+  const st = { data: null, loading: false, error: '', open: null, scoredOnly: false, filter: 'all', more: false, adv: false, how: false, sd: null, sLoading: false, sError: '' };
 
   async function load() {
     st.loading = true; st.error = ''; render();
@@ -166,7 +166,7 @@ export function createLogTab({ api, el }) {
     }).filter(Boolean).sort((a, b) => b.n - a.n);
     const pc = (v, n) => (n ? (v / n * 100).toFixed(0) + '%' : '—');
     const lossHtml = lossRows.length ? `<h3 style="margin:18px 0 6px">為什麼虧（每筆停損可以同時有多個原因）</h3>
-      <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th align="left">策略</th><th>虧損筆數</th>${TAGS.map(([, n]) => `<th>${n}</th>`).join('')}<th>平均停損距離</th><th>停損前平均曾賺</th></tr></thead><tbody>${lossRows.map((r) => `<tr data-k="${esc(r.k)}"><td>${esc(CRYPTO_SIGNALS[r.k]?.label || r.k)}<div class="muted">${esc(r.k)}・${esc(r.tf)}</div></td><td class="num">${r.n}</td>${TAGS.map(([t]) => `<td class="num">${t === 'tight' ? pc(r.rk, r.rn) + (r.rn < r.n ? '<span class="muted">（' + r.rn + '筆已追滿）</span>' : '') : pc(r.cnt[t], r.n)}</td>`).join('')}<td class="num">${r.sp != null ? (r.sp * 100).toFixed(1) + '%' : '—'}</td><td class="num">${r.mfe != null ? r.mfe.toFixed(2) + 'R' : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th align="left">策略</th><th>虧損筆數</th>${TAGS.map(([, n]) => `<th>${n}</th>`).join('')}<th>平均停損距離</th><th>停損前平均曾賺</th></tr></thead><tbody>${lossRows.map((r) => `<tr data-k="${esc(r.k)}"><td>${esc(CRYPTO_SIGNALS[r.k]?.label || r.k)}<div class="muted">${esc(r.k)}・${esc(r.tf)}</div></td><td class="num">${r.n}</td>${TAGS.map(([t]) => `<td class="num">${t === 'tight' ? (r.rn < 10 ? '<span class="muted">樣本不足</span>' : pc(r.rk, r.rn)) + '<div class="muted small">' + r.rk + '/' + r.rn + ' 筆有追蹤（共虧 ' + r.n + '）</div>' : pc(r.cnt[t], r.n)}</td>`).join('')}<td class="num">${r.sp != null ? (r.sp * 100).toFixed(1) + '%' : '—'}</td><td class="num">${r.mfe != null ? r.mfe.toFixed(2) + 'R' : '—'}</td></tr>`).join('')}</tbody></table></div>
       <p class="muted">「停損後又到目標」高 ＝ 方向其實對、停損太近被洗掉；「曾賺 ≥1R 沒止盈」高 ＝ 止盈太遠；「大盤逆向」高 ＝ 受 BTC 影響；「訊號沒走出來」高 ＝ 策略本身的問題。</p>` : '';
     const gItems = items.filter((x) => Array.isArray(x.g) && (!st.open || x.k === st.open));
     let gridHtml = '';
@@ -188,12 +188,13 @@ export function createLogTab({ api, el }) {
       <div class="lg-rows">${list || '<p class="muted">還沒有記錄。</p>'}</div>
       <h3 class="lg-sec">最近訊號${st.open ? ' · ' + esc(st.open) : ''}</h3>
       <div class="lg-feeds">${feedHtml}</div>
-      <details class="lg-det"><summary>進階分析（為什麼虧、停損／止盈放別處會怎樣）</summary><div style="overflow-x:auto">${lossHtml}${gridHtml || '<p class="muted">資料還不夠。</p>'}</div></details>
-      <details class="lg-det"><summary>怎麼記錄、怎麼判斷</summary>
+      <details class="lg-det" data-d="adv"${st.adv ? ' open' : ''}><summary>進階分析（為什麼虧、停損／止盈放別處會怎樣）</summary><div style="overflow-x:auto">${lossHtml}${gridHtml || '<p class="muted">資料還不夠。</p>'}</div></details>
+      <details class="lg-det" data-d="how"${st.how ? ' open' : ''}><summary>怎麼記錄、怎麼判斷</summary>
         <p class="muted small">記錄：新成立的訊號才會記（含不計分的觀察策略）。加密策略進場＝掃到訊號當下的價格（掛單類等價格回到掛單價），來回手續費 0.1%，同一根 K 棒同時碰到停損與目標算停損，最多追 14 天（4H 策略 40 天、12H 與日線 60 天，與回測一致）。主力策略只存訊號，結果用實際 K 線依回測規則重播，不能事後改參數；台股來回成本 0.585%，R＝報酬 ÷ 停損 12%。</p>
         <p class="muted small">判斷：平均 ≥ +0.10R、前後半段都為正、且滿 ${MIN_N} 筆才算實盤驗證；觀察策略達標才建議改成計分。單筆賺賠標準差約 1.5～2R，30 筆的誤差就有 ±0.3R，所以樣本少時不要下結論。維加斯通道做多／做空屬於觀察策略。</p></details>`;
   }
 
+  el.addEventListener('toggle', (e) => { const d = e.target.dataset?.d; if (d) st[d] = e.target.open; }, true);
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (b) {
