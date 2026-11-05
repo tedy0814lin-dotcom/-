@@ -77,8 +77,20 @@ async function chartData(m, sym, tf) {
     return vegasChart(await yahooBars(sym, iv, range), 150);
   }
   const iv = tf === '1d' ? '1d' : tf; // 加密：15m / 1h / 4h
-  const k = await getJSON(`${BN}/fapi/v1/klines?symbol=${sym}&interval=${iv}&limit=1500`, { timeout: 12000 });
-  return vegasChart(k.slice(0, -1).map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[7], t: +x[0] })), 150);
+  // 幣安合約偶爾把雲端 IP 暫時封鎖（HTTP 418/429）→ 依序改用 Bybit 永續、幣安現貨（價格幾乎相同）
+  const bnRows = (k) => k.slice(0, -1).map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[7], t: +x[0] }));
+  const srcs = [
+    async () => bnRows(await getJSON(`${BN}/fapi/v1/klines?symbol=${sym}&interval=${iv}&limit=1500`, { timeout: 10000, retries: 0 })),
+    async () => {
+      const j = await getJSON(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=${{ '15m': 15, '1h': 60, '4h': 240, '1d': 'D' }[iv]}&limit=1000`, { timeout: 10000, retries: 0 });
+      const l = j?.result?.list; if (!l?.length) throw new Error('Bybit 沒有資料');
+      return l.slice(1).reverse().map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[6], t: +x[0] })); // 最新一根未收盤，去掉
+    },
+    async () => bnRows(await getJSON(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}&interval=${iv}&limit=1000`, { timeout: 10000, retries: 0 })),
+  ];
+  let e0;
+  for (const f of srcs) { try { return vegasChart(await f(), 150); } catch (e) { e0 ||= e; } }
+  throw e0;
 }
 
 async function tw(sym) {
