@@ -1,5 +1,5 @@
 // 足跡圖「Delta 階梯」頁：掃幣安 4H，列出今天完成階梯的做多／做空訊號（含迷你 K 線與 Delta 柱）。
-// 規則與回測見 lib/footprint.js。連 2 根買(賣)Delta 強＋價格一階階創高(低) → 下一根開盤進、停損型態低(高)、3R 出場。
+// 規則與回測見 lib/footprint.js。連 2 根買(賣)Delta 強＋價格一階階創高(低) → 下一根開盤進、停損型態低(高)、4R 出場。
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(3) : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
 const nm = (s) => s.replace(/USDT$/, '');
@@ -33,7 +33,7 @@ function mini(r) {
 function card(r, dir) {
   return `<article class="pc-card"><header><div><b>${esc(nm(r.sym))}</b> <span class="cat ${dir > 0 ? 'cat-long' : 'cat-short'}">${dir > 0 ? '做多' : '做空'}</span></div>
     <div class="muted small">Delta 強度 <b class="num">${r.dn > 0 ? '+' : ''}${r.dn}×</b></div></header>${mini(r)}
-    <div class="muted small">進場 <b class="num">${px(r.close)}</b>・停損 <b class="num">${px(r.stop)}</b>（${r.riskPct}%）・目標 <b class="num">${px(r.target)}</b>（3R）</div></article>`;
+    <div class="muted small">進場 <b class="num">${px(r.close)}</b>・停損 <b class="num">${px(r.stop)}</b>（${r.riskPct}%）・目標 <b class="num">${px(r.target)}</b>（4R）</div></article>`;
 }
 
 export function createFootTab({ api, el }) {
@@ -56,13 +56,13 @@ export function createFootTab({ api, el }) {
           <li><b>概念</b>：足跡圖看每根 K 棒的主動買／賣（Delta）。這裡抓「買盤一階一階把價格推上去」的連續堆疊。</li>
           <li><b>做多訊號</b>：連續 2 根 4H，每根都 ①淨買 Delta 強（≥ 近 50 根平均的 2 倍）②創新高 ③收紅 → <b>下一根 4H 開盤進場</b>。</li>
           <li><b>做空</b>：完全相反（連 2 根淨賣 Delta 強＋創新低＋收綠）。</li>
-          <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>3R 出場</b>（賺到風險的 3 倍）。</li>
+          <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>4R 出場</b>（賺到風險的 4 倍）。</li>
         </ol>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回測（150 主流幣・4H・扣費・事件層級）</th><th class="n">每筆期望</th><th class="n">贏隨機</th><th class="n">訓練/驗證</th></tr></thead><tbody>
-          <tr><td>做多（連 2 根）</td><td class="n num">+0.20R</td><td class="n num">隨機 −0.02</td><td class="n num">+0.19 / +0.20</td></tr>
-          <tr><td>做空（連 2 根）</td><td class="n num">+0.11R</td><td class="n num">隨機 −0.03</td><td class="n num">+0.09 / +0.14</td></tr>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回測（150 主流幣・4H・4R 出場・扣費・事件層級）</th><th class="n">每筆期望</th><th class="n">贏隨機</th><th class="n">訓練/驗證</th></tr></thead><tbody>
+          <tr><td>做多（連 2 根）</td><td class="n num">+0.26R</td><td class="n num">隨機 −0.00</td><td class="n num">+0.26 / +0.25</td></tr>
+          <tr><td>做空（連 2 根）</td><td class="n num">+0.13R</td><td class="n num">隨機 −0.02</td><td class="n num">+0.11 / +0.16</td></tr>
         </tbody></table></div>
-        <p class="muted small">投組層級（多空、每筆風險 0.5%、複利扣費）：全期年化 +28%、最大回撤 −46%（持有 BTC +44%／−77%）；驗證期 +50%（BTC −11%）。<b>單用普通，真正的價值是分散</b>——和「大陽線突破」合併（相關 −0.07）全期 +55%、回撤 −37%，報酬與風險都贏 BTC；再配台股部位（相關 −0.01）回撤再腰斬。勝率約 30%，靠少數大波段；2022 空頭年做多為負；對手續費敏感。這是訂單流回測研究，不是投資建議。</p>
+        <p class="muted small">止盈從 3R 改成 4R（2026-11-05，訓練期選的；3R 版驗證期投組略佳 +50% 對 +42%，但 4R 的事件期望、全期與合併組合都較好）。投組層級（多空、每筆風險 0.5%、複利扣費）：全期年化 +36%、最大回撤 −49%（持有 BTC +44%／−77%）；驗證期 +42%（BTC −11%）。<b>單用普通，真正的價值是分散</b>——和「大陽線突破」合併（相關 −0.07）全期 +61%、回撤 −33%，報酬與風險都贏 BTC；再配台股部位（相關 −0.01）回撤再腰斬。勝率約 30%，靠少數大波段；2022 空頭年做多為負；對手續費敏感。這是訂單流回測研究，不是投資建議。</p>
       </section>`;
     if (!d) { el.innerHTML = head + rules; bind(); return; }
     const sec = (title, arr, dir) => `<section class="panel"><div class="panel-head"><strong>${title}</strong><span class="muted small">${arr.length} 個</span></div>${
