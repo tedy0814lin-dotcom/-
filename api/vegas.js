@@ -47,7 +47,12 @@ async function crypto(sym) {
 }
 
 async function yahooBars(sym, interval, range) {
-  const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`, { timeout: 12000 });
+  let j, e0;
+  for (const h of ['query1', 'query2', 'query1']) { // Yahoo 偶爾限流（429），換主機再試
+    try { j = await getJSON(`https://${h}.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`, { timeout: 12000, retries: 0 }); break; }
+    catch (e) { e0 = e; await new Promise((r) => setTimeout(r, 700)); }
+  }
+  if (!j) throw e0;
   const r = j.chart?.result?.[0];
   const q = r?.indicators?.quote?.[0];
   if (!q) throw new Error('Yahoo 沒有資料');
@@ -97,8 +102,12 @@ export default async function handler(req, res) {
       const sym = String(req.query.s || '').trim();
       if (!/^[A-Z0-9.]{2,20}$/.test(sym)) return res.status(400).json({ error: 'bad symbol' });
       const k = `chart:${m}:${sym}:${tf}`;
-      const data = hit(k, (m === 'tw' ? 10 : 4) * 60e3) || await chartData(m, sym, tf);
-      cache.set(k, { at: Date.now(), data });
+      let data = hit(k, (m === 'tw' ? 10 : 4) * 60e3);
+      if (!data) {
+        try { data = await chartData(m, sym, tf); }
+        catch (e) { const old = cache.get(k); if (!old) throw e; data = old.data; } // 來源限流時先用舊資料
+        cache.set(k, { at: Date.now(), data });
+      }
       return res.status(200).json(data);
     }
     const isTw = req.query.m === 'tw';
