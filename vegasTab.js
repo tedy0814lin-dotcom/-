@@ -1,8 +1,50 @@
 // 維加斯通道分頁：加密（15 分 / 1 小時 / 4 小時）、台股（15 分 / 1 小時 / 日線）
+import { volumeProfile, vpSVG, VP_ROWS } from '/vprofile.js';
 const TFS = { crypto: ['15m', '1h', '4h'], tw: ['15m', '1h', '1d'] };
 const TFN = { '15m': '15 分', '1h': '1 小時', '4h': '4 小時', '1d': '日線' };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(3) : v.toPrecision(4));
+const pad2 = (n) => String(n).padStart(2, '0');
+function fmtT(ts, tf) {
+  if (!ts) return '';
+  const d = new Date(ts), md = `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return tf === '1d' ? md : `${md} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+// 畫維加斯通道看圖：K 線＋EMA12＋小通道(144/169)＋大通道(288/338)＋VPVR＋進場/停損/目標
+function drawVegas(cd, now, tf) {
+  const bars = cd.bars, N = bars.length; if (!N) return '';
+  const Wd = 1000, Ht = 430, pt = 8, Hv = 54, pr = 48, px0 = 6, xr = Wd - pr;
+  const ph = Ht - pt - 16 - Hv - 6, pw = xr - px0, dx = pw / N, bw = Math.max(1.2, dx * 0.6);
+  const X = (i) => px0 + (i + 0.5) * dx;
+  const mk = [now?.entry, now?.stop, now?.target].filter((v) => v > 0);
+  let lo = Math.min(...bars.map((b) => b[2]), ...cd.bBot.filter((v) => v > 0), ...mk);
+  let hi = Math.max(...bars.map((b) => b[1]), ...cd.sTop, ...mk);
+  const pdv = (hi - lo) * 0.04; lo -= pdv; hi += pdv;
+  const Y = (v) => pt + (1 - (v - lo) / (hi - lo)) * ph;
+  const vmax = Math.max(...bars.map((b) => b[4]), 1), yv = (v) => Ht - 16 - (v / vmax) * Hv;
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" class="pc" role="img" aria-label="維加斯通道 K 線圖">`;
+  for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4, y = Y(v); s += `<line x1="${px0}" x2="${xr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="pc-g"/><text x="${xr + 4}" y="${(y + 3).toFixed(1)}" class="pc-t">${px(v)}</text>`; }
+  // 通道帶（大在下層、小在上層）
+  const band = (top, bot, cls) => { let u = '', d = ''; for (let i = 0; i < N; i++) { u += `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(top[i]).toFixed(1)} `; } for (let i = N - 1; i >= 0; i--) d += `L${X(i).toFixed(1)} ${Y(bot[i]).toFixed(1)} `; return `<path d="${u}${d}Z" class="${cls}"/>`; };
+  s += band(cd.bTop, cd.bBot, 'vg-tun-b') + band(cd.sTop, cd.sBot, 'vg-tun-s');
+  // VPVR（左）
+  const vp = volumeProfile(bars, lo, hi); if (vp) s += vpSVG(vp, { left: px0, right: xr, yOf: Y, rowPix: ph / VP_ROWS, pw: 170, side: 'left', pxfmt: px });
+  // K 棒＋量
+  bars.forEach((b, i) => {
+    const up = b[3] >= b[0], c = up ? 'pc-u' : 'pc-d', x = X(i);
+    s += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${Y(b[1]).toFixed(1)}" y2="${Y(b[2]).toFixed(1)}" class="${c}s"/>`;
+    const y1 = Y(Math.max(b[0], b[3])), y2 = Y(Math.min(b[0], b[3]));
+    s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}" class="${c}"/>`;
+    s += `<rect x="${(x - bw / 2).toFixed(1)}" y="${yv(b[4]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Ht - 16 - yv(b[4])).toFixed(1)}" class="${c} pc-v"/>`;
+  });
+  // EMA12
+  s += `<polyline points="${cd.e12.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}" class="vg-e12"/>`;
+  // 進場/停損/目標
+  const hl = (v, cls, lab) => v > 0 ? `<line x1="${px0}" x2="${xr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="${cls}"/><text x="${xr - 2}" y="${(Y(v) - 3).toFixed(1)}" text-anchor="end" class="pc-t ${cls}-t">${lab} ${px(v)}</text>` : '';
+  if (now && now.status === '確認') s += hl(now.entry, 'vg-entry', '進') + hl(now.stop, 'vg-stop', '損') + hl(now.target, 'vg-target', '標');
+  for (const i of [0, 2, 4, 6].map((k) => Math.round((k * (N - 1)) / 6))) s += `<text x="${X(i).toFixed(1)}" y="${Ht - 2}" class="pc-t" text-anchor="${i === 0 ? 'start' : i >= N - 1 ? 'end' : 'middle'}">${esc(fmtT(cd.t[i], tf))}</text>`;
+  return s + '</svg>';
+}
 
 // 訊號分數 0–100：步驟（確認 50 / 回踩完成 35 / 突破 EMA12 25 / 碰通道 10）
 // ＋ 大一級時區在通道 15、同方向 8、逆向 −20 ＋ 這檔這個時區歷史勝率 ±20 ＋ 其他時區同方向 8 ＋ 風報比 ≥2、主動買賣、帶量各 5
@@ -77,7 +119,21 @@ function bestTf(r, m) {
 }
 
 export function createVegasTab({ api, el }) {
-  const st = { m: 'crypto', list: {}, rows: {}, loading: false, progress: '', error: '', showAll: false, loaded: {} };
+  const st = { m: 'crypto', list: {}, rows: {}, loading: false, progress: '', error: '', showAll: false, loaded: {}, charts: {} };
+
+  function chartBlock(r, m, ex) {
+    const tfBtns = TFS[m].map((tf) => `<button class="chip vg-tf" data-ctf="${esc(r.s)}|${tf}" aria-pressed="${ex.tf === tf}">${TFN[tf]}</button>`).join('');
+    const body = ex.loading ? '<div class="muted small" style="padding:10px">載入中…</div>'
+      : ex.err ? `<div class="muted small" style="padding:10px">抓不到資料：${esc(ex.err)}</div>`
+      : ex.data && ex.data.bars?.length ? drawVegas(ex.data, r.data?.[ex.tf]?.now, ex.tf) : '<div class="muted small" style="padding:10px">資料不足，畫不出來</div>';
+    return `<div class="vg-chart"><div class="vg-tfbar">${tfBtns}<span class="muted small">訊號在哪個時區就看哪個；想看整體趨勢、價格在高量牆還是真空帶，就切到高時區</span></div>${body}</div>`;
+  }
+  async function loadChart(sym, tf) {
+    st.charts[sym] = { tf, loading: true }; render();
+    try { const d = await api(`/api/vegas?chart=1&m=${st.m}&s=${encodeURIComponent(sym)}&tf=${tf}`); st.charts[sym] = { tf, data: d }; }
+    catch (e) { st.charts[sym] = { tf, err: e.message }; }
+    render();
+  }
 
   async function load(force = false) {
     const m = st.m;
@@ -138,9 +194,12 @@ export function createVegasTab({ api, el }) {
       return `<div class="vg-row"><span class="k">${TFN[tf]}</span>${tr}${now ? ' ・ ' + now : ''}<div>${stat}</div></div>`;
     }).join('');
     const tip = bt ? `<div class="muted">這檔歷史上 <b>${TFN[bt.tf]}</b> 最有效（勝率 ${bt.rate}%，${bt.n} 次）</div>` : '';
+    const ex = st.charts[r.s];
+    const cbtn = `<button class="ghost vg-cbtn" data-chart="${esc(r.s)}">${ex ? '收起圖' : '展開看圖（K 線＋通道＋成交量分布）'}</button>`;
     return `<article class="card"><div class="card-head"><span class="sym num">${esc(r.name)}</span>${badge}
       <div class="price"><span class="p num">${px(r.data?.[TFS[m][0]]?.price)}</span></div></div>
-      ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}${rowsHtml}${tip}</article>`;
+      ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}${rowsHtml}${tip}
+      <div class="vg-cwrap">${cbtn}${ex ? chartBlock(r, m, ex) : ''}</div></article>`;
   }
 
   function render() {
@@ -225,7 +284,13 @@ export function createVegasTab({ api, el }) {
   });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; render(); if (!st.loaded[st.m]) load(); }
+    if (b.dataset.chart) {
+      const sym = b.dataset.chart;
+      if (st.charts[sym]) { delete st.charts[sym]; render(); }
+      else { const r = (st.rows[st.m] || []).find((x) => x.s === sym); const tf = grade(r, st.m)?.tf || bestTf(r, st.m)?.tf || TFS[st.m][TFS[st.m].length - 1]; loadChart(sym, tf); }
+    }
+    else if (b.dataset.ctf) { const [sym, tf] = b.dataset.ctf.split('|'); if (st.charts[sym]?.tf !== tf || st.charts[sym]?.err) loadChart(sym, tf); }
+    else if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; render(); if (!st.loaded[st.m]) load(); }
     else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; render(); }
     else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
     else if ('reload' in b.dataset) load(true);

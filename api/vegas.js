@@ -2,7 +2,7 @@
 // GET /api/vegas?m=crypto&s=BTCUSDT,ETHUSDT  → 每檔 15 分 / 1 小時 / 4 小時 的維加斯通道狀態（一次最多 8 檔）
 // GET /api/vegas?m=tw&s=2330.TW,6147.TWO     → 台股 15 分 / 1 小時 / 日線（一次最多 6 檔，Yahoo 財經資料）
 import { requireUser, getJSON, pool } from './_lib.js';
-import { vegas } from '../lib/vegas.js';
+import { vegas, vegasChart } from '../lib/vegas.js';
 
 const BN = 'https://fapi.binance.com';
 const cache = new Map(); // key → { at, data }
@@ -46,7 +46,7 @@ async function crypto(sym) {
   return { '15m': m15, '1h': h1, '4h': h4 };
 }
 
-async function yahoo(sym, interval, range) {
+async function yahooBars(sym, interval, range) {
   const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`, { timeout: 12000 });
   const r = j.chart?.result?.[0];
   const q = r?.indicators?.quote?.[0];
@@ -57,10 +57,23 @@ async function yahoo(sym, interval, range) {
   const now = Date.now() / 1000;
   for (let i = 0; i < (r.timestamp || []).length; i++) {
     if (r.timestamp[i] + span > now) continue;
-    const b = { o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] || 0 };
+    const b = { o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] || 0, t: r.timestamp[i] * 1000 };
     if (b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0) bars.push(b);
   }
-  return vegas(bars);
+  return bars;
+}
+const yahoo = async (sym, interval, range) => vegas(await yahooBars(sym, interval, range));
+
+// 看圖：單檔、單一時區，回傳近 150 根 K 棒＋維加斯通道線
+const TWCH = { '15m': ['15m', '60d'], '1h': ['60m', '2y'], '1d': ['1d', '10y'] };
+async function chartData(m, sym, tf) {
+  if (m === 'tw') {
+    const [iv, range] = TWCH[tf] || TWCH['1h'];
+    return vegasChart(await yahooBars(sym, iv, range), 150);
+  }
+  const iv = tf === '1d' ? '1d' : tf; // 加密：15m / 1h / 4h
+  const k = await getJSON(`${BN}/fapi/v1/klines?symbol=${sym}&interval=${iv}&limit=1500`, { timeout: 12000 });
+  return vegasChart(k.slice(0, -1).map((x) => ({ o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[7], t: +x[0] })), 150);
 }
 
 async function tw(sym) {
@@ -76,6 +89,15 @@ export default async function handler(req, res) {
     if (list) {
       const k = 'list:' + list;
       const data = hit(k, 30 * 60e3) || (list === 'tw' ? await listTw() : list === 'twall' ? await listTw(true) : await listCrypto());
+      cache.set(k, { at: Date.now(), data });
+      return res.status(200).json(data);
+    }
+    if (req.query.chart) {
+      const m = req.query.m === 'tw' ? 'tw' : 'crypto', tf = String(req.query.tf || '1h');
+      const sym = String(req.query.s || '').trim();
+      if (!/^[A-Z0-9.]{2,20}$/.test(sym)) return res.status(400).json({ error: 'bad symbol' });
+      const k = `chart:${m}:${sym}:${tf}`;
+      const data = hit(k, (m === 'tw' ? 10 : 4) * 60e3) || await chartData(m, sym, tf);
       cache.set(k, { at: Date.now(), data });
       return res.status(200).json(data);
     }

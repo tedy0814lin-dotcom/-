@@ -276,3 +276,29 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .pc-poc-t { fill: #e24aa0; font-weight: 600; }
 .pc-val-ln { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .55; }
 .pc-val-t { fill: var(--muted); }
+
+/* ---------- 共用：成交量分布 VPVR（型態頁、維加斯通道頁）---------- */
+.vp-t { font-size: 10.5px; }
+.vp-up { fill: #3f86c9; opacity: .32; }
+.vp-dn { fill: var(--accent); opacity: .30; }
+.vp-up.vp-hi { opacity: .62; }
+.vp-dn.vp-hi { opacity: .6; }
+.vp-lvn { stroke: var(--muted); stroke-width: .8; stroke-dasharray: 2 4; opacity: .35; }
+.vp-va { fill: var(--accent); opacity: .05; }
+.vp-poc { stroke: #e24aa0; stroke-width: 1.4; stroke-dasharray: 6 3; opacity: .85; }
+.vp-poc-t { fill: #e24aa0; font-weight: 600; }
+.vp-val-ln { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .55; }
+.vp-val-t { fill: var(--muted); }
+
+/* ---------- 維加斯通道看圖 ---------- */
+.vg-cwrap { margin-top: 8px; }
+.vg-cbtn { width: 100%; }
+.vg-chart { margin-top: 8px; border: 1px solid var(--line); border-radius: var(--r); padding: 6px; background: var(--panel-2); }
+.vg-tfbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.vg-tf[aria-pressed="true"] { border-color: var(--accent); background: var(--chip-flat); color: var(--accent); }
+.vg-tun-s { fill: #3f86c9; opacity: .14; stroke: none; }
+.vg-tun-b { fill: var(--accent); opacity: .12; stroke: none; }
+.vg-e12 { fill: none; stroke: #e0863a; stroke-width: 1.2; opacity: .9; }
+.vg-entry { stroke: var(--up); stroke-width: 1.2; stroke-dasharray: 5 3; } .vg-entry-t { fill: var(--up); }
+.vg-stop { stroke: var(--down); stroke-width: 1.2; stroke-dasharray: 4 3; } .vg-stop-t { fill: var(--down); }
+.vg-target { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; } .vg-target-t { fill: var(--accent); }

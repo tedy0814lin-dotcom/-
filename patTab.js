@@ -13,37 +13,8 @@ function cacheSet(id, v) {
 }
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
 
-// 成交量分布（VPVR）：把每根的量依 高—低 範圍分攤到價格格子裡，分買（收漲）賣（收跌）；回傳 POC 與價值區（70%）
-let VP = true; // 由 render 依使用者開關設定
-const VP_ROWS = 50, VP_VA = 0.70;
-function volumeProfile(bars, lo, hi) {
-  if (!(hi > lo)) return null;
-  const up = new Float64Array(VP_ROWS), dn = new Float64Array(VP_ROWS), step = (hi - lo) / VP_ROWS;
-  let tot = 0;
-  for (const b of bars) {
-    const v = b[4]; if (!(v > 0)) continue;
-    const bl = Math.max(lo, b[2]), bh = Math.min(hi, b[1]); if (bh <= bl) { // 影線在範圍外就塞收盤那格
-      const k = Math.min(VP_ROWS - 1, Math.max(0, Math.floor((b[3] - lo) / step))); (b[3] >= b[0] ? up : dn)[k] += v; tot += v; continue;
-    }
-    const span = bh - bl, a = b[3] >= b[0] ? up : dn;
-    const k0 = Math.floor((bl - lo) / step), k1 = Math.min(VP_ROWS - 1, Math.floor((bh - lo) / step));
-    for (let k = Math.max(0, k0); k <= k1; k++) {
-      const cl = lo + k * step, ch = cl + step, ov = Math.min(ch, bh) - Math.max(cl, bl);
-      if (ov > 0) { a[k] += v * ov / span; tot += v * ov / span; }
-    }
-  }
-  if (tot <= 0) return null;
-  const vol = Array.from({ length: VP_ROWS }, (_, k) => up[k] + dn[k]);
-  let poc = 0; for (let k = 1; k < VP_ROWS; k++) if (vol[k] > vol[poc]) poc = k;
-  let loI = poc, hiI = poc, acc = vol[poc];
-  while (acc < VP_VA * tot && (loI > 0 || hiI < VP_ROWS - 1)) {
-    const L = loI > 0 ? vol[loI - 1] : -1, H = hiI < VP_ROWS - 1 ? vol[hiI + 1] : -1;
-    if (H >= L) acc += vol[++hiI]; else acc += vol[--loI];
-  }
-  const vmax = Math.max(...vol);
-  return { up, dn, vol, vmax, step, lo, poc, val: lo + loI * step, vah: lo + (hiI + 1) * step,
-    pocP: lo + (poc + 0.5) * step, hvn: vol.map((v) => v >= 0.7 * vmax), lvn: vol.map((v) => v > 0 && v <= 0.3 * vmax) };
-}
+import { volumeProfile, vpSVG, VP_ROWS } from '/vprofile.js';
+let VP = true; // 由 render 依使用者開關設定（成交量分布 VPVR）
 const KINDS = [
   ['double_bottom', '雙底／雙頂'], ['triple_bottom', '三重底／三重頂'], ['inv_HS', '頭肩底／頭肩頂'], ['rectangle', '矩形整理'], ['asc_triangle', '上升／下降三角形'],
   ['sym_triangle', '對稱三角形'], ['falling_wedge', '下降／上升楔形'], ['rounded_bottom', '圓弧底／圓弧頂'], ['v_bottom', 'V 底／倒 V 頂'], ['broadening', '擴散三角形'], ['diamond', '菱形'],
@@ -109,28 +80,11 @@ function chartRaw(card) {
   let s = `<svg viewBox="0 0 ${Wd} ${Ht}" class="pc" role="img" aria-label="${esc(card.code + ' ' + it.name + ' K 線圖')}">`;
   // 價格格線
   for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4, y = Y(v); s += `<line x1="${px0}" x2="${Wd - pr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="pc-g"/><text x="${Wd - pr + 4}" y="${(y + 3).toFixed(1)}" class="pc-t">${px(v)}</text>`; }
-  // 成交量分布（VPVR）：畫在右側、疊在 K 棒後面
+  // 成交量分布（VPVR）：畫在左側、疊在 K 棒後面
   const xr = Wd - pr;
   if (VP) {
     const vp = volumeProfile(bars, lo, hi);
-    if (vp) {
-      const PW = 185, bh = (ph / VP_ROWS) * 0.86;
-      // 價值區底色
-      s += `<rect x="${px0}" y="${Y(vp.vah).toFixed(1)}" width="${(xr - px0).toFixed(1)}" height="${Math.max(0, Y(vp.val) - Y(vp.vah)).toFixed(1)}" class="pc-va"/>`;
-      // 水平量條：賣（金）靠右、買（藍）接續往左疊，總長＝該格總量
-      for (let k = 0; k < VP_ROWS; k++) {
-        const t = vp.vol[k]; if (!(t > 0)) continue;
-        const yc = Y(vp.lo + (k + 0.5) * vp.step), y = (yc - bh / 2).toFixed(1);
-        const wTot = (t / vp.vmax) * PW, wDn = (vp.dn[k] / vp.vmax) * PW, wUp = (vp.up[k] / vp.vmax) * PW;
-        const op = vp.hvn[k] ? ' pc-vp-hi' : '';
-        if (wDn > 0) s += `<rect x="${(xr - wDn).toFixed(1)}" y="${y}" width="${wDn.toFixed(1)}" height="${bh.toFixed(1)}" class="pc-vp-dn${op}"/>`;
-        if (wUp > 0) s += `<rect x="${(xr - wTot).toFixed(1)}" y="${y}" width="${wUp.toFixed(1)}" height="${bh.toFixed(1)}" class="pc-vp-up${op}"/>`;
-        if (vp.lvn[k]) s += `<line x1="${(xr - PW).toFixed(1)}" x2="${xr}" y1="${yc.toFixed(1)}" y2="${yc.toFixed(1)}" class="pc-vp-lvn"/>`;
-      }
-      // POC、價值區上下緣
-      s += `<line x1="${px0}" x2="${xr}" y1="${Y(vp.pocP).toFixed(1)}" y2="${Y(vp.pocP).toFixed(1)}" class="pc-poc"/><text x="${px0 + 3}" y="${(Y(vp.pocP) - 3).toFixed(1)}" class="pc-t pc-poc-t">POC ${px(vp.pocP)}</text>`;
-      for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${px0}" x2="${xr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="pc-val-ln"/><text x="${px0 + 3}" y="${(Y(v) - 3).toFixed(1)}" class="pc-t pc-val-t">${lab}</text>`;
-    }
+    if (vp) s += vpSVG(vp, { left: px0, right: xr, yOf: Y, rowPix: ph / VP_ROWS, pw: 185, side: 'left', pxfmt: px });
   }
   // 日期
   for (const i of [0, 1, 2, 3, 4, 5, 6].map((k) => Math.round((k * (N - 1)) / 6))) s += `<text x="${X(i).toFixed(1)}" y="${Ht - 2}" class="pc-t" text-anchor="${i === 0 ? 'start' : i === N - 1 ? 'end' : 'middle'}">${esc(r.dates[i] || '')}</text>`;
