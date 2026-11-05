@@ -512,6 +512,19 @@ $('refresh').addEventListener('click', () => load(state.tab, true));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(markSeen, 4000); });
 $('alerts').addEventListener('click', (e) => { if (e.target.closest('.alert-row')) markSeen(); });
 $('more').addEventListener('click', () => { state.limit += 60; render(); });
+// 亮／暗模式：預設跟系統，按鈕切換後記住（localStorage wr_theme）
+(function themeToggle() {
+  const root = document.documentElement, btn = $('theme');
+  const cur = () => root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  const paint = () => { btn.textContent = cur() === 'light' ? '☾ 暗色' : '☀ 亮色'; };
+  btn.addEventListener('click', () => {
+    const next = cur() === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('wr_theme', next); } catch {}
+    paint();
+  });
+  paint();
+})();
 $('logout').addEventListener('click', async () => {
   await fetch('/api/logout', { method: 'POST' }).catch(() => {});
   location.replace('/login');

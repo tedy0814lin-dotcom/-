@@ -227,7 +227,7 @@ export function createVegasTab({ api, el }) {
         <button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">${m === 'tw' ? `股價 10–200 元、成交值前 120 名，日線通道糾纏的已跳過（${skipped} 檔）。分時資料來自 Yahoo 財經，約延遲 20 分鐘。` : '幣安成交額前 80 名永續合約。'}依分數由高到低排序；「觀察」預設收起，點上面的按鈕可以只看某一類。</p>
-      <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}.vg-h .muted{font-size:12.5px;font-weight:400}</style><div class="grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
+      <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}.vg-h .muted{font-size:12.5px;font-weight:400}</style><div class="vg-grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
   }
 
   const toolbar = (m) => `<div class="toolbar">
@@ -246,7 +246,7 @@ export function createVegasTab({ api, el }) {
       if (m === 'tw' && !r.data['1d']?.smooth) return '日線通道糾纏，平常會被跳過';
       return grade(r, m) ? '' : '三個時區目前都沒有訊號';
     };
-    el.innerHTML = toolbar(m) + `<p class="muted">搜尋「${esc(st.q)}」：${hit.length} 筆${st.searching ? '，查詢中…' : ''}</p><div class="grid">${hit.map((r) => { const w = why(r); return (w ? `<p class="muted" style="grid-column:1/-1;margin:6px 0 0">${esc(r.name)}：${esc(w)}</p>` : '') + (r.data && !r.data.error ? card(r, m) : ''); }).join('')}</div>`;
+    el.innerHTML = toolbar(m) + `<p class="muted">搜尋「${esc(st.q)}」：${hit.length} 筆${st.searching ? '，查詢中…' : ''}</p><div class="vg-grid">${hit.map((r) => { const w = why(r); return (w ? `<p class="muted" style="grid-column:1/-1;margin:6px 0 0">${esc(r.name)}：${esc(w)}</p>` : '') + (r.data && !r.data.error ? card(r, m) : ''); }).join('')}</div>`;
   }
 
   // 清單裡沒有的代號：直接向伺服器查
