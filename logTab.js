@@ -24,12 +24,58 @@ function lossTags(x) {
 }
 
 export function createLogTab({ api, el }) {
-  const st = { data: null, loading: false, error: '', open: null, scoredOnly: false };
+  const st = { data: null, loading: false, error: '', open: null, scoredOnly: false, sd: null, sLoading: false, sError: '' };
 
   async function load() {
     st.loading = true; st.error = ''; render();
     try { st.data = await api('/api/log'); } catch (e) { st.error = e.message; }
     st.loading = false; render();
+    loadStrat();
+  }
+  async function loadStrat() {
+    st.sLoading = true; st.sError = ''; render();
+    try { st.sd = await api('/api/log?strat=1'); } catch (e) { st.sError = e.message; }
+    st.sLoading = false; render();
+  }
+  // 主力策略（上線在「策略」頁的）實盤記錄：只存訊號，結果用實際 K 線依回測規則重播
+  const SROWS = [
+    { id: 'cs', label: '大陽線突破新高', mk: '加密日線・多', ref: '回測年化 +49%、勝率 24%（賺大賠小）', f: (x) => x.k === 'cs', cur: '$' },
+    { id: 'fpL', label: 'Delta 階梯・做多', mk: '加密 4H', ref: '回測 +0.20R／筆', f: (x) => x.k === 'fp' && x.dir > 0 },
+    { id: 'fpS', label: 'Delta 階梯・做空', mk: '加密 4H', ref: '回測 +0.11R／筆', f: (x) => x.k === 'fp' && x.dir < 0 },
+    { id: 'pk', label: '大單推升', mk: '台股上櫃日線', ref: '回測 +2.45%／筆（約 +0.20R）', f: (x) => x.k === 'pk', tw: true },
+  ];
+  const SST = { open: '持有中', closed: '已結算', pending: '等進場', skipped: '沒進場', invalid: '無效', error: '資料缺' };
+  function stratHtml() {
+    if (st.sLoading && !st.sd) return '<section class="panel"><strong>主力策略實盤記錄</strong><p class="muted">載入中…</p></section>';
+    if (st.sError) return `<section class="panel warn"><strong>主力策略實盤記錄</strong><p>${esc(st.sError)}</p></section>`;
+    const items = st.sd?.items || [];
+    const rows = SROWS.map((r) => {
+      const L = items.filter(r.f), done = L.filter((x) => x.st === 'closed' && x.R != null).sort((a, b) => (a.exitT || a.exitD || '') > (b.exitT || b.exitD || '') ? 1 : -1);
+      const n = done.length, mean = n ? done.reduce((a, x) => a + x.R, 0) / n : null;
+      const sd = n > 1 ? Math.sqrt(done.reduce((a, x) => a + (x.R - mean) ** 2, 0) / (n - 1)) : null, se = sd != null ? sd / Math.sqrt(n) : null;
+      const h = Math.floor(n / 2), m1 = h ? done.slice(0, h).reduce((a, x) => a + x.R, 0) / h : null, m2 = n - h ? done.slice(h).reduce((a, x) => a + x.R, 0) / (n - h) : null;
+      const open = L.filter((x) => x.st === 'open'), pend = L.filter((x) => x.st === 'pending').length;
+      const pctM = n ? done.reduce((a, x) => a + (x.pct ?? 0), 0) / n : null;
+      return { r, total: L.length, n, mean, se, win: n ? done.filter((x) => x.R > 0).length / n : null, m1, m2, open: open.length, pend, pctM, openR: open.length ? open.reduce((a, x) => a + x.R, 0) / open.length : null, skipped: L.filter((x) => x.st === 'skipped').length };
+    });
+    const tb = rows.map((o) => {
+      const v = o.n < SHOW_N ? `<span class="muted">樣本不足（${o.n}/${MIN_N}）</span>` : o.n < MIN_N ? `<span class="muted">樣本偏少（${o.n}/${MIN_N}），還不能判定</span>`
+        : (o.mean >= PASS && o.m1 > 0 && o.m2 > 0 ? '<span class="up">實盤仍有效</span>' : o.mean + 1.645 * o.se < PASS ? '<span class="down">不如回測，要檢討</span>' : '<span class="muted">沒達標但區間含回測期望，繼續觀察</span>');
+      return `<tr><td>${esc(o.r.label)}<div class="muted">${esc(o.r.mk)}・${esc(o.r.ref)}</div></td><td class="num">${o.total}</td><td class="num">${o.n}</td><td class="num">${o.open}${o.openR != null ? `<span class="muted">（浮動 ${sgn(o.openR)}R）</span>` : ''}</td>
+        <td class="num">${o.win == null ? '—' : (o.win * 100).toFixed(0) + '%'}</td><td class="num ${o.mean > 0 ? 'up' : o.mean < 0 ? 'down' : ''}">${o.mean == null ? '—' : sgn(o.mean) + 'R' + (o.r.tw ? `<span class="muted">（${sgn(o.pctM, 1)}%）</span>` : '')}</td>
+        <td class="num">${o.se != null ? '±' + (1.645 * o.se).toFixed(2) : '—'}</td><td class="num">${o.m1 == null || o.n < 6 ? '—' : sgn(o.m1) + ' / ' + sgn(o.m2)}</td><td>${v}</td></tr>`;
+    }).join('');
+    const nm = (x) => x.s.replace(/USDT$|\.TWO$/, '');
+    const when = (x) => x.sigT ? new Date(x.sigT).toLocaleString('zh-TW', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : `${x.sigD.slice(4, 6)}/${x.sigD.slice(6)}`;
+    const lab = (x) => (x.k === 'cs' ? '大陽線突破' : x.k === 'fp' ? 'Delta 階梯' : '大單推升');
+    const recent = [...items].sort((a, b) => (b.seen || 0) - (a.seen || 0)).slice(0, 30);
+    const rt = recent.map((x) => `<tr><td>${esc(when(x))}</td><td>${esc(nm(x))}</td><td>${lab(x)}${x.k === 'fp' ? (x.dir > 0 ? '・多' : '・空') : ''}</td><td>${SST[x.st] || x.st}</td><td class="num">${x.entry != null ? px(x.entry) : '—'}</td><td class="num ${x.R > 0 ? 'up' : x.R < 0 ? 'down' : ''}">${x.R != null ? sgn(x.R) + 'R' : '—'}</td></tr>`).join('');
+    const upd = st.sd?.updated ? new Date(st.sd.updated).toLocaleString('zh-TW', { hour12: false }) : null;
+    return `<section class="panel"><div class="panel-head"><strong>主力策略實盤記錄（策略頁那四個）</strong><span class="muted small">${upd ? '最後記錄 ' + esc(upd) : '還沒有記錄'}</span></div>
+      <p class="muted small">網站每 15 分鐘掃一次，新成立的訊號只存「策略、代號、訊號 K 棒、停損」；結果由實際 K 線依<b>回測相同規則</b>重播，不能事後改參數。加密每邊手續費 0.1%（比回測保守）；台股來回 0.585%，R＝報酬 ÷ 停損 12%。維加斯通道在下方原本的表格。累積到 ${MIN_N} 筆以上、平均 ≥ +${PASS.toFixed(2)}R、前後半都為正才算實盤驗證過。</p>
+      <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13.5px"><thead><tr><th align="left">策略</th><th>記錄</th><th>已結算</th><th>持有中</th><th>勝率</th><th>平均 R</th><th>90% 誤差</th><th>前／後半</th><th align="left">判斷</th></tr></thead><tbody>${tb}</tbody></table></div>
+      <h4 style="margin:12px 0 4px">最近 30 筆</h4>
+      <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th align="left">訊號</th><th align="left">代號</th><th align="left">策略</th><th>狀態</th><th>進場</th><th>R</th></tr></thead><tbody>${rt || '<tr><td colspan="6" class="muted">還沒有記錄。第一批訊號會在下次排程（約 15 分鐘內）出現；台股要先累積 21 個交易日資料。</td></tr>'}</tbody></table></div></section>`;
   }
 
   function stats(list, ab) {
@@ -115,6 +161,7 @@ export function createLogTab({ api, el }) {
         <span class="spacer"></span><span class="muted">${upd ? '更新於 ' + esc(upd) : '還沒有資料'}</span>
         <button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
+      ${stratHtml()}
       <p class="muted">每 15 分鐘自動記錄一次網站所有策略「成立」的訊號（含不計分的觀察策略，例如維加斯通道做多／做空），之後追到停損或目標為止，並照回測的規則計算：進場＝掃到訊號當下的價格（掛單類等價格回到掛單價）、來回手續費 0.1%、同一根 K 棒同時碰到停損與目標算停損、最多追 14 天（4H 策略 40 天、12H 與日線策略 60 天，跟回測一致）。R 是扣費後的結果。累積到 ${MIN_N} 筆以上、平均 ≥ +${PASS.toFixed(2)}R、前後半段都為正，才建議把觀察策略改成計分；這是即時（未來）資料，比回測更可信，但需要時間累積。</p>
       <div style="overflow-x:auto"><table class="tbl" style="width:100%;border-collapse:collapse;font-size:13.5px">
         <thead><tr><th align="left">策略</th><th>狀態</th><th>記錄</th><th>已結算</th><th>持有中</th><th>勝率</th><th>平均 R</th><th>90% 誤差</th><th>前／後半段</th><th align="left">判斷</th></tr></thead>

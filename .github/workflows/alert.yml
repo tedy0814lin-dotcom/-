@@ -38,7 +38,7 @@ jobs:
             if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
             else timeout 600 node scripts/alert.mjs || true; fi
             # 每 3 輪（約 15 分鐘）記錄一次所有策略的訊號、追蹤結果
-            if [ $(( (i - 1) % 3 )) = 0 ]; then timeout 300 node scripts/log.mjs || true; fi
+            if [ $(( (i - 1) % 3 )) = 0 ]; then timeout 300 node scripts/log.mjs || true; timeout 400 node scripts/slog.mjs || true; fi
             if [ $(( $(date +%s) - START + 300 )) -gt 2700 ]; then break; fi
             sleep 300
           done

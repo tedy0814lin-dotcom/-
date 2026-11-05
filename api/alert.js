@@ -9,6 +9,8 @@ import { CATS, classify, STRATS } from '../lib/categories.js';
 import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '../lib/twCore.js';
 import { twData } from './twstock.js';
 import { histData } from './twhist.js';
+import { claudeScan } from '../lib/claudeApi.js';
+import { footprintScan } from '../lib/footprint.js';
 
 function authed(req) {
   const want = process.env.ALERT_KEY || '';
@@ -88,6 +90,15 @@ export default async function handler(req, res) {
   if (!authed(req)) return res.status(401).json({ error: '金鑰不對' });
   const min = req.query.min === '1' ? 1 : req.query.min === '2' ? 2 : 3;
   try {
+    // 策略實盤記錄用：大陽線突破（日線）＋Delta 階梯（4H）目前新成立的訊號
+    if (req.query.m === 'slog') {
+      const cap = (fn) => new Promise((ok, no) => { const r = { setHeader() {}, status() { return this; }, json: ok }; fn({ query: {} }, r).catch(no); });
+      const [cs, fp] = await Promise.all([cap(claudeScan), cap(footprintScan)]);
+      const items = [];
+      for (const r of cs.fresh || []) items.push({ k: 'cs', s: r.sym, dir: 1, sigT: Date.parse(r.sigDay + 'T00:00:00Z'), close: r.close, stop: r.stop0 });
+      for (const [arr, dir] of [[fp.long || [], 1], [fp.short || [], -1]]) for (const r of arr) items.push({ k: 'fp', s: r.sym, dir, sigT: r.sigT, close: r.close, stop: r.stop });
+      return res.status(200).json({ at: Date.now(), items });
+    }
     // 數據記錄用：所有策略（含不計分的觀察策略）目前成立的進出場計畫
     if (req.query.m === 'log') {
       const d = await buildCrypto(120, { getJSON, pool });
