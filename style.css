@@ -305,3 +305,7 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .vg-entry { stroke: var(--up); stroke-width: 1.2; stroke-dasharray: 5 3; } .vg-entry-t { fill: var(--up); }
 .vg-stop { stroke: var(--down); stroke-width: 1.2; stroke-dasharray: 4 3; } .vg-stop-t { fill: var(--down); }
 .vg-target { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; } .vg-target-t { fill: var(--accent); }
+
+/* ---------- 足跡圖 Delta 階梯：迷你圖的 Delta 柱 ---------- */
+.fp-dp { fill: var(--up); opacity: .85; }
+.fp-dn { fill: var(--down); opacity: .85; }

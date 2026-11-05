@@ -3,6 +3,7 @@
 import { createClaudeTab } from '/claudeTab.js';
 import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
+import { createFootTab } from '/footTab.js';
 
 const LS = 'wr_strat_sub';
 const CARDS = [
@@ -15,15 +16,19 @@ const CARDS = [
   { id: 'pk', mk: '台股', tf: '日線', side: '做多', by: '台股選股', title: '大單推升',
     note: '每筆平均成交股數暴增＋當日大漲＋站上月線：少數大戶在買，不是散戶搶進；隔天開盤買。',
     stats: [['回測筆數', '1,114'], ['每筆平均', '+2.45%'], ['勝過同日平均', '+2.36%'], ['勝率', '33%']] },
+  { id: 'fp', mk: '加密', tf: '4H', side: '多空', by: 'Claude 設計', title: 'Delta 階梯（足跡圖）',
+    note: '足跡圖訂單流：連 2 根主動買(賣)Delta 強＋價格一階階創高(低)＝買盤堆疊；下一根開盤進、3R 出場。',
+    stats: [['做多期望', '+0.20R'], ['做空期望', '+0.11R'], ['配大陽線突破', '+55%'], ['單用回撤', '−46%']] },
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function createStrategyTab({ api, el, goto }) {
-  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-cs"></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div>';
+  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-cs"></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div>';
   const kids = {
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
     vg: createVegasTab({ api, el: el.querySelector('#st-vg') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
+    fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
   };
   let sub = 'cs';
   try { const s = localStorage.getItem(LS); if (kids[s]) sub = s; } catch {}
