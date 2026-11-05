@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.query.strat) { // 主力策略（大陽線突破／Delta 階梯／大單推升）的實盤記錄＋結算重播
     try {
-      if (!scache.data || Date.now() - scache.at > 5 * 60e3) {
+      if (!scache.data || !scache.data.updated || req.query.force || Date.now() - scache.at > 5 * 60e3) {
         const r = await fetch(`https://raw.githubusercontent.com/${REPO}/data/strat.json`, { headers: { 'Cache-Control': 'no-cache' } });
         const j = r.status === 404 ? { items: [] } : r.ok ? await r.json() : (() => { throw new Error('讀取策略記錄失敗 HTTP ' + r.status); })();
         scache = { at: Date.now(), data: { updated: j.updated ?? null, items: await stratResults(j.items || []) } };
