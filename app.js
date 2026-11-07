@@ -147,11 +147,30 @@ function catBadge(r) {
   const c = CATS[r.cat];
   return `<span class="cat cat-${r.cat} lv-${r.catLevel === '非常強' ? 4 : r.catLevel === '強' ? 3 : r.catLevel === '中' ? 2 : 1}">${r.split ? '多空分歧' : c.label}<b>${r.catLevel} ${r.catScore}分</b></span>`;
 }
+// 策略計畫：名稱一行、進場／停損／目標一行，回測數字收進「回測依據」摺疊（點開才看）
+function planBlocks(list) {
+  return `<div class="plans">${list.map((l) => {
+    const m = /^【(.+?)】(.*?)：(.*)$/.exec(l);
+    if (!m) return `<div class="why">${esc(l)}</div>`;
+    const parts = m[3].split('・');
+    const val = parts.filter((x) => /^(進場|停損|目標)/.test(x));
+    const note = parts.filter((x) => !/^(進場|停損|目標)/.test(x)).join('・');
+    return `<div class="plan"><div class="plan-t">${esc(m[1])} <span class="muted">${esc(m[2])}</span></div>`
+      + (val.length ? `<div class="plan-v">${val.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : '')
+      + (note ? `<details class="plan-n"><summary>回測依據</summary>${esc(note)}</details>` : '')
+      + '</div>';
+  }).join('')}</div>`;
+}
+
 function catBlock(r, why) {
   const lines = [];
-  if (r.cat) lines.push(`<div class="why why-pat"><span class="muted">依據</span> ${r.catWhy.map(esc).join('・')}</div>`);
+  if (r.cat) {
+    // 下方已列出每個策略的計畫時，「依據」只留分數，不重複列策略名稱；籌碼分 +0 不顯示
+    const items = (why && why.length ? r.catWhy.filter((x) => /^(策略分|籌碼分)/.test(x)) : r.catWhy).map((x) => x.replace(/・籌碼分 \+0$/, ''));
+    if (items.length) lines.push(`<div class="why why-pat"><span class="muted">依據</span> ${items.map(esc).join('・')}</div>`);
+  }
   if (r.chipWhy?.length) lines.push(`<div class="why"><span class="muted">籌碼</span> ${r.chipWhy.map(esc).join('・')}</div>`);
-  if (why && why.length) lines.push(`<div class="why">${why.map(esc).join('・')}</div>`);
+  if (why && why.length) lines.push(planBlocks(why));
   if (r.catConflict?.length) lines.push(`<div class="why warn-text">注意：同時有${r.catConflict.map(esc).join('、')}的訊號，方向打架</div>`);
   return lines.join('');
 }
@@ -168,12 +187,12 @@ function cryptoCard(r) {
       ${r.oiAll ? metric(`全市場持倉`, '$' + big(r.oiAll), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span> <span class="muted">${r.oiSources}所</span>`)
         : metric('持倉量', r.oi == null ? '—' : '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
       ${metric('24h 振幅', r.range24 == null ? '—' : r.range24.toFixed(1) + '%', `持倉 4h <span class="${cls(r.oiChg4)}">${signed(r.oiChg4, 1, '%')}</span>`)}
-      ${metric(r.fundingAll != null ? '資金費率（加權）' : '資金費率', signed(r.funding, 4, '%'), r.fundingMax && r.fundingMin && r.fundingMax.ex !== r.fundingMin.ex ? `${esc(r.fundingMin.ex)} ${signed(r.fundingMin.funding, 3)} ~ ${esc(r.fundingMax.ex)} ${signed(r.fundingMax.funding, 3)}` : '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
-      ${metric('大戶多空比', (r.topLS == null ? '—' : r.topLS.toFixed(2)), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
-      ${metric('散戶多空比', (r.globalLS == null ? '—' : r.globalLS.toFixed(2)), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
-      ${metric('CVD 24h', r.cvd24 == null ? '—' : (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
+      ${metric('資金費率', signed(r.funding, 4, '%'), r.fundingMax && r.fundingMin && r.fundingMax.ex !== r.fundingMin.ex ? `${esc(r.fundingMin.ex)} ${signed(r.fundingMin.funding, 3)} ~ ${esc(r.fundingMax.ex)} ${signed(r.fundingMax.funding, 3)}` : '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
+      ${r.topLS == null ? '' : metric('大戶多空比', r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
+      ${r.globalLS == null ? '' : metric('散戶多空比', r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
+      ${r.cvd24 == null ? '' : metric('CVD 24h', (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
     </div>
-    <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
+    ${r.spark && r.spark.length > 1 ? `<div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>` : ''}
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
     ${catBlock(r, r.stratWhy || [])}
