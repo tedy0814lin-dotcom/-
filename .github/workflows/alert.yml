@@ -16,8 +16,12 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write   # 數據記錄要推回 data 分支
-    # GitHub 的定時排程常常 30～45 分鐘才跑一次，所以每次啟動後自己每 20 分鐘掃一次、連續約 45 分鐘；下一輪排在後面接著跑
-    # （策略都是 4H 以上週期，20 分鐘一輪足夠）
+      actions: write    # 讓這一輪在中途先排好「下一輪」，輪與輪之間不留空窗
+    # GitHub 的定時排程不準（實測起點間隔 40～80 分鐘），所以不靠它：
+    #   1. 每一輪啟動後自己每 10 分鐘掃一次、連續約 40～50 分鐘；
+    #   2. 第 2 次掃描開始時，用 workflow_dispatch 先排好「下一輪」（排在 concurrency 佇列，這一輪結束就立刻接上，中間只差啟動的幾十秒）；
+    #   3. 定時排程（每 30 分鐘）只當備援：萬一接力斷掉，最慢下次排程時重新接上。
+    # workflow_dispatch 事件即使用 GITHUB_TOKEN 發出也一定會建立新的 run（GitHub 官方文件）。
     concurrency:
       group: alert
       cancel-in-progress: false
@@ -32,26 +36,34 @@ jobs:
           key: alert-state-${{ github.run_id }}
           restore-keys: alert-state-
       - run: |
-          # 用實際經過時間控制：最多跑 45 分鐘，確保在 60 分鐘逾時前結束、把「推過哪些」存回快取（避免重複推播）
-          # 2026-11-08 搬遷：所有運算都在這裡跑（網站 Netlify 只讀結果）。每輪：警報 → 數據記錄 → 策略記錄 → 快照
-          START=$(date +%s); i=0
+          # 2026-11-08 搬遷：所有運算都在這裡跑（網站 Cloudflare 只讀結果）。每輪：警報 → 數據記錄 → 策略記錄 → 快照
+          # 每次掃描目標間隔 10 分鐘（做完才算，掃描本身超過 10 分鐘就連續接著做）；開始新掃描的最後期限是這一輪的第 40 分鐘，
+          # 確保 60 分鐘逾時前結束、把「推過哪些」存回快取（避免重複推播）
+          START=$(date +%s); i=0; NEXT=0
           while true; do
             i=$((i+1)); T0=$(date +%s)
+            # 第 2 次掃描開始時排好下一輪（只排一次）。test=0：不要送測試訊息
+            if [ "$NEXT" = 0 ] && [ "$i" -ge 2 ]; then
+              if gh workflow run alert.yml --ref "$GITHUB_REF_NAME" -f test=0 -f tw=0; then NEXT=1; echo "已排好下一輪"; else echo "::warning::排下一輪失敗，靠定時排程備援"; fi
+            fi
             if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
             else timeout 600 node scripts/alert.mjs || true; fi
             timeout 300 node scripts/log.mjs || true
             timeout 400 node scripts/slog.mjs || true
             # 快照（加密一定跑；台股依時段／過期自動決定，也可手動 TW=1）
             TW="$TW_IN" timeout 1200 node scripts/snapshot.mjs || true
-            # 下一輪：距離這輪開始滿 20 分鐘；如果剩下的時間不夠再跑一輪就結束
-            ELAPSED=$(( $(date +%s) - T0 ))
-            if [ $(( $(date +%s) - START + 1500 )) -gt 2700 ]; then break; fi
-            [ "$ELAPSED" -lt 1200 ] && sleep $(( 1200 - ELAPSED ))
+            ELAPSED=$(( $(date +%s) - T0 )); TOTAL=$(( $(date +%s) - START ))
+            echo "第 $i 次掃描花 ${ELAPSED} 秒，這一輪已 ${TOTAL} 秒"
+            # 超過第 40 分鐘就不再開始新的掃描
+            if [ "$TOTAL" -gt 2400 ]; then break; fi
+            [ "$ELAPSED" -lt 600 ] && sleep $(( 600 - ELAPSED ))
+            [ $(( $(date +%s) - START )) -gt 2400 ] && break
           done
         env:
           SNAPSHOT: '1'
           ALERT_KEY: ${{ secrets.ALERT_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           SITE: ${{ vars.SITE }}
           TW_IN: ${{ github.event.inputs.tw }}
