@@ -1,0 +1,17 @@
+name: 連線測試
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for u in \
+            "https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=4h&limit=5" \
+            "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=5" \
+            "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=5" \
+            "https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=4h&limit=2" \
+            "https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=240&limit=5" \
+            "https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=BTC-USDT&interval=4h&limit=5" \
+            "https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP" ; do
+            code=$(curl -s -o /tmp/o -w "%{http_code}" -m 15 "$u"); echo "$code $(echo $u | cut -c1-80) :: $(head -c 80 /tmp/o | tr '\n' ' ')"
+          done
