@@ -2,6 +2,7 @@
 import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
+import { staticApi } from '/static.js';
 import { createPatTab } from '/patTab.js';
 import { createStrategyTab } from '/strategyTab.js';
 import { createLogTab } from '/logTab.js';
@@ -165,11 +166,11 @@ function cryptoCard(r) {
     </div>
     <div class="metrics">
       ${r.oiAll ? metric(`全市場持倉`, '$' + big(r.oiAll), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span> <span class="muted">${r.oiSources}所</span>`)
-        : metric('持倉量（幣安）', '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
+        : metric('持倉量', r.oi == null ? '—' : '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
       ${metric('24h 振幅', r.range24 == null ? '—' : r.range24.toFixed(1) + '%', `持倉 4h <span class="${cls(r.oiChg4)}">${signed(r.oiChg4, 1, '%')}</span>`)}
       ${metric(r.fundingAll != null ? '資金費率（加權）' : '資金費率', signed(r.funding, 4, '%'), r.fundingMax && r.fundingMin && r.fundingMax.ex !== r.fundingMin.ex ? `${esc(r.fundingMin.ex)} ${signed(r.fundingMin.funding, 3)} ~ ${esc(r.fundingMax.ex)} ${signed(r.fundingMax.funding, 3)}` : '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
-      ${metric('大戶多空比', r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
-      ${metric('散戶多空比', r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
+      ${metric('大戶多空比', (r.topLS == null ? '—' : r.topLS.toFixed(2)), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
+      ${metric('散戶多空比', (r.globalLS == null ? '—' : r.globalLS.toFixed(2)), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
       ${metric('CVD 24h', r.cvd24 == null ? '—' : (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
     </div>
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
@@ -249,7 +250,7 @@ function renderStatus() {
   el.classList.toggle('err', !!state.error[state.tab]);
   if (state.error[state.tab]) { el.textContent = state.error[state.tab]; return; }
   if (state.loading[state.tab] && !d) {
-    el.textContent = state.tab === 'tw' ? '正在向證交所抓近 5 日資料，第一次大約要 10 秒…' : '正在向幣安抓合約資料…';
+    el.textContent = state.tab === 'tw' ? '正在向證交所抓近 5 日資料，第一次大約要 10 秒…' : '正在讀取加密貨幣資料（BingX，GitHub 約每 20 分鐘更新）…';
     return;
   }
   if (!d) { el.textContent = ''; return; }
@@ -355,12 +356,17 @@ function render() {
 }
 
 // ---------- 抓資料 ----------
+// 資料一律讀 GitHub 算好的快照（static.js）；只有登入／登出／確認身分還是呼叫 Netlify 函式
 async function api(path) {
-  const r = await fetch(path, { credentials: 'same-origin' });
-  if (r.status === 401) { location.replace('/login'); throw new Error('未登入'); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `伺服器錯誤 ${r.status}`);
-  return j;
+  if (/^\/api\/(me|login|logout)\b/.test(path)) {
+    const r = await fetch(path, { credentials: 'same-origin' });
+    if (r.status === 401) { location.replace('/login'); throw new Error('未登入'); }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `伺服器錯誤 ${r.status}`);
+    return j;
+  }
+  try { return await staticApi(path); }
+  catch (e) { if (e.unauth) { location.replace('/login'); throw new Error('未登入'); } throw e; }
 }
 
 // 伺服器被幣安擋（例如機房在美國）時，改用你自己的瀏覽器直接抓
@@ -462,12 +468,7 @@ async function load(tab, refresh = false) {
   if (tab === state.tab) render();
   try {
     if (tab === 'crypto') {
-      try {
-        state.data.crypto = await api(`/api/crypto?n=120${refresh ? '&refresh=1' : ''}`);
-      } catch (e) {
-        if (e.message === '未登入') throw e;
-        state.data.crypto = await cryptoFromBrowser();
-      }
+      state.data.crypto = await api(`/api/crypto?n=120${refresh ? '&refresh=1' : ''}`); // 讀 GitHub 算好的快照；不再退回瀏覽器直連幣安
       if (state.xchg) applyExchanges(); // 先用上一份交易所資料，背景再更新
       classifyAll('crypto');
       setTimeout(() => enrichCryptoExchanges(refresh), 0);

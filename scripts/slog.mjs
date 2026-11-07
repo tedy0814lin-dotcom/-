@@ -11,16 +11,7 @@ if (!KEY) { console.log('沒有 ALERT_KEY，略過策略記錄'); process.exit(0
 const git = (...a) => execFileSync('git', a, { cwd: DIR, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
 if (fs.existsSync(DIR + '/.git')) { try { git('pull', '--rebase', '-q'); } catch {} } else fs.mkdirSync(DIR, { recursive: true });
 
-async function get(path) {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const r = await fetch(SITE + path, { headers: { 'x-alert-key': KEY } });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
-      return j;
-    } catch (e) { if (i === 2) throw e; await new Promise((ok) => setTimeout(ok, 4000)); }
-  }
-}
+import { get } from './_api.mjs'; // 直接在這台主機算（不再呼叫網站）
 const rd = (f, d) => { try { return JSON.parse(fs.readFileSync(DIR + '/' + f, 'utf8')); } catch { return d; } };
 const now = Date.now();
 const db = rd('strat.json', { items: [] });

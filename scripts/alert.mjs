@@ -12,19 +12,7 @@ const COOL = 12 * 3600e3;   // 同一檔同方向的冷卻時間
 const MISSED_R = 0.7;       // 已經往目標走超過幾 R 就算來不及
 if (!KEY || !LINE) { console.log('還沒設定 ALERT_KEY / LINE_TOKEN，先跳過'); process.exit(0); }
 
-async function get(path) {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const r = await fetch(SITE + path, { headers: { 'x-alert-key': KEY } });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
-      return j;
-    } catch (e) {
-      if (i === 2) throw e;
-      await new Promise((ok) => setTimeout(ok, 5000));
-    }
-  }
-}
+import { get } from './_api.mjs'; // 直接在這台主機算（不再呼叫網站）
 
 async function push(text) {
   if (text.length > 4900) text = text.slice(0, 4880) + '\n…（其餘請看網站）';

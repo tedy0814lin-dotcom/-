@@ -1,6 +1,7 @@
 // 共用工具：登入驗證、抓資料、併發控制
 // 檔名開頭是底線「_」，Vercel 不會把它當成網址，只給其他檔案 import 用。
 import crypto from 'node:crypto';
+import { isBinanceUrl, emulateBinance } from '../lib/bingx.js';
 
 const COOKIE = 'wr_session';
 const DAYS = 30; // 登入後保持 30 天
@@ -50,6 +51,7 @@ export function currentUser(req) {
 
 // 每支資料 API 開頭呼叫：沒登入就回 401
 export function requireUser(req, res) {
+  if (process.env.SNAPSHOT === '1') return 'snapshot'; // GitHub Actions 內部呼叫，不需要登入（網站上的登入由 Netlify 負責）
   const u = currentUser(req);
   if (!u) { res.status(401).json({ error: '請先登入' }); return null; }
   return u;
@@ -75,6 +77,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 抓 JSON；網路錯誤、被限流（429）或對方伺服器錯誤（5xx）會自動重試 2 次
 export async function getJSON(url, { timeout = 9000, retries = 2, headers = {} } = {}) {
+  if (isBinanceUrl(url)) return emulateBinance(url); // 搬遷後幣安連不到，一律改問 BingX（見 lib/bingx.js）
   let err;
   for (let i = 0; i <= retries; i++) {
     try {

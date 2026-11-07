@@ -25,16 +25,7 @@ function prepare() {
   git('config', 'user.name', 'whale-radar-log'); git('config', 'user.email', 'log@users.noreply.github.com');
 }
 
-async function get(path) {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const r = await fetch(SITE + path, { headers: { 'x-alert-key': KEY } });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
-      return j;
-    } catch (e) { if (i === 2) throw e; await new Promise((ok) => setTimeout(ok, 4000)); }
-  }
-}
+import { get } from './_api.mjs'; // 直接在這台主機算（不再呼叫網站）
 
 prepare();
 let db = { items: [] };

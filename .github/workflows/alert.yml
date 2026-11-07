@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: write   # 數據記錄要推回 data 分支
     # GitHub 的定時排程常常 30～45 分鐘才跑一次，所以每次啟動後自己每 20 分鐘掃一次、連續約 45 分鐘；下一輪排在後面接著跑
-    # （2026-11-07 為了省 Vercel 免費版的 Active CPU 4 小時額度，從 5 分鐘改成 20 分鐘；策略都是 4H 以上週期）
+    # （策略都是 4H 以上週期，20 分鐘一輪足夠）
     concurrency:
       group: alert
       cancel-in-progress: false
@@ -33,20 +33,27 @@ jobs:
           restore-keys: alert-state-
       - run: |
           # 用實際經過時間控制：最多跑 45 分鐘，確保在 60 分鐘逾時前結束、把「推過哪些」存回快取（避免重複推播）
+          # 2026-11-08 搬遷：所有運算都在這裡跑（網站 Netlify 只讀結果）。每輪：警報 → 數據記錄 → 策略記錄 → 快照
           START=$(date +%s); i=0
           while true; do
-            i=$((i+1))
+            i=$((i+1)); T0=$(date +%s)
             if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
             else timeout 600 node scripts/alert.mjs || true; fi
-            # 每輪（約 20 分鐘）記錄一次所有策略的訊號、追蹤結果
-            if true; then timeout 300 node scripts/log.mjs || true; timeout 400 node scripts/slog.mjs || true; fi
+            timeout 300 node scripts/log.mjs || true
+            timeout 400 node scripts/slog.mjs || true
+            # 快照（加密一定跑；台股依時段／過期自動決定，也可手動 TW=1）
+            TW="$TW_IN" timeout 1200 node scripts/snapshot.mjs || true
+            # 下一輪：距離這輪開始滿 20 分鐘；如果剩下的時間不夠再跑一輪就結束
+            ELAPSED=$(( $(date +%s) - T0 ))
             if [ $(( $(date +%s) - START + 1500 )) -gt 2700 ]; then break; fi
-            sleep 1200
+            [ "$ELAPSED" -lt 1200 ] && sleep $(( 1200 - ELAPSED ))
           done
         env:
+          SNAPSHOT: '1'
           ALERT_KEY: ${{ secrets.ALERT_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          SITE: ${{ vars.SITE }}
           TW_IN: ${{ github.event.inputs.tw }}
           TEST_IN: ${{ github.event.inputs.test }}
       - uses: actions/cache/save@v4

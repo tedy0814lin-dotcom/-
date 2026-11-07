@@ -137,7 +137,7 @@ export function createPatTab({ api, el }) {
         const rows = (tw.rows || []).filter((r) => r.volume >= MINV && r.close >= 10 && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, TOP);
         st.names = Object.fromEntries(rows.map((r) => [r.code, r.name])); codes = rows.map((r) => r.code); batch = BATCH;
       } else {
-        st.progress = '正在取得幣安永續合約清單…'; render();
+        st.progress = '正在取得 BingX 永續合約清單…'; render();
         const l = await api('/api/twhist?pat=1&market=crypto&list=1&top=' + CTOP);
         codes = l.symbols || []; st.names = Object.fromEntries(codes.map((x) => [x, ''])); batch = CBATCH;
       }
@@ -210,7 +210,7 @@ export function createPatTab({ api, el }) {
       <div class="toolbar">
         ${sel('pat-mkt', st.market, [['tw', '台股（日線）'], ['cx', '加密貨幣']], '市場')}
         ${st.market === 'cx' ? sel('pat-tf', st.tf, [['4h', '4H'], ['12h', '12H'], ['1d', '日線']], '時區') : ''}
-        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量 ≥${MINV} 張的 ${st.total} 檔上市櫃股票（日線）` : `幣安 USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 ${cards.length} 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
+        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量 ≥${MINV} 張的 ${st.total} 檔上市櫃股票（日線）` : `BingX USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 ${cards.length} 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
         <button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>
       <div class="toolbar">
         ${sel('pat-dir', st.dir, [[0, '偏多＋偏空'], [1, '只看偏多'], [-1, '只看偏空']], '方向')}

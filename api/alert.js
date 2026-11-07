@@ -130,7 +130,7 @@ export default async function handler(req, res) {
     // 數據記錄用：這檔從某個時間起的 15 分 K（[時間, 高, 低, 收]），GitHub 主機連不到幣安，所以經過這裡
     if (req.query.m === 'klines') {
       const sym = String(req.query.s || '');
-      if (!/^[A-Z0-9]{2,20}USDT$/.test(sym)) return res.status(400).json({ error: '代號不對' });
+      if (!/^[A-Z0-9]{1,20}USDT$/.test(sym)) return res.status(400).json({ error: '代號不對' });
       const from = Math.max(0, Number(req.query.from) || 0);
       const k = await getJSON(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=15m&startTime=${from}&limit=1500`, { timeout: 12000 });
       return res.status(200).json({ k: k.map((x) => [x[0], +x[2], +x[3], +x[4]]).slice(0, -1) }); // 去掉還沒收的最後一根

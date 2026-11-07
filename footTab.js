@@ -1,4 +1,4 @@
-// 足跡圖「Delta 階梯」頁：掃幣安 4H，列出今天完成階梯的做多／做空訊號（含迷你 K 線與 Delta 柱）。
+// 足跡圖「Delta 階梯」頁：掃 BingX 4H（Delta 為 OHLCV 近似版），列出今天完成階梯的做多／做空訊號（含迷你 K 線與 Delta 柱）。
 // 規則與回測見 lib/footprint.js。連 2 根買(賣)Delta 強＋價格一階階創高(低) → 下一根開盤進、停損型態低(高)、4R 出場。
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(3) : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));

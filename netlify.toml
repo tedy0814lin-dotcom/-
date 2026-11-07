@@ -1,0 +1,20 @@
+# Netlify 設定：靜態前端 + 登入用的小函式。所有運算在 GitHub Actions（見 scripts/snapshot.mjs）。
+[build]
+  command = "node scripts/build-site.mjs"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# /login → login.html
+[[redirects]]
+  from = "/login"
+  to = "/login.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "same-origin"
