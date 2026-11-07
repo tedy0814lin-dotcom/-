@@ -167,6 +167,9 @@ const git = (...a) => execFileSync('git', a, { cwd: OUT, stdio: ['ignore', 'pipe
 if (!fs.existsSync(path.join(OUT, '.git'))) git('init', '-q', '-b', 'snap');
 try { git('remote', 'add', 'origin', url); } catch { git('remote', 'set-url', 'origin', url); }
 git('config', 'user.name', 'whale-radar-snap'); git('config', 'user.email', 'snap@users.noreply.github.com');
-git('checkout', '-q', '--orphan', 'new'); git('add', '-A'); git('commit', '-q', '-m', 'snapshot ' + new Date().toISOString());
-git('push', '-q', '-f', 'origin', 'new:refs/heads/snap');
+// 同一個 run 會連續跑好幾輪，分支名每次都要不一樣（固定叫 new 的話第二輪起 checkout 會失敗、快照就不更新了）
+const tmpBranch = 'snap-' + Date.now();
+git('checkout', '-q', '--orphan', tmpBranch); git('add', '-A'); git('commit', '-q', '-m', 'snapshot ' + new Date().toISOString());
+git('push', '-q', '-f', 'origin', tmpBranch + ':refs/heads/snap');
+try { git('checkout', '-q', '--detach'); git('branch', '-q', '-D', tmpBranch); } catch {}
 console.log('已推到 snap 分支');
