@@ -6,7 +6,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - run: |
-          t() { code=$(curl -s -m 15 -o /tmp/o -w "%{http_code} %{size_download}B" -H "User-Agent: Mozilla/5.0" "$2"); echo "$1 | $code | $(head -c 90 /tmp/o | tr '\n' ' ')"; }
+          t() { code=$(curl -s -m 15 -o /tmp/o -w "%{http_code} %{size_download}B" -H "User-Agent: Mozilla/5.0" "$2" || echo "curl-fail($?)"); [ -f /tmp/o ] || : > /tmp/o; echo "$1 | $code | $(head -c 90 /tmp/o | tr '\n' ' ')"; }
           t twse-openapi "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
           t twse-rwd "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20261106&type=ALLBUT0999&response=json"
           t twse-stockday "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20261101&stockNo=2330&response=json"
