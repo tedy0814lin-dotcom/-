@@ -200,7 +200,7 @@ function cryptoCard(r) {
       ${r.oiAll ? metric(`全市場持倉`, '$' + big(r.oiAll), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span> <br><span class="muted">${r.oiSources} 所合計</span>`)
         : metric('持倉量', r.oi == null ? '—' : '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
       ${metric('24h 振幅', r.range24 == null ? '—' : r.range24.toFixed(1) + '%', `持倉 4h <span class="${cls(r.oiChg4)}">${signed(r.oiChg4, 1, '%')}</span>`)}
-      ${metric('資金費率', signed(r.funding, 4, '%'), r.fundingMax && r.fundingMin && r.fundingMax.ex !== r.fundingMin.ex ? `<span class="muted">低</span> ${esc(r.fundingMin.ex)} ${signed(r.fundingMin.funding, 3)}<br><span class="muted">高</span> ${esc(r.fundingMax.ex)} ${signed(r.fundingMax.funding, 3)}` : '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
+      ${metric('資金費率', signed(r.funding, 4, '%'), '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
       ${metric('大戶多空比', r.topLS == null ? '—' : r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
       ${metric('散戶多空比', r.globalLS == null ? '—' : r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
       ${metric('CVD 24h', r.cvd24 == null ? '—' : (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
