@@ -149,17 +149,30 @@ function catBadge(r) {
 }
 // 策略計畫：名稱一行、進場／停損／目標一行，回測數字收進「回測依據」摺疊（點開才看）
 function planBlocks(list) {
-  return `<div class="plans">${list.map((l) => {
+  // 進場／停損／目標完全相同的策略合併成一塊：名稱各一行，回測依據各自標名稱收在同一個摺疊
+  const groups = [];
+  const plain = [];
+  for (const l of list) {
     const m = /^【(.+?)】(.*?)：(.*)$/.exec(l);
-    if (!m) return `<div class="why">${esc(l)}</div>`;
+    if (!m) { plain.push(`<div class="why">${esc(l)}</div>`); continue; }
     const parts = m[3].split('・');
     const val = parts.filter((x) => /^(進場|停損|目標)/.test(x));
     const note = parts.filter((x) => !/^(進場|停損|目標)/.test(x)).join('・');
-    return `<div class="plan"><div class="plan-t">${esc(m[1])} <span class="muted">${esc(m[2])}</span></div>`
-      + (val.length ? `<div class="plan-v">${val.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : '')
-      + (note ? `<details class="plan-n"><summary>回測依據</summary>${esc(note)}</details>` : '')
+    const key = val.join('|');
+    let g = val.length ? groups.find((x) => x.key === key) : null;
+    if (!g) { g = { key, val, items: [] }; groups.push(g); }
+    g.items.push({ name: m[1], tf: m[2], note });
+  }
+  const html = groups.map((g) => {
+    const multi = g.items.length > 1;
+    const titles = g.items.map((i) => `<div class="plan-t">${esc(i.name)} <span class="muted">${esc(i.tf)}</span></div>`).join('');
+    const notes = g.items.filter((i) => i.note).map((i) => (multi ? `<div><b>${esc(i.name)}</b>：${esc(i.note)}</div>` : `<div>${esc(i.note)}</div>`)).join('');
+    return `<div class="plan">${titles}`
+      + (g.val.length ? `<div class="plan-v">${g.val.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : '')
+      + (notes ? `<details class="plan-n"><summary>回測依據</summary>${notes}</details>` : '')
       + '</div>';
-  }).join('')}</div>`;
+  }).join('');
+  return `<div class="plans">${html}${plain.join('')}</div>`;
 }
 
 function catBlock(r, why) {
@@ -184,15 +197,15 @@ function cryptoCard(r) {
       <div class="price"><span class="p num">${price(r.price)}</span><span class="c num ${cls(r.chg24)}">${signed(r.chg24, 2, '%')}</span></div>
     </div>
     <div class="metrics">
-      ${r.oiAll ? metric(`全市場持倉`, '$' + big(r.oiAll), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span> <span class="muted">${r.oiSources}所</span>`)
+      ${r.oiAll ? metric(`全市場持倉`, '$' + big(r.oiAll), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span> <br><span class="muted">${r.oiSources} 所合計</span>`)
         : metric('持倉量', r.oi == null ? '—' : '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
       ${metric('24h 振幅', r.range24 == null ? '—' : r.range24.toFixed(1) + '%', `持倉 4h <span class="${cls(r.oiChg4)}">${signed(r.oiChg4, 1, '%')}</span>`)}
-      ${metric('資金費率', signed(r.funding, 4, '%'), r.fundingMax && r.fundingMin && r.fundingMax.ex !== r.fundingMin.ex ? `${esc(r.fundingMin.ex)} ${signed(r.fundingMin.funding, 3)} ~ ${esc(r.fundingMax.ex)} ${signed(r.fundingMax.funding, 3)}` : '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
-      ${r.topLS == null ? '' : metric('大戶多空比', r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
-      ${r.globalLS == null ? '' : metric('散戶多空比', r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
-      ${r.cvd24 == null ? '' : metric('CVD 24h', (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
+      ${metric('資金費率', signed(r.funding, 4, '%'), r.fundingMax && r.fundingMin && r.fundingMax.ex !== r.fundingMin.ex ? `<span class="muted">低</span> ${esc(r.fundingMin.ex)} ${signed(r.fundingMin.funding, 3)}<br><span class="muted">高</span> ${esc(r.fundingMax.ex)} ${signed(r.fundingMax.funding, 3)}` : '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
+      ${metric('大戶多空比', r.topLS == null ? '—' : r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
+      ${metric('散戶多空比', r.globalLS == null ? '—' : r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
+      ${metric('CVD 24h', r.cvd24 == null ? '—' : (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
     </div>
-    ${r.spark && r.spark.length > 1 ? `<div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>` : ''}
+    <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
     ${catBlock(r, r.stratWhy || [])}
