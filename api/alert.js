@@ -85,6 +85,17 @@ function pick(rows, dict, mkt, min = 3) {
   return out;
 }
 
+// 省 CPU：加密全掃（buildCrypto）很耗運算，警報掃描（crypto）和數據記錄（log）短時間內共用同一份結果
+const BUILD_TTL = 8 * 60e3;
+const memo = { t: 0, p: null };
+async function cachedBuild() {
+  if (!memo.p || Date.now() - memo.t > BUILD_TTL) {
+    memo.t = Date.now();
+    memo.p = buildCrypto(120, { getJSON, pool }).catch((e) => { memo.p = null; throw e; });
+  }
+  return structuredClone(await memo.p);
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!authed(req)) return res.status(401).json({ error: '金鑰不對' });
@@ -101,7 +112,7 @@ export default async function handler(req, res) {
     }
     // 數據記錄用：所有策略（含不計分的觀察策略）目前成立的進出場計畫
     if (req.query.m === 'log') {
-      const d = await buildCrypto(120, { getJSON, pool });
+      const d = await cachedBuild();
       const items = [];
       for (const r of d.rows) {
         r.signals = cryptoSignals(r);
@@ -125,7 +136,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ k: k.map((x) => [x[0], +x[2], +x[3], +x[4]]).slice(0, -1) }); // 去掉還沒收的最後一根
     }
     if (req.query.m === 'crypto') {
-      const d = await buildCrypto(120, { getJSON, pool });
+      const d = await cachedBuild();
       for (const r of d.rows) r.signals = cryptoSignals(r);
       return res.status(200).json({ items: pick(d.rows, CRYPTO_SIGNALS, 'crypto', min) });
     }

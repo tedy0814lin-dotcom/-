@@ -531,7 +531,7 @@ $('logout').addEventListener('click', async () => {
 });
 
 // 加密貨幣每 5 分鐘自動更新（分頁在背景時不更新）
-setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto'); }, 5 * 60 * 1000);
+setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto'); }, 10 * 60 * 1000);
 
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
