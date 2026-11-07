@@ -37,7 +37,7 @@ jobs:
           restore-keys: alert-state-
       - run: |
           # 2026-11-08 搬遷：所有運算都在這裡跑（網站 Cloudflare 只讀結果）。每輪：警報 → 數據記錄 → 策略記錄 → 快照
-          # 每次掃描目標間隔 10 分鐘（做完才算，掃描本身超過 10 分鐘就連續接著做）；開始新掃描的最後期限是這一輪的第 40 分鐘，
+          # 每次掃描目標間隔 10 分鐘（台北 01:00～08:59 為 30 分鐘；做完才算，掃描本身超過 10 分鐘就連續接著做）；開始新掃描的最後期限是這一輪的第 40 分鐘，
           # 確保 60 分鐘逾時前結束、把「推過哪些」存回快取（避免重複推播）
           START=$(date +%s); i=0; NEXT=0
           while true; do
@@ -56,7 +56,9 @@ jobs:
             echo "第 $i 次掃描花 ${ELAPSED} 秒，這一輪已 ${TOTAL} 秒"
             # 超過第 40 分鐘就不再開始新的掃描
             if [ "$TOTAL" -gt 2400 ]; then break; fi
-            [ "$ELAPSED" -lt 600 ] && sleep $(( 600 - ELAPSED ))
+            # 台北時間 01:00～08:59 不推播（alert.mjs 的 quiet），網站也沒人看，降到每 30 分鐘一次，減少 Actions 占用；其餘時間每 10 分鐘
+            H=$(TZ=Asia/Taipei date +%-H); INT=600; if [ "$H" -ge 1 ] && [ "$H" -lt 9 ]; then INT=1800; fi
+            [ "$ELAPSED" -lt "$INT" ] && sleep $(( INT - ELAPSED ))
             [ $(( $(date +%s) - START )) -gt 2400 ] && break
           done
         env:
