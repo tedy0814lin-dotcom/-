@@ -1,0 +1,40 @@
+name: 連線測試
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          t() { code=$(curl -s -m 15 -o /tmp/o -w "%{http_code} %{size_download}B" -H "User-Agent: Mozilla/5.0" "$2"); echo "$1 | $code | $(head -c 90 /tmp/o | tr '\n' ' ')"; }
+          t twse-openapi "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+          t twse-rwd "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20261106&type=ALLBUT0999&response=json"
+          t twse-stockday "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20261101&stockNo=2330&response=json"
+          t twse-t86 "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261106&selectType=ALLBUT0999&response=json"
+          t tpex-openapi "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
+          t tpex-www "https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=2026%2F11%2F06&type=EW&response=json"
+          t tpex-margin "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance"
+          t yahoo-q1 "https://query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1d&range=1mo"
+          t yahoo-q2 "https://query2.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&range=1mo"
+          t okx-funding "https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP"
+          t okx-oi "https://www.okx.com/api/v5/public/open-interest?instType=SWAP"
+          t okx-oihist "https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId=BTC-USDT-SWAP&period=1H&limit=5"
+          t okx-lsratio "https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio-contract?instId=BTC-USDT-SWAP&period=1H&limit=5"
+          t okx-lsratio-top "https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio-contract-top-trader?instId=BTC-USDT-SWAP&period=1H&limit=5"
+          t okx-taker "https://www.okx.com/api/v5/rubik/stat/taker-volume-contract?instId=BTC-USDT-SWAP&period=1H&limit=5"
+          t okx-candles "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=4H&limit=5"
+          t okx-tickers "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
+          t bingx-klines "https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=BTC-USDT&interval=4h&limit=5"
+          t bingx-premium "https://open-api.bingx.com/openApi/swap/v2/quote/premiumIndex"
+          t bingx-oi "https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol=BTC-USDT"
+          t bingx-ticker "https://open-api.bingx.com/openApi/swap/v2/quote/ticker"
+          t hyperliquid "https://api.hyperliquid.xyz/info"
+          t bitget "https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES"
+          t gate "https://api.gateio.ws/api/v4/futures/usdt/contracts"
+          t mexc "https://contract.mexc.com/api/v1/contract/ticker"
+          t htx "https://api.hbdm.com/linear-swap-api/v1/swap_batch_funding_rate"
+          t altme-fng "https://api.alternative.me/fng/"
+          t binance-fapi "https://fapi.binance.com/fapi/v1/ping"
+          t binance-vision "https://data-api.binance.vision/api/v3/ping"
+          t coingecko "https://api.coingecko.com/api/v3/ping"
+          t raw-gh "https://raw.githubusercontent.com/tedy0814lin-dotcom/-/data/strat.json"
