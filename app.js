@@ -91,7 +91,6 @@ const signed = (v, d = 2, unit = '') => (v == null ? '—' : (v > 0 ? '+' : '') 
 const lotsFmt = (v) => (v == null ? '—' : (v > 0 ? '+' : '') + nf.format(v));
 const streakFmt = (s) => (s > 0 ? `連買 ${s}` : s < 0 ? `連賣 ${-s}` : '—');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ageFmt = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60e3)); return m < 1 ? '剛剛' : m < 60 ? `${m} 分鐘前` : `${Math.floor(m / 60)} 小時 ${m % 60} 分前`; };
 const timeFmt = (t) => new Date(t).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
 const dateFmt = (ymd) => `${ymd.slice(0, 4)}/${ymd.slice(4, 6)}/${ymd.slice(6)}`;
 
@@ -283,16 +282,14 @@ function renderStatus() {
   el.classList.toggle('err', !!state.error[state.tab]);
   if (state.error[state.tab]) { el.textContent = state.error[state.tab]; return; }
   if (state.loading[state.tab] && !d) {
-    el.textContent = state.tab === 'tw' ? '正在向證交所抓近 5 日資料，第一次大約要 10 秒…' : '正在讀取加密貨幣資料（BingX，GitHub 每 15 分鐘算一次、夜間較少）…';
+    el.textContent = state.tab === 'tw' ? '正在向證交所抓近 5 日資料，第一次大約要 10 秒…' : '正在讀取加密貨幣資料（BingX，GitHub 約每 20 分鐘更新）…';
     return;
   }
   if (!d) { el.textContent = ''; return; }
   const parts = [d.source];
   if (d.date) parts.push(`資料日 ${dateFmt(d.date)}`);
   parts.push(`${d.rows.length} 檔`);
-  const stale = state.tab === 'crypto' && Date.now() - d.updatedAt > 45 * 60e3;
-  const dayTag = new Date(d.updatedAt).toDateString() === new Date().toDateString() ? '' : `${new Date(d.updatedAt).getMonth() + 1}/${new Date(d.updatedAt).getDate()} `;
-  parts.push(`資料時間 ${dayTag}${timeFmt(d.updatedAt)}（${ageFmt(d.updatedAt)}）${stale ? '，偏舊，等下一輪掃描' : ''}`);
+  parts.push(`${timeFmt(d.updatedAt)} 更新`);
   if (d.viaBrowser) parts.push('由你的瀏覽器直接抓取');
   if (state.tab === 'crypto') {
     if (state.xchg) {
@@ -567,8 +564,7 @@ $('logout').addEventListener('click', async () => {
 });
 
 // 加密貨幣每 5 分鐘自動更新（分頁在背景時不更新）
-setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto'); }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden) renderStatus(); }, 30 * 1000); // 讓「幾分鐘前」自己走
+setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto'); }, 10 * 60 * 1000);
 
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
