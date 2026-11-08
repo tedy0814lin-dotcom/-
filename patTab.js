@@ -51,12 +51,12 @@ function cardsOf(code, r) {
 }
 
 // ---- K 線圖 ----
-// 預設畫最近 100 根；型態的轉折點比較早就往前延伸到型態起點前 5 根（最多 160 根）
+// 預設畫最近 200 根；型態的轉折點比較早就往前延伸到型態起點前 5 根（最多 320 根）；成交量分布用全部 320 根算
 function chart(card) {
   const { r, it } = card, N0 = r.bars.length;
   const idx = [...(it.pts || []).map((p) => p[0]), it.neckLine ? it.neckLine.i : N0, it.lines ? it.lines.t0 : N0].filter((v) => v >= 0);
-  const s0 = Math.max(0, Math.min(N0 - 100, idx.length ? Math.min(...idx) - 5 : N0));
-  const R = { ...r, bars: r.bars.slice(s0), dates: r.dates.slice(s0), off: r.off + s0, candles: r.candles.map((c) => ({ ...c, i: c.i - s0 })) };
+  const s0 = Math.max(0, Math.min(N0 - 200, idx.length ? Math.min(...idx) - 5 : N0));
+  const R = { ...r, vpBars: r.bars, bars: r.bars.slice(s0), dates: r.dates.slice(s0), off: r.off + s0, candles: r.candles.map((c) => ({ ...c, i: c.i - s0 })) };
   const I = { ...it, pts: (it.pts || []).map(([i, y]) => [i - s0, y]), neckLine: it.neckLine ? { ...it.neckLine, i: it.neckLine.i - s0 } : null, lines: it.lines ? { ...it.lines, t0: it.lines.t0 - s0 } : null };
   return chartRaw({ ...card, r: R, it: I });
 }
@@ -83,7 +83,7 @@ function chartRaw(card) {
   // 成交量分布（VPVR）：畫在左側、疊在 K 棒後面
   const xr = Wd - pr;
   if (VP) {
-    const vp = volumeProfile(bars, lo, hi);
+    const vp = volumeProfile(r.vpBars || bars, lo, hi);
     if (vp) s += vpSVG(vp, { left: px0, right: xr, yOf: Y, rowPix: ph / VP_ROWS, pw: 185, side: 'left', pxfmt: px });
   }
   // 日期
@@ -229,7 +229,7 @@ export function createPatTab({ api, el }) {
         <summary>怎麼判斷的、圖上的線是什麼</summary>
         <dl>
           <dt>圖上畫的</dt><dd>K 棒（綠漲紅跌，跟網站其他頁一致）＋成交量；折線與圓點＝型態的高低轉折點；金色虛線＝頸線（突破／跌破價）；紅色點線＝停損參考；收斂／擴散三角形畫上下兩條趨勢線；三角箭頭＝突破（跌破）那一根；方框＝K 棒型態。</dd>
-          <dt>成交量分布（VPVR，右側量條）</dt><dd>把畫面裡每根 K 棒的成交量，依它的最高～最低價分攤到各個價位，累積成右邊的橫向量條：<b>藍＝收漲的量</b>、<b>金＝收跌的量</b>。胖的地方＝高量區（HVN，大家成交密集、常是支撐壓力）；細的地方＝低量真空帶（LVN，價格容易快速穿過）。<b class="pc-poc" style="border:0">— —</b> 粉紅線＝POC（成交量最大的價位）；VAH／VAL＝價值區（涵蓋 70% 成交量）的上下緣。<b>這只是參考位，不是買賣訊號</b>——回測顯示單獨照它做並不會賺，POC／價值區適合當「容易停頓或反轉的位置」來輔助判斷。上面的「成交量分布」勾選框可以關掉。</dd>
+          <dt>成交量分布（VPVR，右側量條）</dt><dd>把最近 320 根 K 棒（比畫面長，台股約一年）的成交量，依它的最高～最低價分攤到各個價位，累積成右邊的橫向量條：<b>藍＝收漲的量</b>、<b>金＝收跌的量</b>。胖的地方＝高量區（HVN，大家成交密集、常是支撐壓力）；細的地方＝低量真空帶（LVN，價格容易快速穿過）。<b class="pc-poc" style="border:0">— —</b> 粉紅線＝成交量最大的價位（線上直接標價）；VAH／VAL＝價值區（涵蓋 70% 成交量）的上下緣。<b>這只是參考位，不是買賣訊號</b>——回測顯示單獨照它做並不會賺，POC／價值區適合當「容易停頓或反轉的位置」來輔助判斷。上面的「成交量分布」勾選框可以關掉。</dd>
           <dt>找高低點</dt><dd>用 ATR 之字轉折：價格反向走超過 2～3 倍 ATR 才確認一個高點或低點，反轉後才確認，不會偷看未來。偏空型態是把價格上下翻轉後用同一套偵測。</dd>
           <dt>正在形成／已經形成</dt><dd>型態成形後最多等 15 根日線；收盤站上（跌破）頸線就算突破。「已經形成」只列最近 6 根內突破的。收斂三角形另外用趨勢線擬合（上下線收斂、至少 85% 收盤在兩線內）。</dd>
           <dt>確認</dt><dd>量＝突破（跌破）那天成交量 ≥ 前 20 日均量 ${VOLX} 倍（正在形成則看近 5 日均量 ≥ ${VOL5X} 倍）。K 棒型態＝最近 2 根內、方向相同。MACD 背離＝柱狀體「一段一段的波峰」比較（價格更高／低、柱狀體更低／高），最近 10 根內確認；連續 2 段以上才標「持續」。</dd>

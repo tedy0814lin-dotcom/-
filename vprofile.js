@@ -43,7 +43,7 @@ export function vpSVG(vp, g) {
     }
   }
   const lblX = side === 'left' ? right - 2 : left + 3, anc = side === 'left' ? 'end' : 'start';
-  s += `<line x1="${left}" x2="${right}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${(yOf(vp.pocP) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-poc-t">POC ${pocPx(vp.pocP)}</text>`;
+  s += `<line x1="${left}" x2="${right}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${(yOf(vp.pocP) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-poc-t">${pocPx(vp.pocP)}</text>`;
   for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${left}" x2="${right}" y1="${yOf(v).toFixed(1)}" y2="${yOf(v).toFixed(1)}" class="vp-val-ln"/><text x="${lblX}" y="${(yOf(v) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-val-t">${lab}</text>`;
   return s;
 }

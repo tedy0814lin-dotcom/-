@@ -74,7 +74,7 @@ const TWCH = { '15m': ['15m', '60d'], '1h': ['60m', '2y'], '1d': ['1d', '10y'] }
 async function chartData(m, sym, tf) {
   if (m === 'tw') {
     const [iv, range] = TWCH[tf] || TWCH['1h'];
-    return vegasChart(await yahooBars(sym, iv, range), 150);
+    return vegasChart(await yahooBars(sym, iv, range), 240);
   }
   const iv = tf === '1d' ? '1d' : tf; // 加密：15m / 1h / 4h
   // 先用 BingX；沒有該幣或被限流 → 幣安合約 → Bybit 永續 → 幣安現貨（價格幾乎相同）
@@ -94,7 +94,7 @@ async function chartData(m, sym, tf) {
     async () => bnRows(await getJSON(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}&interval=${iv}&limit=1000`, { timeout: 10000, retries: 0 })),
   ];
   let e0;
-  for (const f of srcs) { try { return vegasChart(await f(), 150); } catch (e) { e0 ||= e; } }
+  for (const f of srcs) { try { return vegasChart(await f(), 240); } catch (e) { e0 ||= e; } }
   throw e0;
 }
 
