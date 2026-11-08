@@ -90,9 +90,6 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .refresh:disabled { opacity: .55; cursor: wait; }
 .status { width: 100%; font-size: 12.5px; color: var(--muted); }
 .status.err { color: var(--up); }
-.fresh { font-size: 12.5px; color: var(--muted); padding: 6px 0 2px; }
-.fresh b { color: var(--text, inherit); font-weight: 600; }
-.fresh .warn { color: var(--up); font-weight: 600; }
 
 .chips { display: flex; gap: 6px; overflow-x: auto; padding: 12px 0 4px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
