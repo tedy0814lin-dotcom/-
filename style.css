@@ -374,3 +374,19 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
   .lg-row { grid-template-columns: 1fr auto; }
   .lg-r-mean, .lg-r-prog { grid-column: 1 / -1; }
 }
+
+/* 籌碼參考面板（未通過回測，僅供參考） */
+.chipref { margin-top: 8px; border-top: 1px dashed var(--line, #2a3340); padding-top: 6px; font-size: 12px; }
+.chipref > summary { cursor: pointer; color: var(--muted); user-select: none; }
+.cr-hit { color: var(--fg); font-weight: 600; }
+.cr-note { margin: 6px 0; color: var(--muted); line-height: 1.5; }
+.cr-layer { margin: 6px 0; }
+.cr-h { font-weight: 600; margin: 6px 0 2px; }
+.cr-i { line-height: 1.5; padding-left: 2px; }
+.cr-i.up { color: var(--up, #2fbf71); } .cr-i.down { color: var(--down, #e5534b); }
+.cr-miss { color: var(--muted); }
+.cr-combo { margin: 4px 0; padding: 4px 6px; border-radius: 6px; background: rgba(127,127,127,.08); }
+.cr-combo.cr-hit { outline: 1px solid var(--accent, #e0a82e); }
+.cr-tag { margin-left: 8px; color: var(--muted); }
+.cr-conds { display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--muted); }
+.cr-conds .ok { color: var(--up, #2fbf71); } .cr-conds .bad { color: var(--down, #e5534b); }

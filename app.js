@@ -1,5 +1,5 @@
 // 籌碼雷達前端：讀 /api 的資料，畫成卡片，提供搜尋、排序、訊號篩選
-import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
+import { buildCrypto, CRYPTO_SIGNALS, chipRef, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { staticApi } from '/static.js';
@@ -188,6 +188,23 @@ function catBlock(r, why) {
   return lines.join('');
 }
 
+// ---------- 籌碼參考面板（照文件的四層框架；回測沒有優勢，只供參考，不計分）----------
+function chipRefBlock(r) {
+  const c = chipRef(r);
+  const hit = c.combos.filter((x) => x.state === 'hit');
+  const dirTxt = (d) => (d > 0 ? 'up' : d < 0 ? 'down' : '');
+  const layers = c.layers.map((l) => `<div class="cr-layer"><div class="cr-h">層${l.n}　${esc(l.title)}</div>
+    ${l.items.map((i) => `<div class="cr-i ${dirTxt(i.d)}">${i.d > 0 ? '▲' : i.d < 0 ? '▼' : '・'} ${esc(i.t)}</div>`).join('')}
+    ${l.miss.map((m) => `<div class="cr-i cr-miss">⚠ ${esc(m)}</div>`).join('')}</div>`).join('');
+  const combos = c.combos.map((x) => {
+    const tag = x.state === 'hit' ? '全部符合' : x.state === 'no' ? '不符合' : '缺資料';
+    return `<div class="cr-combo cr-${x.state}"><b>${x.k}　${esc(x.name)}</b>（${x.side > 0 ? '偏多' : '偏空'}）<span class="cr-tag">${tag}</span><div class="cr-conds">${x.conds.map((k) => `<span class="${k.ok === true ? 'ok' : k.ok === false ? 'bad' : 'na'}">${k.ok === true ? '✓' : k.ok === false ? '✗' : '?'} ${esc(k.t)}</span>`).join('')}</div></div>`;
+  }).join('');
+  return `<details class="chipref"><summary>籌碼參考${hit.length ? `<span class="cr-hit">　${hit.map((x) => x.k + ' ' + x.name).join('、')}</span>` : ''}<span class="muted">　未通過回測・不計分</span></summary>
+    <div class="cr-note">依文件的四層框架列出現況。回測（24 檔、4H、2023～2026）這些規則與三組組合單獨使用都沒有統計優勢，只當風險情境參考，不是進場訊號。</div>
+    ${layers}<div class="cr-h">三角驗證組合</div>${combos}</details>`;
+}
+
 // ---------- 卡片 ----------
 function cryptoCard(r) {
   return `<article class="card" data-sym="${esc(r.symbol)}">
@@ -209,6 +226,7 @@ function cryptoCard(r) {
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
     ${r.exList ? `<div class="xline"><span class="k">持倉分布</span>${r.exList.filter((v) => v.share != null).slice(0, 5).map((v) => `<span>${esc(v.ex)} <b class="num">${v.share.toFixed(0)}%</b></span>`).join('')}</div>` : ''}
     ${catBlock(r, r.stratWhy || [])}
+    ${chipRefBlock(r)}
   </article>`;
 }
 
