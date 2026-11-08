@@ -35,7 +35,7 @@ function cardsOf(code, r) {
     if (d) tags.push({ t: `MACD ${dir > 0 ? '底' : '頂'}背離${d.k >= 2 ? `（持續 ×${d.k}）` : ''}`, k: d.k >= 2 ? 'div2' : 'div' });
     return tags;
   };
-  const PASS = { eTri12: '12H 三重底早進場：驗證期 347 筆 +0.51R', eDia12: '12H 菱形底早進場：驗證期 135 筆 +0.42R', eDbl12: '12H 雙底早進場：驗證期 1,260 筆 +0.25R（觀察，沒贏 BTC）', eRect12: '12H 矩形底部早進場：驗證期 1,039 筆 +0.28R（觀察，沒贏 BTC）', eRect1d: '日線矩形底部早進場：驗證期 267 筆 +0.64R', eTri1d: '日線三重底早進場：驗證期 176 筆 +0.67R', eDbl1d: '日線雙底早進場：驗證期 199 筆 +0.86R' };
+  const PASS = { eTri12: '12H 三重底早進場：驗證期 347 筆 +0.51R', eDia12: '12H 菱形底（連續兩個收斂三角形）早進場：驗證期 68 筆 +0.44R（樣本偏少）', eDbl12: '12H 雙底早進場：驗證期 1,260 筆 +0.25R（觀察，沒贏 BTC）', eRect12: '12H 矩形底部早進場：驗證期 1,039 筆 +0.28R（觀察，沒贏 BTC）', eRect1d: '日線矩形底部早進場：驗證期 267 筆 +0.64R', eTri1d: '日線三重底早進場：驗證期 176 筆 +0.67R', eDbl1d: '日線雙底早進場：驗證期 199 筆 +0.86R' };
   for (const it of r.items) {
     const tags = conf(it.dir, it);
     const ps = it.dir > 0 && it.state === 'forming' ? (r.early || []).filter((e) => e.kind === it.kind) : [];

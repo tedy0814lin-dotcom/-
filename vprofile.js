@@ -21,6 +21,8 @@ export function volumeProfile(bars, lo, hi, rows = VP_ROWS, va = 0.70) {
   return { rows, up, dn, vol, vmax, step, lo, poc, pocP: lo + (poc + 0.5) * step, val: lo + loI * step, vah: lo + (hiI + 1) * step,
     hvn: vol.map((v) => v >= 0.7 * vmax), lvn: vol.map((v) => v > 0 && v <= 0.3 * vmax) };
 }
+// POC 價位文字：>=1000 一位小數、>=1 兩位、其餘 4 位有效數字
+const pocPx = (v) => (v >= 1000 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toPrecision(4));
 // 畫出 VPVR：量條在 side（預設左）、價值區底色與 POC／VAH／VAL 橫線滿版，價位標籤在另一側
 export function vpSVG(vp, g) {
   const { left, right, yOf, rowPix, pw = 180, side = 'left' } = g;
@@ -41,7 +43,7 @@ export function vpSVG(vp, g) {
     }
   }
   const lblX = side === 'left' ? right - 2 : left + 3, anc = side === 'left' ? 'end' : 'start';
-  s += `<line x1="${left}" x2="${right}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${(yOf(vp.pocP) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-poc-t">POC</text>`;
+  s += `<line x1="${left}" x2="${right}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${(yOf(vp.pocP) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-poc-t">POC ${pocPx(vp.pocP)}</text>`;
   for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${left}" x2="${right}" y1="${yOf(v).toFixed(1)}" y2="${yOf(v).toFixed(1)}" class="vp-val-ln"/><text x="${lblX}" y="${(yOf(v) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-val-t">${lab}</text>`;
   return s;
 }
