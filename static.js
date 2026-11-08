@@ -61,4 +61,4 @@ export async function staticApi(path) {
   }
 }
 
-export async function snapStatus() { try { return await snap('_status', 30e3); } catch { return null; } }
+export async function snapStatus(ttl = 30e3) { try { return await snap('_status', ttl); } catch { return null; } }

@@ -2,7 +2,7 @@
 import { buildCrypto, CRYPTO_SIGNALS, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
-import { staticApi } from '/static.js';
+import { staticApi, snapStatus } from '/static.js';
 import { createPatTab } from '/patTab.js';
 import { createStrategyTab } from '/strategyTab.js';
 import { createLogTab } from '/logTab.js';
@@ -278,6 +278,7 @@ function renderChips() {
 }
 
 function renderStatus() {
+  if (!freshSt) loadFresh();
   const d = state.data[state.tab];
   const el = $('status');
   el.classList.toggle('err', !!state.error[state.tab]);
@@ -568,7 +569,22 @@ $('logout').addEventListener('click', async () => {
 
 // 加密貨幣每 5 分鐘自動更新（分頁在背景時不更新）
 setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto'); }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden) renderStatus(); }, 30 * 1000); // 讓「幾分鐘前」自己走
+// 每個分頁共用的「資料多新」提示（策略、型態、數據記錄等頁自己沒有這行，所以放在最上面）
+let freshSt = null;
+function renderFresh() {
+  const el = $('fresh'); if (!el) return;
+  if (!freshSt) { el.textContent = ''; return; }
+  const one = (label, key, warnMin) => {
+    const s = freshSt[key]; if (!s || !s.at) return '';
+    const at = s.ok === false ? (s.last || s.at) : s.at, old = warnMin && Date.now() - at > warnMin * 60e3;
+    const d = new Date(at), tag = d.toDateString() === new Date().toDateString() ? '' : `${d.getMonth() + 1}/${d.getDate()} `;
+    return `${label} <b>${tag}${timeFmt(at)}</b>（${ageFmt(at)}）${s.ok === false ? ' <span class="warn">上次更新失敗</span>' : old ? ' <span class="warn">偏舊</span>' : ''}`;
+  };
+  el.innerHTML = '資料時間：' + [one('加密', 'crypto', 45), one('台股', 'twstock', 0)].filter(Boolean).join('　·　');
+}
+async function loadFresh() { const s = await snapStatus(55e3); if (s) freshSt = s; renderFresh(); }
+loadFresh(); setInterval(() => { if (!document.hidden) loadFresh(); }, 60 * 1000);
+setInterval(() => { if (!document.hidden) { renderStatus(); renderFresh(); } }, 30 * 1000); // 讓「幾分鐘前」自己走
 
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
