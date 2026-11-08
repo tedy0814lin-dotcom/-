@@ -214,12 +214,15 @@ function cryptoCard(r) {
       ${metric('資金費率', signed(r.funding, 4, '%'), '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
       ${r.topLS != null ? metric('大戶多空比', r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)
         : r.okxTop ? metric('大戶多空比', r.okxTop.now.toFixed(2), `<span class="${cls(r.okxTop.chg)}">24h ${signed(r.okxTop.chg, 2)}</span> <span class="muted">OKX</span>`)
+        : r.gate?.top ? metric('大戶多空比', r.gate.top.now.toFixed(2), `<span class="${cls(r.gate.top.chg)}">24h ${signed(r.gate.top.chg, 2)}</span> <span class="muted">Gate</span>`)
         : metric('大戶多空比', '—', '')}
       ${r.globalLS != null ? metric('散戶多空比', r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)
         : r.okxAcc ? metric('散戶多空比', r.okxAcc.now.toFixed(2), `<span class="${cls(r.okxAcc.chg)}">24h ${signed(r.okxAcc.chg, 2)}</span> <span class="muted">OKX</span>`)
+        : r.gate?.acc ? metric('散戶多空比', r.gate.acc.now.toFixed(2), `<span class="${cls(r.gate.acc.chg)}">24h ${signed(r.gate.acc.chg, 2)}</span> <span class="muted">Gate</span>`)
         : metric('散戶多空比', '—', '')}
       ${r.cvd24 != null ? metric('CVD 24h', (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))
         : r.okxCvd ? metric('CVD 24h', signed(r.okxCvd.r24, 1, '%'), `淨買佔成交量 <span class="muted">OKX</span>`, cls(r.okxCvd.r24))
+        : r.gate?.cvd?.r24 != null ? metric('CVD 24h', signed(r.gate.cvd.r24, 1, '%'), `淨買佔成交量 <span class="muted">Gate</span>`, cls(r.gate.cvd.r24))
         : metric('CVD 24h', '—', '')}
     </div>
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
