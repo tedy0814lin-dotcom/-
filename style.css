@@ -382,3 +382,5 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .cr-h { font-weight: 600; margin: 6px 0 2px; }
 .cr-i { line-height: 1.5; padding-left: 2px; }
 .cr-miss { color: var(--muted); }
+.cr-label { margin-top: 8px; font-size: 12.5px; }
+.cr-label b { color: var(--accent); font-weight: 600; }

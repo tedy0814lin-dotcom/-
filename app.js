@@ -1,5 +1,5 @@
 // 籌碼雷達前端：讀 /api 的資料，畫成卡片，提供搜尋、排序、訊號篩選
-import { buildCrypto, CRYPTO_SIGNALS, chipRef, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
+import { buildCrypto, CRYPTO_SIGNALS, chipLabel, chipRef, cryptoSignals, cryptoScore, structSignals, chochWhy, chochKeys } from '/lib/cryptoCore.js';
 import { fetchExchanges, mergeExchanges, normBase, EXCHANGES } from '/lib/exchanges.js';
 import { CATS, classify } from '/lib/categories.js';
 import { staticApi } from '/static.js';
@@ -188,13 +188,13 @@ function catBlock(r, why) {
   return lines.join('');
 }
 
-// ---------- 籌碼數據面板（只列數據，不下判斷、不計分）----------
+// ---------- 籌碼數據面板（只列數據；上方一行簡單判斷，不計分）----------
 function chipRefBlock(r) {
-  const c = chipRef(r);
+  const c = chipRef(r), lb = chipLabel(r);
   const layers = c.layers.map((l) => `<div class="cr-layer"><div class="cr-h">${esc(l.title)}</div>
     ${l.items.map((t) => `<div class="cr-i">・ ${esc(t)}</div>`).join('')}
     ${l.miss.map((m) => `<div class="cr-i cr-miss">⚠ ${esc(m)}</div>`).join('')}</div>`).join('');
-  return `<details class="chipref"><summary>籌碼數據<span class="muted">　持倉・費率・CVD・大戶・爆倉・訂單簿</span></summary>${layers}</details>`;
+  return `${lb ? `<div class="cr-label"><span class="muted">籌碼</span> <b>${esc(lb.t)}</b><span class="muted">　${esc(lb.d)}</span></div>` : ''}<details class="chipref"><summary>籌碼數據<span class="muted">　持倉・費率・CVD・大戶・爆倉・訂單簿</span></summary>${layers}</details>`;
 }
 
 // ---------- 卡片 ----------
