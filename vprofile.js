@@ -42,8 +42,11 @@ export function vpSVG(vp, g) {
       if (vp.lvn[k]) s += `<line x1="${(right - pw).toFixed(1)}" x2="${right}" y1="${yc.toFixed(1)}" y2="${yc.toFixed(1)}" class="vp-lvn"/>`;
     }
   }
-  const lblX = side === 'left' ? right - 2 : left + 3, anc = side === 'left' ? 'end' : 'start';
-  s += `<line x1="${left}" x2="${right}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${(yOf(vp.pocP) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-poc-t">${pocPx(vp.pocP)}</text>`;
-  for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${left}" x2="${right}" y1="${yOf(v).toFixed(1)}" y2="${yOf(v).toFixed(1)}" class="vp-val-ln"/><text x="${lblX}" y="${(yOf(v) - 3).toFixed(1)}" text-anchor="${anc}" class="vp-t vp-val-t">${lab}</text>`;
+  // 線只畫到量條長度，價格直接寫在線尾（成交量的峰旁邊），避免整條橫線擋住 K 棒
+  const x1 = side === 'left' ? left : right - pw, x2 = side === 'left' ? left + pw : right;
+  const lblX = side === 'left' ? x2 + 4 : x1 - 4, anc = side === 'left' ? 'start' : 'end';
+  const ty = (v) => (yOf(v) + 3.5).toFixed(1);
+  s += `<line x1="${x1}" x2="${x2}" y1="${yOf(vp.pocP).toFixed(1)}" y2="${yOf(vp.pocP).toFixed(1)}" class="vp-poc"/><text x="${lblX}" y="${ty(vp.pocP)}" text-anchor="${anc}" class="vp-t vp-poc-t">${pocPx(vp.pocP)}</text>`;
+  for (const [v, lab] of [[vp.vah, 'VAH'], [vp.val, 'VAL']]) s += `<line x1="${x1}" x2="${x2}" y1="${yOf(v).toFixed(1)}" y2="${yOf(v).toFixed(1)}" class="vp-val-ln"/><text x="${lblX}" y="${ty(v)}" text-anchor="${anc}" class="vp-t vp-val-t">${lab}</text>`;
   return s;
 }

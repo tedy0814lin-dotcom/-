@@ -291,7 +291,7 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .pc-val-t { fill: var(--muted); }
 
 /* ---------- 共用：成交量分布 VPVR（型態頁、維加斯通道頁）---------- */
-.vp-t { font-size: 10.5px; }
+.vp-t { font-size: 10.5px; paint-order: stroke; stroke: var(--bg, #0b0f14); stroke-width: 3px; stroke-linejoin: round; }
 .vp-up { fill: #3f86c9; opacity: .32; }
 .vp-dn { fill: var(--accent); opacity: .30; }
 .vp-up.vp-hi { opacity: .62; }
