@@ -120,7 +120,7 @@ function chartRaw(card) {
 }
 
 export function createPatTab({ api, el }) {
-  const st = { market: 'tw', tf: '4h', loading: false, progress: '', error: '', loaded: false, results: {}, names: {}, scanned: 0, total: 0, miss: 0, day: '', kind: '', dir: 0, state: '', need: '', page: 1, vp: (() => { try { return localStorage.getItem('wr_pat_vp') !== '0'; } catch { return true; } })() };
+  const st = { market: 'tw', tf: '4h', loading: false, progress: '', error: '', loaded: false, results: {}, names: {}, scanned: 0, total: 0, miss: 0, day: '', kind: '', dir: 0, state: '', need: '', page: 1, q: '', vp: (() => { try { return localStorage.getItem('wr_pat_vp') !== '0'; } catch { return true; } })() };
 
   async function load(force = false) {
     if (st.loading && !st.switching) return;
@@ -160,7 +160,9 @@ export function createPatTab({ api, el }) {
   function list() {
     let cards = [];
     for (const [code, r] of Object.entries(st.results)) if (r && r.items) cards.push(...cardsOf(code, r));
-    const total = cards.length;
+    const total = new Set(cards.map((c) => c.code)).size;
+    const q = st.q.trim().toLowerCase();
+    if (q) cards = cards.filter((c) => c.code.toLowerCase().includes(q) || (st.names[c.code] || '').toLowerCase().includes(q));
     cards = cards.filter((c) => {
       if (st.dir && c.it.dir !== st.dir) return false;
       if (st.state && c.it.state !== st.state) return false;
@@ -176,7 +178,14 @@ export function createPatTab({ api, el }) {
     });
     const stOrd = { formed: 0, forming: 1, candle: 2 };
     cards.sort((a, b) => b.score - a.score || stOrd[a.it.state] - stOrd[b.it.state] || (a.it.distPct ?? a.it.ago ?? 0) - (b.it.distPct ?? b.it.ago ?? 0));
-    return { cards, total };
+    // 一檔只留一張（排序最前的那個型態），其餘型態名稱收在 others
+    const seen = new Map(), one = [];
+    for (const c of cards) {
+      const f = seen.get(c.code);
+      if (f) { if (!f.others.includes(c.it.name) && f.it.name !== c.it.name) f.others.push(c.it.name); continue; }
+      c.others = []; seen.set(c.code, c); one.push(c);
+    }
+    return { cards: one, total };
   }
 
   function cardHtml(c) {
@@ -185,7 +194,7 @@ export function createPatTab({ api, el }) {
     const info = it.state === 'candle' ? '' : `<div class="pc-info muted small">頸線 <b class="num">${px(it.neck)}</b>・停損參考 <b class="num">${px(it.stop)}</b>（${(Math.abs(1 - it.stop / r.close) * 100).toFixed(1)}%）・收盤 <b class="num">${px(r.close)}</b></div>`;
     return `<article class="pc-card">
       <header><div><b class="num">${esc(st.market === 'tw' ? code : code.replace(/USDT$/, ''))}</b> ${esc(st.names[code] || (st.market === 'tw' ? '' : 'USDT 永續・' + st.tf.toUpperCase()))}</div>
-        <div class="pc-tags"><span class="pc-k ${bull ? 'up' : 'down'}">${bull ? '偏多' : '偏空'}</span><span class="pc-name">${esc(it.name)}</span><span class="muted small">${esc(stTxt)}</span></div></header>
+        <div class="pc-tags"><span class="pc-k ${bull ? 'up' : 'down'}">${bull ? '偏多' : '偏空'}</span><span class="pc-name">${esc(it.name)}</span><span class="muted small">${esc(stTxt)}</span></div>${c.others && c.others.length ? `<div class="muted small">同一檔另有：${esc(c.others.join('、'))}</div>` : ''}</header>
       ${chart(c)}
       <div class="pc-conf">${c.tags.length ? c.tags.map((t) => `<span class="pc-c ${t.k}">${esc(t.t)}</span>`).join('') : '<span class="muted small">沒有量、K 棒或 MACD 背離確認</span>'}</div>
       ${info}</article>`;
@@ -213,6 +222,7 @@ export function createPatTab({ api, el }) {
         <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量 ≥${MINV} 張的 ${st.total} 檔上市櫃股票（日線）` : `BingX USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 ${cards.length} 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
         <button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>
       <div class="toolbar">
+        <input id="pat-q" class="sort" type="search" placeholder="查代號／名稱，例如 2330 或 BTC" value="${esc(st.q)}" aria-label="搜尋代號" style="min-width:12em">
         ${sel('pat-dir', st.dir, [[0, '偏多＋偏空'], [1, '只看偏多'], [-1, '只看偏空']], '方向')}
         ${sel('pat-state', st.state, [['', '全部狀態'], ['formed', '已經形成'], ['forming', '正在形成']], '狀態')}
         ${sel('pat-kind', st.kind, [['', '全部型態'], ...KIND_OPTS], '型態')}
@@ -223,7 +233,7 @@ export function createPatTab({ api, el }) {
       <div class="status err" style="border:1px solid var(--down)">${st.market === 'cx'
         ? '加密貨幣：綠底「回測通過」＝底部早進場（型態一成形就進、不等突破；每個型態各自挑參數，2025-11 之後驗證通過，全期也贏同期持有 BTC）：12H 三重底、菱形底，日線雙底、矩形、三重底；12H 雙底、矩形只算觀察。已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。其他型態與 K 棒型態沒有通過回測，只供看圖。'
         : '台股：日線型態（突破進場與底部早進場都測過，約 1,900 檔、2020–2026、扣 0.585%）沒有一個贏過同期持有 0050，K 棒型態也沒有逐一回測，所以<b>不計分、不推播</b>，只供看圖。'}排序＝回測通過最前，其次確認越多越前面（有量、同方向 K 棒型態、同方向 MACD 背離、持續背離）。</div>
-      <div class="pc-grid">${shown.map(cardHtml).join('') || '<div class="muted small">目前沒有符合的型態。</div>'}</div>
+      <div class="pc-grid">${shown.map(cardHtml).join('') || `<div class="muted small">${st.q.trim() ? `找不到「${esc(st.q.trim())}」：這檔不在這次掃描範圍內（${st.market === 'tw' ? `成交量前 ${TOP} 檔`: `成交額前 ${CTOP} 名`}），或目前沒有符合篩選條件的型態。` : '目前沒有符合的型態。'}</div>`}</div>
       ${shown.length < cards.length ? `<div style="text-align:center;margin:12px"><button class="refresh" id="pat-more" type="button">再顯示 ${Math.min(PAGE, cards.length - shown.length)} 張（還有 ${cards.length - shown.length} 張）</button></div>` : ''}
       <details class="guide">
         <summary>怎麼判斷的、圖上的線是什麼</summary>
@@ -243,6 +253,8 @@ export function createPatTab({ api, el }) {
     const bind = (id, key, num) => { el.querySelector('#' + id).onchange = (e) => { st[key] = num ? +e.target.value : e.target.value; st.page = 1; render(); }; };
     bind('pat-dir', 'dir', true); bind('pat-state', 'state'); bind('pat-kind', 'kind'); bind('pat-need', 'need');
     el.querySelector('#pat-vp').onchange = (e) => { st.vp = e.target.checked; try { localStorage.setItem('wr_pat_vp', st.vp ? '1' : '0'); } catch {} render(); };
+    const qi = el.querySelector('#pat-q');
+    qi.oninput = (e) => { st.q = e.target.value; st.page = 1; render(); const n = el.querySelector('#pat-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
     const more = el.querySelector('#pat-more'); if (more) more.onclick = () => { st.page++; render(); };
   }
 

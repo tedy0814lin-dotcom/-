@@ -401,3 +401,4 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .ch-r { fill: var(--accent); font-size: 11.5px; }
 .ch-tick { fill: var(--muted); font-size: 10.5px; }
 .ch-empty { fill: var(--muted); font-size: 12px; }
+.pc-card header .muted.small { flex-basis: 100%; }
