@@ -5,6 +5,7 @@ import { CATS, classify } from '/lib/categories.js';
 import { staticApi } from '/static.js';
 import { createPatTab } from '/patTab.js';
 import { createStrategyTab } from '/strategyTab.js';
+import { openChart } from '/chartView.js';
 import { createLogTab } from '/logTab.js';
 import { TW_SIGNALS, twPick, applyTwHist, twInRange } from '/lib/twCore.js';
 
@@ -203,6 +204,7 @@ function cryptoCard(r) {
     <div class="card-head">
       <span class="sym">${esc(r.base)}</span>
       ${catBadge(r)}
+      <button type="button" class="ghost chart-btn" data-chart="${esc(r.symbol)}" title="籌碼圖表：K線、持倉、爆倉、資金費率、大戶多空比">圖表</button>
       <div class="price"><span class="p num">${price(r.price)}</span><span class="c num ${cls(r.chg24)}">${signed(r.chg24, 2, '%')}</span></div>
     </div>
     <div class="metrics">
@@ -210,9 +212,15 @@ function cryptoCard(r) {
         : metric('持倉量', r.oi == null ? '—' : '$' + big(r.oi), `<span class="${cls(r.oiChg24)}">24h ${signed(r.oiChg24, 1, '%')}</span>`)}
       ${metric('24h 振幅', r.range24 == null ? '—' : r.range24.toFixed(1) + '%', `持倉 4h <span class="${cls(r.oiChg4)}">${signed(r.oiChg4, 1, '%')}</span>`)}
       ${metric('資金費率', signed(r.funding, 4, '%'), '', r.funding >= 0.05 ? 'up' : r.funding <= -0.03 ? 'down' : '')}
-      ${metric('大戶多空比', r.topLS == null ? '—' : r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)}
-      ${metric('散戶多空比', r.globalLS == null ? '—' : r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)}
-      ${metric('CVD 24h', r.cvd24 == null ? '—' : (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))}
+      ${r.topLS != null ? metric('大戶多空比', r.topLS.toFixed(2), `<span class="${cls(r.topLSChg)}">24h ${signed(r.topLSChg, 2)}</span>`)
+        : r.okxTop ? metric('大戶多空比', r.okxTop.now.toFixed(2), `<span class="${cls(r.okxTop.chg)}">24h ${signed(r.okxTop.chg, 2)}</span> <span class="muted">OKX</span>`)
+        : metric('大戶多空比', '—', '')}
+      ${r.globalLS != null ? metric('散戶多空比', r.globalLS.toFixed(2), `<span class="${cls(r.globalLSChg)}">24h ${signed(r.globalLSChg, 2)}</span>`)
+        : r.okxAcc ? metric('散戶多空比', r.okxAcc.now.toFixed(2), `<span class="${cls(r.okxAcc.chg)}">24h ${signed(r.okxAcc.chg, 2)}</span> <span class="muted">OKX</span>`)
+        : metric('散戶多空比', '—', '')}
+      ${r.cvd24 != null ? metric('CVD 24h', (r.cvd24 >= 0 ? '+$' : '-$') + big(Math.abs(r.cvd24)), `<span class="${cls(r.cvdRatio)}">${signed(r.cvdRatio, 1, '%')}</span> 買賣比 ${r.taker == null ? '—' : r.taker.toFixed(2)}`, cls(r.cvd24))
+        : r.okxCvd ? metric('CVD 24h', signed(r.okxCvd.r24, 1, '%'), `淨買佔成交量 <span class="muted">OKX</span>`, cls(r.okxCvd.r24))
+        : metric('CVD 24h', '—', '')}
     </div>
     <div class="spark-row"><span class="k">持倉 24h</span>${spark(r.spark)}</div>
     ${r.cvdSpark && r.cvdSpark.length > 1 ? `<div class="spark-row"><span class="k">CVD 24h</span>${spark(r.cvdSpark)}</div>` : ''}
@@ -554,6 +562,11 @@ $('sort').addEventListener('change', (e) => { state.sort[state.tab] = e.target.v
 $('refresh').addEventListener('click', () => load(state.tab, true));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(markSeen, 4000); });
 $('alerts').addEventListener('click', (e) => { if (e.target.closest('.alert-row')) markSeen(); });
+$('grid').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-chart]'); if (!b) return;
+  const r = (state.data.crypto?.rows || []).find((x) => x.symbol === b.dataset.chart); if (!r) return;
+  openChart({ sym: r.symbol, base: r.base, inst: state.xchg?.byBase?.[normBase(r.base)]?.OKX?.sym || null });
+});
 $('more').addEventListener('click', () => { state.limit += 60; render(); });
 // 亮／暗模式：預設跟系統，按鈕切換後記住（localStorage wr_theme）
 (function themeToggle() {
