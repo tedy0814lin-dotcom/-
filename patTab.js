@@ -40,6 +40,7 @@ function cardsOf(code, r) {
     const tags = conf(it.dir, it);
     const ps = it.dir > 0 && it.state === 'forming' ? (r.early || []).filter((e) => e.kind === it.kind) : [];
     for (const e of ps) tags.unshift({ t: `回測通過・${PASS[e.key] || e.key}（${e.ago ? '前一根' : '剛'}成形，下一根開盤進、停損 ${px(e.stop)}、4R）`, k: 'pass' }); out.push({ code, r, it, tags, score: tags.length + (tags.some((x) => x.k === 'div2') ? 1 : 0) + (ps.length ? 10 : 0) }); }
+  if (!r.items.length && !(r.early || []).length && !out.length) out.push({ code, r, it: { dir: 0, kind: 'none', name: '沒有偵測到型態', state: 'none', pts: [], neckLine: null, lines: null }, tags: [], score: -1, plain: true });
   const EN = { rectangle: '矩形整理（底部）', triple_bottom: '三重底', double_bottom: '雙底', diamond: '菱形（底部）' };
   for (const e of r.early || []) {
     if (r.items.some((x) => x.dir > 0 && x.state === 'forming' && x.kind === e.kind)) continue;
@@ -160,10 +161,12 @@ export function createPatTab({ api, el }) {
   function list() {
     let cards = [];
     for (const [code, r] of Object.entries(st.results)) if (r && r.items) cards.push(...cardsOf(code, r));
-    const total = new Set(cards.map((c) => c.code)).size;
+    const total = new Set(cards.filter((c) => !c.plain).map((c) => c.code)).size;
     const q = st.q.trim().toLowerCase();
     if (q) cards = cards.filter((c) => c.code.toLowerCase().includes(q) || (st.names[c.code] || '').toLowerCase().includes(q));
+    else cards = cards.filter((c) => !c.plain); // 沒有型態的股票只在搜尋時才出現
     cards = cards.filter((c) => {
+      if (c.plain) return true;
       if (st.dir && c.it.dir !== st.dir) return false;
       if (st.state && c.it.state !== st.state) return false;
       if (!kindMatch(c.it, st.kind)) return false;
@@ -176,7 +179,7 @@ export function createPatTab({ api, el }) {
       if (st.need === 'pass' && !has('pass')) return false;
       return true;
     });
-    const stOrd = { formed: 0, forming: 1, candle: 2 };
+    const stOrd = { formed: 0, forming: 1, candle: 2, none: 3 };
     cards.sort((a, b) => b.score - a.score || stOrd[a.it.state] - stOrd[b.it.state] || (a.it.distPct ?? a.it.ago ?? 0) - (b.it.distPct ?? b.it.ago ?? 0));
     // 一檔只留一張（排序最前的那個型態），其餘型態名稱收在 others
     const seen = new Map(), one = [];
@@ -189,14 +192,14 @@ export function createPatTab({ api, el }) {
   }
 
   function cardHtml(c) {
-    const { it, r, code } = c, bull = it.dir > 0;
-    const stTxt = it.state === 'formed' ? (it.ago === 0 ? '剛突破' : `${it.ago} 根前${bull ? '突破' : '跌破'}`) : it.state === 'forming' ? `正在形成・距${bull ? '頸線' : '頸線（跌破價）'} ${it.distPct == null ? '—' : it.distPct.toFixed(1) + '%'}` : 'K 棒型態';
-    const info = it.state === 'candle' ? '' : `<div class="pc-info muted small">頸線 <b class="num">${px(it.neck)}</b>・停損參考 <b class="num">${px(it.stop)}</b>（${(Math.abs(1 - it.stop / r.close) * 100).toFixed(1)}%）・收盤 <b class="num">${px(r.close)}</b></div>`;
+    const { it, r, code } = c, bull = it.dir > 0, plain = it.state === 'none';
+    const stTxt = plain ? '' : it.state === 'formed' ? (it.ago === 0 ? '剛突破' : `${it.ago} 根前${bull ? '突破' : '跌破'}`) : it.state === 'forming' ? `正在形成・距${bull ? '頸線' : '頸線（跌破價）'} ${it.distPct == null ? '—' : it.distPct.toFixed(1) + '%'}` : 'K 棒型態';
+    const info = it.state === 'candle' || plain ? '' : `<div class="pc-info muted small">頸線 <b class="num">${px(it.neck)}</b>・停損參考 <b class="num">${px(it.stop)}</b>（${(Math.abs(1 - it.stop / r.close) * 100).toFixed(1)}%）・收盤 <b class="num">${px(r.close)}</b></div>`;
     return `<article class="pc-card">
       <header><div><b class="num">${esc(st.market === 'tw' ? code : code.replace(/USDT$/, ''))}</b> ${esc(st.names[code] || (st.market === 'tw' ? '' : 'USDT 永續・' + st.tf.toUpperCase()))}</div>
-        <div class="pc-tags"><span class="pc-k ${bull ? 'up' : 'down'}">${bull ? '偏多' : '偏空'}</span><span class="pc-name">${esc(it.name)}</span><span class="muted small">${esc(stTxt)}</span></div>${c.others && c.others.length ? `<div class="muted small">同一檔另有：${esc(c.others.join('、'))}</div>` : ''}</header>
+        <div class="pc-tags">${plain ? '' : `<span class="pc-k ${bull ? 'up' : 'down'}">${bull ? '偏多' : '偏空'}</span>`}<span class="pc-name">${esc(it.name)}</span><span class="muted small">${esc(stTxt)}</span></div>${c.others && c.others.length ? `<div class="muted small">同一檔另有：${esc(c.others.join('、'))}</div>` : ''}</header>
       ${chart(c)}
-      <div class="pc-conf">${c.tags.length ? c.tags.map((t) => `<span class="pc-c ${t.k}">${esc(t.t)}</span>`).join('') : '<span class="muted small">沒有量、K 棒或 MACD 背離確認</span>'}</div>
+      <div class="pc-conf">${c.tags.length ? c.tags.map((t) => `<span class="pc-c ${t.k}">${esc(t.t)}</span>`).join('') : `<span class="muted small">${plain ? `目前沒有偵測到型態，只顯示 K 線與成交量分布（收盤 ${px(r.close)}）` : '沒有量、K 棒或 MACD 背離確認'}</span>`}</div>
       ${info}</article>`;
   }
 
@@ -230,14 +233,14 @@ export function createPatTab({ api, el }) {
         codes = codes.filter((c) => !st.results[c]);
         if (!codes.length) return;
         st.lookup = true; renderBody();
-        const j = await api(`/api/twhist?pat=1&codes=${codes.join(',')}`);
+        const j = await api(`/api/twhist?pat=1&plain=1&codes=${codes.join(',')}`);
         Object.assign(st.results, j.results);
         for (const c of codes) if (st.allNames && !st.names[c]) st.names[c] = st.allNames[c] || '';
       } else {
         const b = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/USDT$/, ''); if (!b) return;
         const sym = b + 'USDT'; if (st.results[sym]) return;
         st.lookup = true; renderBody();
-        const j = await api(`/api/twhist?pat=1&market=crypto&tf=${st.tf}&symbols=${sym}`);
+        const j = await api(`/api/twhist?pat=1&market=crypto&tf=${st.tf}&plain=1&symbols=${sym}`);
         Object.assign(st.results, j.results); if (!st.names[sym]) st.names[sym] = '';
       }
     } catch { /* 查不到就維持「找不到」 */ } finally { st.lookup = false; if (st.q.trim() === raw) renderBody(); }
