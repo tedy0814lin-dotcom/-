@@ -30,7 +30,7 @@ const status = (() => { try { return JSON.parse(fs.readFileSync(path.join(OUT, '
 const tpe = new Date(Date.now() + 8 * 3600e3), hr = tpe.getUTCHours(), dow = tpe.getUTCDay();
 const twAge = Date.now() - (status.twstock?.at || 0);
 const WITH_TW = process.env.TW === '1' || (ONLY && [...ONLY].some((k) => /^(tw|pat_tw|vegas_.*tw|avg)/.test(k)))
-  || (!ONLY && ((dow >= 1 && dow <= 5 && [9, 10, 11, 12, 13, 17, 21].includes(hr) && twAge > 50 * 60e3) || twAge > 6 * 3600e3));
+  || (!ONLY && ((dow >= 1 && dow <= 5 && [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(hr) && twAge > 50 * 60e3) || twAge > 6 * 3600e3));
 const write = (key, data) => fs.writeFileSync(path.join(OUT, key + '.json'), JSON.stringify(data));
 const read = (key) => { try { return JSON.parse(fs.readFileSync(path.join(OUT, key + '.json'), 'utf8')); } catch { return null; } };
 const pool = async (items, n, fn) => { let i = 0; const out = []; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); } })); return out; };

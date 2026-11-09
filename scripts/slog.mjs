@@ -28,7 +28,7 @@ const REL_MIN = 1.5, CHG_MIN = 0.04, LIQ_MIN = 500, TOP_N = 3, KEEP = 26;
 try {
   const tp = new Date(now + 8 * 3600e3), ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
   const av = rd('twavg.json', { days: [], rows: {}, names: {}, tried: [] });
-  const todayOk = tp.getUTCHours() >= 19; // 上櫃資料收盤後約 17～18 點才齊
+  const todayOk = tp.getUTCHours() >= 14; // 收盤後資料公布時間不一定：api/avgtrade 會自己檢查今天的資料齊不齊（沒齊就不算、下次再抓）
   const want = [];
   for (let i = 0; i < 45; i++) { // 近 45 個日曆天的平日
     const d = new Date(tp.getTime() - i * 864e5), w = d.getUTCDay(), y = ymd(d);

@@ -77,6 +77,8 @@ export default async function handler(req, res) {
     try { b = await tpex(ymd); } catch (e) { miss.push(`${ymd} 上櫃：${e.message}`); }
     await sleep(Number(process.env.WR_SLEEP ?? 300));
     if (!a && !b) continue; // 兩邊都沒資料 = 休市
+    // 今天的資料公布得早晚不一：兩邊都要齊（上市約 1,000 檔、上櫃約 880 檔）才算，沒齊就當「還沒有」，下次再抓，不然會拿到半份資料算出錯的選股
+    if (ymd === new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '') && (!a || !b || Object.keys(a).length < 700 || Object.keys(b).length < 600)) { miss.push(`${ymd} 今天的資料還沒齊`); continue; }
     const day = {};
     for (const [mkt, src] of [['上市', a], ['上櫃', b]]) {
       for (const [code, [name, close, shares, trades]] of Object.entries(src || {})) {
