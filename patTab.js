@@ -3,7 +3,7 @@
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
 const KEY = 'wr_pat_v8_';
-const MINV = 1000, TOP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
+const MINV = 1000, TOP = 500, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const bucket = (mkt, tf) => (mkt === 'tw' ? taipeiDay() : String(Math.floor(Date.now() / ((tf === '4h' ? 10 : 30) * 60e3))));
@@ -200,6 +200,48 @@ export function createPatTab({ api, el }) {
       ${info}</article>`;
   }
 
+  function bodyHtml(cards, shown) {
+    const q = st.q.trim();
+    const empty = q
+      ? (st.lookup ? `查詢「${esc(q)}」中…` : `找不到「${esc(q)}」的型態：不在這次掃描清單、或目前沒有符合篩選條件的型態（${st.market === 'tw' ? '台股可輸入 4 位數代號或股票名稱，沒掃過的會自動單獨查詢' : '輸入幣名如 BTC、ETH，沒掃過的會自動單獨查詢'}）。`)
+      : '目前沒有符合的型態。';
+    return `<div class="pc-grid">${shown.map(cardHtml).join('') || `<div class="muted small">${empty}</div>`}</div>
+      ${shown.length < cards.length ? `<div style="text-align:center;margin:12px"><button class="refresh" id="pat-more" type="button">再顯示 ${Math.min(PAGE, cards.length - shown.length)} 張（還有 ${cards.length - shown.length} 張）</button></div>` : ''}`;
+  }
+  // 只重畫卡片區，不動搜尋框（避免打注音／連打數字時輸入框被換掉）
+  function renderBody() {
+    const body = el.querySelector('#pat-body'); if (!body) return render();
+    const { cards } = list(); VP = st.vp;
+    body.innerHTML = bodyHtml(cards, cards.slice(0, st.page * PAGE));
+    const cnt = el.querySelector('#pat-cnt'); if (cnt) cnt.textContent = cards.length;
+    const more = el.querySelector('#pat-more'); if (more) more.onclick = () => { st.page++; renderBody(); };
+  }
+  // 掃描清單以外的股票：單獨查詢（台股 4 位數代號或名稱；加密貨幣幣名）
+  async function lookup(q) {
+    const raw = q.trim(); if (!raw || st.lookup || st.loading) return;
+    let codes = [];
+    try {
+      if (st.market === 'tw') {
+        if (/^\d{4}$/.test(raw)) codes = [raw];
+        else {
+          if (!st.allNames) { const tw = await api('/api/twstock'); st.allNames = Object.fromEntries((tw.rows || []).filter((r) => /^\d{4}$/.test(r.code)).map((r) => [r.code, r.name])); }
+          codes = Object.entries(st.allNames).filter(([, n]) => n.toLowerCase().includes(raw.toLowerCase())).map(([c]) => c).slice(0, 8);
+        }
+        codes = codes.filter((c) => !st.results[c]);
+        if (!codes.length) return;
+        st.lookup = true; renderBody();
+        const j = await api(`/api/twhist?pat=1&codes=${codes.join(',')}`);
+        Object.assign(st.results, j.results);
+        for (const c of codes) if (st.allNames && !st.names[c]) st.names[c] = st.allNames[c] || '';
+      } else {
+        const b = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/USDT$/, ''); if (!b) return;
+        const sym = b + 'USDT'; if (st.results[sym]) return;
+        st.lookup = true; renderBody();
+        const j = await api(`/api/twhist?pat=1&market=crypto&tf=${st.tf}&symbols=${sym}`);
+        Object.assign(st.results, j.results); if (!st.names[sym]) st.names[sym] = '';
+      }
+    } catch { /* 查不到就維持「找不到」 */ } finally { st.lookup = false; if (st.q.trim() === raw) renderBody(); }
+  }
   function render() {
     if (!el.isConnected) return;
     const status = st.error ? `<div class="status err">${esc(st.error)}</div>` : '';
@@ -219,7 +261,7 @@ export function createPatTab({ api, el }) {
       <div class="toolbar">
         ${sel('pat-mkt', st.market, [['tw', '台股（日線）'], ['cx', '加密貨幣']], '市場')}
         ${st.market === 'cx' ? sel('pat-tf', st.tf, [['4h', '4H'], ['12h', '12H'], ['1d', '日線']], '時區') : ''}
-        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量 ≥${MINV} 張的 ${st.total} 檔上市櫃股票（日線）` : `BingX USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 ${cards.length} 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
+        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量 ≥${MINV} 張的 ${st.total} 檔上市櫃股票（日線）` : `BingX USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 <span id="pat-cnt">${cards.length}</span> 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
         <button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>
       <div class="toolbar">
         <input id="pat-q" class="sort" type="search" placeholder="查代號／名稱，例如 2330 或 BTC" value="${esc(st.q)}" aria-label="搜尋代號" style="min-width:12em">
@@ -233,8 +275,7 @@ export function createPatTab({ api, el }) {
       <div class="status err" style="border:1px solid var(--down)">${st.market === 'cx'
         ? '加密貨幣：綠底「回測通過」＝底部早進場（型態一成形就進、不等突破；每個型態各自挑參數，2025-11 之後驗證通過，全期也贏同期持有 BTC）：12H 三重底、菱形底，日線雙底、矩形、三重底；12H 雙底、矩形只算觀察。已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。其他型態與 K 棒型態沒有通過回測，只供看圖。'
         : '台股：日線型態（突破進場與底部早進場都測過，約 1,900 檔、2020–2026、扣 0.585%）沒有一個贏過同期持有 0050，K 棒型態也沒有逐一回測，所以<b>不計分、不推播</b>，只供看圖。'}排序＝回測通過最前，其次確認越多越前面（有量、同方向 K 棒型態、同方向 MACD 背離、持續背離）。</div>
-      <div class="pc-grid">${shown.map(cardHtml).join('') || `<div class="muted small">${st.q.trim() ? `找不到「${esc(st.q.trim())}」：這檔不在這次掃描範圍內（${st.market === 'tw' ? `成交量前 ${TOP} 檔`: `成交額前 ${CTOP} 名`}），或目前沒有符合篩選條件的型態。` : '目前沒有符合的型態。'}</div>`}</div>
-      ${shown.length < cards.length ? `<div style="text-align:center;margin:12px"><button class="refresh" id="pat-more" type="button">再顯示 ${Math.min(PAGE, cards.length - shown.length)} 張（還有 ${cards.length - shown.length} 張）</button></div>` : ''}
+      <div id="pat-body">${bodyHtml(cards, shown)}</div>
       <details class="guide">
         <summary>怎麼判斷的、圖上的線是什麼</summary>
         <dl>
@@ -254,8 +295,12 @@ export function createPatTab({ api, el }) {
     bind('pat-dir', 'dir', true); bind('pat-state', 'state'); bind('pat-kind', 'kind'); bind('pat-need', 'need');
     el.querySelector('#pat-vp').onchange = (e) => { st.vp = e.target.checked; try { localStorage.setItem('wr_pat_vp', st.vp ? '1' : '0'); } catch {} render(); };
     const qi = el.querySelector('#pat-q');
-    qi.oninput = (e) => { st.q = e.target.value; st.page = 1; render(); const n = el.querySelector('#pat-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
-    const more = el.querySelector('#pat-more'); if (more) more.onclick = () => { st.page++; render(); };
+    let timer = null, composing = false;
+    const run = () => { st.q = qi.value; st.page = 1; renderBody(); clearTimeout(timer); timer = setTimeout(() => { if (!composing && !list().cards.length) lookup(qi.value); }, 600); };
+    qi.addEventListener('compositionstart', () => { composing = true; });
+    qi.addEventListener('compositionend', () => { composing = false; run(); });
+    qi.addEventListener('input', () => { if (!composing) run(); });
+    const more = el.querySelector('#pat-more'); if (more) more.onclick = () => { st.page++; renderBody(); };
   }
 
   return { load, render, get loaded() { return st.loaded; }, get loading() { return st.loading; } };
