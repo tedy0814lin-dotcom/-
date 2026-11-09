@@ -3,7 +3,7 @@
 // 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
 const KEY = 'wr_pat_v8_';
-const MINV = 1000, TOP = 500, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
+const MINV = 1000, TOP = 300, MAXP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const bucket = (mkt, tf) => (mkt === 'tw' ? taipeiDay() : String(Math.floor(Date.now() / ((tf === '4h' ? 10 : 30) * 60e3))));
@@ -134,7 +134,7 @@ export function createPatTab({ api, el }) {
       if (mkt === 'tw') {
         st.progress = '正在取得台股清單…'; render();
         const tw = await api('/api/twstock');
-        const rows = (tw.rows || []).filter((r) => r.volume >= MINV && r.close >= 10 && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, TOP);
+        const rows = (tw.rows || []).filter((r) => r.volume >= MINV && r.close >= 10 && r.close <= MAXP && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, TOP);
         st.names = Object.fromEntries(rows.map((r) => [r.code, r.name])); codes = rows.map((r) => r.code); batch = BATCH;
       } else {
         st.progress = '正在取得 BingX 永續合約清單…'; render();
@@ -261,7 +261,7 @@ export function createPatTab({ api, el }) {
       <div class="toolbar">
         ${sel('pat-mkt', st.market, [['tw', '台股（日線）'], ['cx', '加密貨幣']], '市場')}
         ${st.market === 'cx' ? sel('pat-tf', st.tf, [['4h', '4H'], ['12h', '12H'], ['1d', '日線']], '時區') : ''}
-        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描成交量 ≥${MINV} 張的 ${st.total} 檔上市櫃股票（日線）` : `BingX USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 <span id="pat-cnt">${cards.length}</span> 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
+        <div class="status" style="width:auto;flex:1">${st.market === 'tw' ? `掃描股價 10～${MAXP} 元、成交量 ≥${MINV} 張、成交量前 ${TOP} 名的 ${st.total} 檔上市櫃股票（日線）；其他股票在搜尋框輸入代號或名稱可單獨查` : `BingX USDT 永續成交額前 ${st.total} 名（${esc(st.tf.toUpperCase())}）`}・${esc(st.day)}・共 ${total} 張，符合 <span id="pat-cnt">${cards.length}</span> 張${st.miss ? `・${st.miss} 檔沒抓到` : ''}${st.loading ? '・' + esc(st.progress) : ''}</div>
         <button class="refresh" id="pat-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>
       <div class="toolbar">
         <input id="pat-q" class="sort" type="search" placeholder="查代號／名稱，例如 2330 或 BTC" value="${esc(st.q)}" aria-label="搜尋代號" style="min-width:12em">
@@ -285,7 +285,7 @@ export function createPatTab({ api, el }) {
           <dt>正在形成／已經形成</dt><dd>型態成形後最多等 15 根日線；收盤站上（跌破）頸線就算突破。「已經形成」只列最近 6 根內突破的。收斂三角形另外用趨勢線擬合（上下線收斂、至少 85% 收盤在兩線內）。</dd>
           <dt>確認</dt><dd>量＝突破（跌破）那天成交量 ≥ 前 20 日均量 ${VOLX} 倍（正在形成則看近 5 日均量 ≥ ${VOL5X} 倍）。K 棒型態＝最近 2 根內、方向相同。MACD 背離＝柱狀體「一段一段的波峰」比較（價格更高／低、柱狀體更低／高），最近 10 根內確認；連續 2 段以上才標「持續」。</dd>
           <dt>回測通過（綠底標籤）</dt><dd>只有加密貨幣「底部早進場」（12H 三重底、菱形底；日線雙底、矩形、三重底；12H 雙底、矩形為觀察）：型態一成形（最後一個低點被 2～3 倍 ATR 反彈確認）就在下一根開盤進場，不等突破頸線，停損＝型態低點下 0.1 ATR、4R 出場。幣安前 150 名 2020–2026 回測，前 75% 挑、後 25%（2025-11 之後）驗證通過，也已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。每個型態在 27 組參數裡各自挑。台股同樣方法（雙底＋MACD 背離最好，驗證期 401 筆 +0.19R）每筆仍輸同期持有 0050，所以台股沒有通過的。</dd>
-          <dt>限制</dt><dd>只掃當日成交量 ≥${MINV} 張、股價 ≥10 元的股票（最多 ${TOP} 檔，含上櫃）；Yahoo 資料偶爾缺漏。偵測邏輯與加密貨幣頁同一套（已和 Python 回測逐根對照）；加密貨幣 4H／12H 有部分型態通過回測，台股日線沒有。</dd>
+          <dt>限制</dt><dd>只掃當日成交量 ≥${MINV} 張、股價 10～${MAXP} 元的股票（成交量前 ${TOP} 檔，含上櫃）；不在清單的股票用搜尋框輸入 4 位數代號或名稱單獨查；Yahoo 資料偶爾缺漏。偵測邏輯與加密貨幣頁同一套（已和 Python 回測逐根對照）；加密貨幣 4H／12H 有部分型態通過回測，台股日線沒有。</dd>
         </dl>
       </details>`;
     el.querySelector('#pat-refresh').onclick = () => load(true);
