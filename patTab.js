@@ -206,7 +206,7 @@ export function createPatTab({ api, el }) {
   function bodyHtml(cards, shown) {
     const q = st.q.trim();
     const empty = q
-      ? (st.lookup ? `查詢「${esc(q)}」中…` : `找不到「${esc(q)}」的型態：不在這次掃描清單、或目前沒有符合篩選條件的型態（${st.market === 'tw' ? '台股可輸入 4 位數代號或股票名稱，沒掃過的會自動單獨查詢' : '輸入幣名如 BTC、ETH，沒掃過的會自動單獨查詢'}）。`)
+      ? (st.lookup ? `查詢「${esc(q)}」中…` : `找不到「${esc(q)}」：${st.market === 'tw' ? '台股請輸入 4 位數代號或股票名稱；全台股資料每天收盤後（約 16:00）更新一次，今天剛更新前查不到的股票請稍後再試，ETF 與 5 位數代號不支援。' : '加密貨幣只搜得到掃描清單內有型態的幣（成交額前 120 名）。'}`)
       : '目前沒有符合的型態。';
     return `<div class="pc-grid">${shown.map(cardHtml).join('') || `<div class="muted small">${empty}</div>`}</div>
       ${shown.length < cards.length ? `<div style="text-align:center;margin:12px"><button class="refresh" id="pat-more" type="button">再顯示 ${Math.min(PAGE, cards.length - shown.length)} 張（還有 ${cards.length - shown.length} 張）</button></div>` : ''}`;

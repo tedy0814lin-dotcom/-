@@ -125,7 +125,7 @@ if (WITH_TW) {
     return out;
   });
   await job('pat_tw', async () => {
-    const rows = (tw?.rows || []).filter((r) => r.volume >= 1000 && r.close >= 10 && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, 300);
+    const rows = (tw?.rows || []).filter((r) => r.volume >= 1000 && r.close >= 10 && r.close <= 300 && /^\d{4}$/.test(r.code)).sort((a, b) => b.volume - a.volume).slice(0, 300);
     const codes = rows.map((r) => r.code), results = {}, miss = []; let day = '';
     const parts = []; for (let i = 0; i < codes.length; i += 15) parts.push(codes.slice(i, i + 15));
     await pool(parts, 2, async (p) => { const j = await get('/api/twhist?pat=1&codes=' + p.join(',')); Object.assign(results, j.results); miss.push(...(j.miss || [])); day = j.day || day; });

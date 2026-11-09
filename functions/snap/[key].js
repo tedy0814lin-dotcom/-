@@ -4,8 +4,9 @@ import { currentUser, json } from '../../cf/auth.js';
 
 export async function onRequest({ request, env, params }) {
   if (!(await currentUser(env, request))) return json({ error: '請先登入' }, 401);
-  const BASE = env.SNAP_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap';
   const key = String(params.key || '');
+  // 全台股型態（每天收盤後算一次）放在 snap2 分支，檔名 pp_tw_<代號前兩碼>
+  const BASE = key.startsWith('pp_') ? (env.SNAP2_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap2') : (env.SNAP_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap');
   if (!/^[a-z0-9_]{1,40}$/i.test(key)) return json({ error: '名稱不對' }, 400);
   const headers = { 'User-Agent': 'whale-radar', 'Cache-Control': 'no-cache' };
   if (env.GH_TOKEN) headers.Authorization = 'Bearer ' + env.GH_TOKEN;

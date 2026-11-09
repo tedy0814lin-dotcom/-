@@ -1,0 +1,25 @@
+name: 全台股型態快照
+on:
+  schedule:
+    # 台北 15:40（UTC 07:40）週一～週五：收盤後算一次全部台股；週六 10:00 再補一次
+    - cron: '40 7 * * 1-5'
+    - cron: '0 2 * * 6'
+  workflow_dispatch:
+jobs:
+  patall:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    concurrency:
+      group: patall
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: timeout 3000 node scripts/patall.mjs
+        env:
+          SNAPSHOT: '1'
+          GITHUB_TOKEN: ${{ github.token }}

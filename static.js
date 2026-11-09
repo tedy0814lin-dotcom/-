@@ -38,6 +38,14 @@ export async function staticApi(path) {
           const all = await snap('pat_crypto_' + (q.tf || '4h'));
           return { results: pickKeys(all.results, list(q.symbols)), miss: [], tf: all.tf };
         }
+        if (q.plain) { // 單獨查一檔（沒有型態也要給圖）：讀每天收盤後算好的全台股分片
+          const cs = list(q.codes), res = {}; let day = '';
+          for (const sh of [...new Set(cs.map((c) => c.slice(0, 2)))]) {
+            const all = await snap('pp_tw_' + sh, 10 * 60e3).catch(() => null); // 這個分片不存在＝那段代號沒有股票
+            if (all) { day = all.day || day; Object.assign(res, pickKeys(all.results, cs)); }
+          }
+          return { results: res, miss: [], day };
+        }
         const all = await snap('pat_tw');
         return { results: pickKeys(all.results, list(q.codes)), miss: [], day: all.day };
       }
