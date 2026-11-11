@@ -247,7 +247,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-
 .pc-c { font-size: 12px; padding: 1px 8px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); }
 .pc-c.vol { color: var(--accent); border-color: var(--accent); }
 .pc-c.candle { color: var(--fg); border-color: var(--accent); }
-.pc-c.div, .pc-c.div2 { color: var(--up); border-color: var(--up); }
+.pc-c.div, .pc-c.div2 { color: var(--fg); border-color: var(--muted, var(--line)); border-style: dashed; }
 .pc-c.div2 { background: var(--chip-up); font-weight: 600; }
 .pc-info { margin-top: 4px; }
 .pc-c.pass { color: var(--accent-ink); background: var(--up); border-color: var(--up); font-weight: 600; }

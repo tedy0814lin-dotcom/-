@@ -1,8 +1,8 @@
 // 台股型態頁：掃描成交量 ≥1000 張的上市櫃股票日線，每個型態一張 K 線圖卡片（代號 名稱 型態 + K 線圖 + 畫出的型態）。
 // 型態：底部／向上突破 7 種＋圓弧底、V 底、擴散三角形、菱形，以及它們的偏空版（頭部／向下跌破，用鏡像偵測）；另有 K 棒型態（吞噬、孕線、錘子線、射擊之星、晨星／黃昏之星、貫穿／烏雲罩頂、平頭頂／底）。
-// 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）、同方向的 MACD 柱狀體背離（最近 10 根內）、持續背離（連續 2 段以上）。
+// 「確認」＝有量（突破日量 ≥1.5 倍 20 日均量）、同方向的 K 棒型態（最近 3 根內）。MACD 背離另外當「參考」標在卡片上（不算確認、不進排序；台股用 lib/macdRef.js 新版）。
 // 只做看圖參考：2026-11-03 台股 1,900 檔日線回測（扣 0.585%、前 75% 挑參數、後 25% 驗證），所有型態都沒有通過門檻，所以不計分、不推播。
-const KEY = 'wr_pat_v8_';
+const KEY = 'wr_pat_v9_';
 const MINV = 1000, TOP = 300, MAXP = 300, BATCH = 15, CTOP = 120, CBATCH = 12, PAGE = 12, VOLX = 1.5, VOL5X = 1.3;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const taipeiDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -14,6 +14,7 @@ function cacheSet(id, v) {
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
 
 import { volumeProfile, vpSVG, VP_ROWS } from '/vprofile.js';
+import { refText } from '/lib/macdRef.js';
 let VP = true; // 由 render 依使用者開關設定（成交量分布 VPVR）
 const KINDS = [
   ['double_bottom', '雙底／雙頂'], ['triple_bottom', '三重底／三重頂'], ['inv_HS', '頭肩底／頭肩頂'], ['rectangle', '矩形整理'], ['asc_triangle', '上升／下降三角形'],
@@ -24,6 +25,8 @@ const KIND_OPTS = KINDS.filter(([k]) => k !== 'conv_desc' && k !== 'conv_sym');
 const kindMatch = (it, k) => !k || it.kind === k || (k === 'conv_asc' && /^conv_(asc|desc|sym)$/.test(it.kind)) || (k === 'falling_wedge' && /^conv_(fwedge|rwedge)$/.test(it.kind));
 
 // 把一檔股票拆成卡片：每個型態一張；沒有型態但有 K 棒型態的，K 棒型態自己一張
+// 排序分數：背離（MACD 參考）不算——回測日線沒有資訊、週線只有連續 ≥3 次有，不能拿來把卡片排前面
+const scoreOf = (tags) => tags.filter((x) => x.k !== 'div' && x.k !== 'div2').length;
 function cardsOf(code, r) {
   const out = [];
   const conf = (dir, it) => {
@@ -31,7 +34,16 @@ function cardsOf(code, r) {
     if (it && it.state === 'formed' && it.volX != null && it.volX >= VOLX) tags.push({ t: `突破量 ×${it.volX.toFixed(1)}`, k: 'vol' });
     else if (it && it.state === 'forming' && r.vol5x != null && r.vol5x >= VOL5X) tags.push({ t: `近 5 日量 ×${r.vol5x.toFixed(1)}`, k: 'vol' });
     for (const c of r.candles) if (c.dir === dir && c.ago <= 2) tags.push({ t: `K 棒：${c.name}${c.ago ? '（前一根）' : ''}`, k: 'candle' });
-    const d = dir > 0 ? r.div.bull : r.div.bear;
+    if (r.ref === undefined) return tags; // 舊快照（還沒有新版判讀）：不顯示舊版背離，等下一次快照更新
+    if (r.ref) { // 台股：新版 MACD 背離參考（柱峰包絡、價格已走遠或失效的不顯示；只供參考，不算「確認」也不進排序）
+      for (const tf of ['w', 'd']) for (const side of ['top', 'bot']) {
+        const x = r.ref[tf] && r.ref[tf][side];
+        if (!x || (dir && (side === 'bot') !== (dir > 0))) continue;
+        tags.push({ t: 'MACD 參考：' + refText({ ...x, tf, side: side === 'top' ? -1 : 1 }), k: x.chain >= 2 ? 'div2' : 'div' });
+      }
+      return tags;
+    }
+    const d = dir > 0 ? r.div.bull : r.div.bear; // 加密貨幣：沿用柱狀體波峰背離標籤（只顯示，不進排序）
     if (d) tags.push({ t: `MACD ${dir > 0 ? '底' : '頂'}背離${d.k >= 2 ? `（持續 ×${d.k}）` : ''}`, k: d.k >= 2 ? 'div2' : 'div' });
     return tags;
   };
@@ -39,14 +51,14 @@ function cardsOf(code, r) {
   for (const it of r.items) {
     const tags = conf(it.dir, it);
     const ps = it.dir > 0 && it.state === 'forming' ? (r.early || []).filter((e) => e.kind === it.kind) : [];
-    for (const e of ps) tags.unshift({ t: `回測通過・${PASS[e.key] || e.key}（${e.ago ? '前一根' : '剛'}成形，下一根開盤進、停損 ${px(e.stop)}、4R）`, k: 'pass' }); out.push({ code, r, it, tags, score: tags.length + (tags.some((x) => x.k === 'div2') ? 1 : 0) + (ps.length ? 10 : 0) }); }
-  if (!r.items.length && !(r.early || []).length && !out.length) out.push({ code, r, it: { dir: 0, kind: 'none', name: '沒有偵測到型態', state: 'none', pts: [], neckLine: null, lines: null }, tags: [], score: -1, plain: true });
+    for (const e of ps) tags.unshift({ t: `回測通過・${PASS[e.key] || e.key}（${e.ago ? '前一根' : '剛'}成形，下一根開盤進、停損 ${px(e.stop)}、4R）`, k: 'pass' }); out.push({ code, r, it, tags, score: scoreOf(tags) + (ps.length ? 10 : 0) }); }
+  if (!r.items.length && !(r.early || []).length && !out.length) out.push({ code, r, it: { dir: 0, kind: 'none', name: '沒有偵測到型態', state: 'none', pts: [], neckLine: null, lines: null }, tags: r.ref ? conf(0, null) : [], score: -1, plain: true });
   const EN = { rectangle: '矩形整理（底部）', triple_bottom: '三重底', double_bottom: '雙底', diamond: '菱形（底部）' };
   for (const e of r.early || []) {
     if (r.items.some((x) => x.dir > 0 && x.state === 'forming' && x.kind === e.kind)) continue;
     const it = { dir: 1, kind: e.kind, name: (EN[e.kind] || e.kind) + '・底部早進場', state: 'forming', distPct: e.neck ? (e.neck / r.close - 1) * 100 : null, neck: e.neck, stop: e.stop, pts: e.pts || [], neckLine: e.neckLine || null, lines: null };
     const tags = [{ t: `回測通過・${PASS[e.key] || e.key}（${e.ago ? '前一根' : '剛'}成形，下一根開盤進、停損 ${px(e.stop)}、4R）`, k: 'pass' }, ...conf(1, it)];
-    out.push({ code, r, it, tags, score: tags.length + 10 });
+    out.push({ code, r, it, tags, score: scoreOf(tags) + 10 });
   }
   return out;
 }
@@ -175,7 +187,7 @@ export function createPatTab({ api, el }) {
       if (st.need === 'candle' && !has('candle')) return false;
       if (st.need === 'div' && !has('div') && !has('div2')) return false;
       if (st.need === 'div2' && !has('div2')) return false;
-      if (st.need === 'any' && !c.tags.length) return false;
+      if (st.need === 'any' && !scoreOf(c.tags)) return false;
       if (st.need === 'pass' && !has('pass')) return false;
       return true;
     });
@@ -271,13 +283,13 @@ export function createPatTab({ api, el }) {
         ${sel('pat-dir', st.dir, [[0, '偏多＋偏空'], [1, '只看偏多'], [-1, '只看偏空']], '方向')}
         ${sel('pat-state', st.state, [['', '全部狀態'], ['formed', '已經形成'], ['forming', '正在形成']], '狀態')}
         ${sel('pat-kind', st.kind, [['', '全部型態'], ...KIND_OPTS], '型態')}
-        ${sel('pat-need', st.need, [['', '不限確認'], ['any', '至少一項確認'], ['vol', '有量'], ['candle', '有 K 棒型態'], ['div', '有 MACD 背離'], ['div2', '持續背離（連續 2 段以上）'], ['pass', '只看回測通過（加密 12H／日線底部早進場）']], '確認條件')}
+        ${sel('pat-need', st.need, [['', '不限確認'], ['any', '至少一項確認'], ['vol', '有量'], ['candle', '有 K 棒型態'], ['div', '有 MACD 背離參考'], ['div2', 'MACD 背離參考：連續 2 次以上'], ['pass', '只看回測通過（加密 12H／日線底部早進場）']], '確認條件')}
         <label class="pc-vp-tg"><input type="checkbox" id="pat-vp" ${st.vp ? 'checked' : ''}> 成交量分布</label>
       </div>
       ${status}
       <div class="status err" style="border:1px solid var(--down)">${st.market === 'cx'
         ? '加密貨幣：綠底「回測通過」＝底部早進場（型態一成形就進、不等突破；每個型態各自挑參數，2025-11 之後驗證通過，全期也贏同期持有 BTC）：12H 三重底、菱形底，日線雙底、矩形、三重底；12H 雙底、矩形只算觀察。已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。其他型態與 K 棒型態沒有通過回測，只供看圖。'
-        : '台股：日線型態（突破進場與底部早進場都測過，約 1,900 檔、2020–2026、扣 0.585%）沒有一個贏過同期持有 0050，K 棒型態也沒有逐一回測，所以<b>不計分、不推播</b>，只供看圖。'}排序＝回測通過最前，其次確認越多越前面（有量、同方向 K 棒型態、同方向 MACD 背離、持續背離）。</div>
+        : '台股：日線型態（突破進場與底部早進場都測過，約 1,900 檔、2020–2026、扣 0.585%）沒有一個贏過同期持有 0050，K 棒型態也沒有逐一回測，所以<b>不計分、不推播</b>，只供看圖。'}排序＝回測通過最前，其次確認越多越前面（有量、同方向 K 棒型態；MACD 背離只標參考，不算確認、不影響排序）。</div>
       <div id="pat-body">${bodyHtml(cards, shown)}</div>
       <details class="guide">
         <summary>怎麼判斷的、圖上的線是什麼</summary>
@@ -286,7 +298,8 @@ export function createPatTab({ api, el }) {
           <dt>成交量分布（VPVR，右側量條）</dt><dd>把最近 320 根 K 棒（比畫面長，台股約一年）的成交量，依它的最高～最低價分攤到各個價位，累積成右邊的橫向量條：<b>藍＝收漲的量</b>、<b>金＝收跌的量</b>。胖的地方＝高量區（HVN，大家成交密集、常是支撐壓力）；細的地方＝低量真空帶（LVN，價格容易快速穿過）。<b class="pc-poc" style="border:0">— —</b> 粉紅線＝成交量最大的價位（線上直接標價）；VAH／VAL＝價值區（涵蓋 70% 成交量）的上下緣。<b>這只是參考位，不是買賣訊號</b>——回測顯示單獨照它做並不會賺，POC／價值區適合當「容易停頓或反轉的位置」來輔助判斷。上面的「成交量分布」勾選框可以關掉。</dd>
           <dt>找高低點</dt><dd>用 ATR 之字轉折：價格反向走超過 2～3 倍 ATR 才確認一個高點或低點，反轉後才確認，不會偷看未來。偏空型態是把價格上下翻轉後用同一套偵測。</dd>
           <dt>正在形成／已經形成</dt><dd>型態成形後最多等 15 根日線；收盤站上（跌破）頸線就算突破。「已經形成」只列最近 6 根內突破的。收斂三角形另外用趨勢線擬合（上下線收斂、至少 85% 收盤在兩線內）。</dd>
-          <dt>確認</dt><dd>量＝突破（跌破）那天成交量 ≥ 前 20 日均量 ${VOLX} 倍（正在形成則看近 5 日均量 ≥ ${VOL5X} 倍）。K 棒型態＝最近 2 根內、方向相同。MACD 背離＝柱狀體「一段一段的波峰」比較（價格更高／低、柱狀體更低／高），最近 10 根內確認；連續 2 段以上才標「持續」。</dd>
+          <dt>確認</dt><dd>量＝突破（跌破）那天成交量 ≥ 前 20 日均量 ${VOLX} 倍（正在形成則看近 5 日均量 ≥ ${VOL5X} 倍）。K 棒型態＝最近 2 根內、方向相同。K 棒型態＝最近 2 根內、方向相同。</dd>
+          <dt>MACD 背離參考（2026-11-12 新版，台股）</dt><dd>只供看圖參考，<b>不算確認、不進排序、不推播</b>。用柱狀體「一段一段的波峰」比：頂背離＝價格高點一峰比一峰高、柱峰一峰比一峰低，中間夾的小峰略過（包絡法）；底背離相反。日線與週線分開標。只顯示：柱峰縮小至少 15%（峰相差無幾的不顯示）、價格還在該段極值附近、而且之後沒有再創新高（低）的；「形成中」與「已發動」只在連續 2 次以上才顯示。標「波動收斂」＝最末峰的 ATR% 比第一峰小 10% 以上。<b>回測（台股日線 1,371 檔、週線 500 檔）：日線之後的報酬跟隨機沒有差別；週線只有連續 ≥3 次頂背離有資訊（65 筆，13 週後平均落後大盤 4.2%）；底背離不偏多；「縮小越多越準」不成立；波動收斂時之後大跌的機率較低。</b>所以它是描述「動能是否在衰竭」，不是進出場訊號。</dd>
           <dt>回測通過（綠底標籤）</dt><dd>只有加密貨幣「底部早進場」（12H 三重底、菱形底；日線雙底、矩形、三重底；12H 雙底、矩形為觀察）：型態一成形（最後一個低點被 2～3 倍 ATR 反彈確認）就在下一根開盤進場，不等突破頸線，停損＝型態低點下 0.1 ATR、4R 出場。幣安前 150 名 2020–2026 回測，前 75% 挑、後 25%（2025-11 之後）驗證通過，也已在「加密貨幣」頁計分。2022、2025 兩個空頭年接近 0 或虧損。每個型態在 27 組參數裡各自挑。台股同樣方法（雙底＋MACD 背離最好，驗證期 401 筆 +0.19R）每筆仍輸同期持有 0050，所以台股沒有通過的。</dd>
           <dt>限制</dt><dd>只掃當日成交量 ≥${MINV} 張、股價 10～${MAXP} 元的股票（成交量前 ${TOP} 檔，含上櫃）；不在清單的股票用搜尋框輸入 4 位數代號或名稱單獨查；Yahoo 資料偶爾缺漏。偵測邏輯與加密貨幣頁同一套（已和 Python 回測逐根對照）；加密貨幣 4H／12H 有部分型態通過回測，台股日線沒有。</dd>
         </dl>
