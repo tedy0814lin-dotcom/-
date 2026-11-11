@@ -65,6 +65,7 @@ export async function staticApi(path) {
       if (!c) throw new Error('這個星期的成交資料還沒有');
       return c;
     }
+    case 'factor': return snap('pp_factor_tw', 10 * 60e3); // 台股四因子排名＋前瞻記錄（每天收盤後算，放 snap2 分支）
     default: throw new Error('靜態版沒有這個資料：' + name);
   }
 }

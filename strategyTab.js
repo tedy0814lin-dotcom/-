@@ -4,6 +4,7 @@ import { createClaudeTab } from '/claudeTab.js';
 import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
+import { createFactTab } from '/factTab.js';
 
 const LS = 'wr_strat_sub';
 const CARDS = [
@@ -20,15 +21,19 @@ const CARDS = [
     note: '足跡圖訂單流：連 2 根 Delta 強＋價格一階階創高(低)＝買盤堆疊；下一根開盤進、4R 出場。BingX 沒有主動買賣量，Delta 用 OHLCV 近似（強度約幣安真 Delta 的 55～65%）。',
     stats: [['做多期望（BingX 近似）', '+0.15R'], ['做空期望（BingX 近似）', '+0.13R'], ['幣安真 Delta 多／空', '+0.28／+0.11R'], ['2026-11-07 重測 104 幣', '4R 出場']] },
 ];
+CARDS.push({ id: 'fa', mk: '台股', tf: '日線', side: '做多', by: 'Claude 設計', title: '四因子排名（觀察用）',
+  note: '近 250 日高＋120 日動能＋日內強＋量增，四個百分位平均，前 20 名等權、每 20 日換股。⚠ 驗證期只有 1/9 組參數贏 0050，有倖存者偏誤，所以只當觀察，從上線日起做前瞻記錄；不是買賣訊號。',
+  stats: [['回測全期年化', '+43.4%'], ['0050 同期', '+23.8%'], ['驗證期贏 0050', '1／9 組'], ['最大回撤', '−50%']] });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function createStrategyTab({ api, el, goto }) {
-  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-cs"></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div>';
+  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-cs"></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div><div id="st-fa" hidden></div>';
   const kids = {
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
     vg: createVegasTab({ api, el: el.querySelector('#st-vg') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
+    fa: createFactTab({ api, el: el.querySelector('#st-fa') }),
   };
   let sub = 'cs';
   try { const s = localStorage.getItem(LS); if (kids[s]) sub = s; } catch {}
