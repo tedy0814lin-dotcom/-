@@ -81,7 +81,7 @@ function grade(r, m) {
         if (n.tunnel === '大') { sc += 8; notes.push('大通道（做空回測 +0.33R）'); }
       }
       if (m === 'tw' && n.dir > 0) {
-        if (n.tunnel === '大') { sc += 10; notes.push('大通道（台股回測 +0.55R，隨機做多 +0.20R）'); }
+        // 大通道加分已拿掉：2026-11-12 用 1,943 檔重測，排除 2026 後 608 筆 6R +0.12R（區間含 0、後半段 −0.13R），原本的 +0.55R 沒有重現
         if (n.spread != null && n.spread < 2) { sc += 6; notes.push('通道距離 <2ATR（回測較好）'); }
         if (n.spread != null && n.spread >= 2 && n.spread < 4) { sc -= 8; notes.push('通道距離 2～4ATR（回測幾乎沒優勢）'); }
       }
