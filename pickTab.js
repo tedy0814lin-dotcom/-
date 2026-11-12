@@ -3,6 +3,8 @@
 // 回測（上櫃 893 檔、2021–2026，扣手續費＋證交稅 0.585%；2026-11-12 起用修復後的乾淨資料）：每日最多 3 檔、隔天開盤跳空 <5% 才買、停損 12%、最長抱 40 天，
 // 1,178 筆，每筆平均 +2.25%，比同出場的隨機基準多賺 +1.47%（90% 區間 −0.10～+3.14，已含 0），贏同期 0050 +0.57%／筆，勝率 32%（賺大賠小型）。
 // 上市（證交所，2024-11～2026-11，481 日）已回測：沒有優勢，略差於隨機，只列出供參考，不納入策略結論。
+// 2026-11-12 起名單先排除「簡易 MACD 頂背離」（收盤創 20 日新高、MACD 柱狀體 < 前 20 日柱峰 80%，見 lib/pickDiv.js；標記由 scripts/patall.mjs 每天收盤後算好放 snap2 的 pp_pkdiv.json）。
+// 依據（上櫃、排除 2026 大多頭，40 天停損）：帶頂背離的 195 筆每筆比 0050 少 4.35%（區間 −6.75～−1.92，前後半皆負）；排除後 810 筆每筆約 0%（區間含 0），從「輸 0050」變成「約等於 0050」，仍不是「穩贏」。上市驗證方向不一致，故為觀察用。
 
 const CACHE_PREFIX = 'wr_pick_v1_';
 const REL_MIN = 1.5;      // 今日每筆均股數 ≥ 前 20 日均值 × 1.5
@@ -37,7 +39,7 @@ function cacheSet(k, v) {
 }
 
 export function createPickTab({ api, el }) {
-  const st = { loading: false, progress: '', error: '', days: [], rows: {}, names: {}, miss: [], loaded: false, showTwse: false };
+  const st = { pkdiv: null, loading: false, progress: '', error: '', days: [], rows: {}, names: {}, miss: [], loaded: false, showTwse: false };
 
   async function load(force = false) {
     if (st.loading) return;
@@ -61,7 +63,10 @@ export function createPickTab({ api, el }) {
         Object.assign(names, c.names);
         miss.push(...(c.miss || []));
       }
-      Object.assign(st, { days, rows, names, miss, loaded: true, progress: '' });
+      // 頂背離標記（每天收盤後由 patall 算好）：抓不到不影響選股，只是不排除
+      let pkdiv = null;
+      try { const j = await api('/api/pkdiv'); if (j && j.flags && j.asof) pkdiv = j; } catch {}
+      Object.assign(st, { days, rows, names, miss, pkdiv, loaded: true, progress: '' });
     } catch (e) {
       st.error = `更新失敗：${e.message}`; st.progress = '';
     } finally {
@@ -110,17 +115,23 @@ export function createPickTab({ api, el }) {
     if (!st.loaded) { el.innerHTML = `<div class="status">${esc(st.progress || (st.loading ? '準備中…' : ''))}</div>${status}`; return; }
     const { rows, n, last } = compute();
     if (!last) { el.innerHTML = `<div class="status err">只抓到 ${n} 個交易日，至少需要 21 天。${esc(st.miss.slice(0, 3).join('；'))}</div>`; return; }
-    const otc = rows.filter((r) => r.mkt === '上櫃' && r.pass).sort((a, b) => b.rel - a.rel);
+    // 頂背離排除：標記日期要等於選股的最新交易日才採用（否則視為沒有資料、不排除，並在畫面提醒）
+    const pd = st.pkdiv && String(st.pkdiv.asof).replace(/-/g, '') === last ? st.pkdiv.flags : null;
+    const otcAll = rows.filter((r) => r.mkt === '上櫃' && r.pass).sort((a, b) => b.rel - a.rel);
+    const otcDiv = pd ? otcAll.filter((r) => pd[r.code] === 1) : [];
+    const otc = pd ? otcAll.filter((r) => pd[r.code] !== 1) : otcAll;
+    const divNote = pd ? '' : `<div class="status err">頂背離標記今天還沒算好，下面的名單<b>尚未排除頂背離</b>，等收盤後資料更新再按「更新最新資料」。</div>`;
     const sii = rows.filter((r) => r.mkt === '上市' && r.pass).sort((a, b) => b.rel - a.rel);
     const missNote = st.miss.length ? `<div class="status err">部分資料沒抓到（${esc(st.miss.slice(0, 3).join('；'))}），名單可能不完整，稍後按「更新」再試。</div>` : '';
     el.innerHTML = `
       <div class="toolbar"><div class="status" style="width:auto;flex:1">資料到 ${fmtD(last)}（共 ${n} 個交易日）・符合條件：上櫃 ${otc.length} 檔／上市 ${sii.length} 檔${st.loading ? '・' + esc(st.progress || '更新中…') : ''}</div><button class="refresh" id="pick-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '更新最新資料'}</button></div>
-      ${status}${missNote}
+      ${status}${missNote}${divNote}
       <section class="panel">
-        <div class="panel-head"><strong>大單推升：上櫃（已回測）</strong><span class="muted small">收盤後選股，隔天開盤買；筆均倍數最高的前 ${TOP_N} 名是回測版本，其餘是備選（不限檔數版也有效，但較薄）</span></div>
+        <div class="panel-head"><strong>大單推升：上櫃（已回測）</strong><span class="muted small">收盤後選股（先排除帶頂背離的），隔天開盤買；筆均倍數最高的前 ${TOP_N} 名是回測版本，其餘是備選（不限檔數版也有效，但較薄）</span></div>
         <h4>優先 ${TOP_N} 檔</h4>
         ${table(otc.slice(0, TOP_N), true)}
         ${otc.length > TOP_N ? `<h4>備選 ${otc.length - TOP_N} 檔</h4>${table(otc.slice(TOP_N), false)}` : ''}
+        ${otcDiv.length ? `<details style="margin-top:8px"><summary class="muted small">已排除：帶 MACD 頂背離的 ${otcDiv.length} 檔（創 20 日新高但 MACD 柱狀體沒跟上，回測這類訊號扣費後沒有優勢）</summary>${table(otcDiv, false)}</details>` : ''}
         <div class="muted small" style="margin-top:8px">進場：隔天開盤價比今天收盤高超過 5% 就不買（跳空太大，回測也是這樣篩）；漲停鎖死買不到也跳過，不追價。出場：買進後收盤價跌到買價 −12% → 隔天開盤賣；否則最長抱 ${HOLD} 個交易日，第 ${HOLD} 天收盤賣。</div>
       </section>
       <section class="panel">
@@ -135,7 +146,8 @@ export function createPickTab({ api, el }) {
           <dt>要有心理準備</dt><dd>勝率只有三成多，超過一半的單子會被停損，利潤靠少數大波段：把最賺的 10% 拿掉後，平均變 −5.9%，比隨機基準還差。年度不是每年都賺：2021 +0.5%、2022 −4.6%、2023 +5.8%、2024 +0.6%、2025 +3.8%、2026 +8.4%，獲利集中在 2023 與 2025–2026。另外約 8 成訊號是收漲停的股票，漲停鎖死買不到的單子回測沒辦法排除，實際成交會比回測少。</dd>
           <dt>對照檢驗（修復前資料，未重測）</dt><dd>只看「大漲＋爆量」、不看筆均：20 日只多賺 +0.19%（幾乎沒優勢）；加上「筆均放大」才有 +0.97%。所以優勢來自筆均股數，不是單純爆量。加上投信買超反而變差，已拿掉。做空版（跌 4% 且筆均放大）沒有優勢，不做。</dd>
           <dt>買賣方式再檢驗（乾淨資料，2026-11-12）</dt><dd>用同一批訊號比較出場。<b>買進持有 13 天</b>（老師的做法）扣掉同期持有 0050 後是 −0.02%，7 天 −0.23%，都沒贏 0050。目前的「跌 12% 停損、最長 40 天」贏同期 0050 +0.57%／筆，但訓練期是負的（−0.23%）、靠驗證期（+2.68%）撐起來，拿掉 2026 年後變 −0.31%。投組層級（最多同時持 5～10 檔）報酬起伏很大，回撤約 −44%～−53%（0050 為 −36%），勝負取決於少數翻倍的單子。再晚一天（第 3 個交易日開盤）才買，優勢幾乎消失；隔日沖與當沖都是負的。所以把它當<b>選股參考</b>，不要當成能穩定取代 0050 的主力。</dd>
-          <dt>限制</dt><dd>筆均股數是「買賣家數差」的近似，不是券商分點本身。價格資料有倖存者偏誤（下市股不在內），實際會比回測略差。上市股票回測沒有優勢（略差於隨機）。逐筆統計沒有模擬資金配置與同時持倉。我們另外測過排除 MACD 頂背離、融資增加、成交值門檻等濾網，在上櫃有時看起來更好，但上市驗證不成立或樣本太小，所以都沒有加進來。</dd>
+          <dt>限制</dt><dd>筆均股數是「買賣家數差」的近似，不是券商分點本身。價格資料有倖存者偏誤（下市股不在內），實際會比回測略差。上市股票回測沒有優勢（略差於隨機）。逐筆統計沒有模擬資金配置與同時持倉。我們另外測過融資增加、成交值門檻等濾網，上市驗證不成立或樣本太小，沒有加進來。</dd>
+          <dt>頂背離排除（2026-11-12 新增，觀察用）</dt><dd>名單先排除「簡易 MACD 頂背離」的股票（收盤創 20 日新高，但 MACD 柱狀體不到前 20 日柱峰的 80%＝價漲動能沒跟上）。排除 2026 大多頭後的上櫃回測：帶頂背離的 195 筆，每筆比同期 0050 少 4.35%（90% 區間 −6.75～−1.92，前後半都是負）；排除它之後 810 筆從「每筆輸 0050 0.66%」變成約 0%（區間 −1.62～+1.55 含 0，後半段仍為負），<b>只是由輸變平手，不是穩贏 0050</b>。投組層級結果隨槽數跳動很大（10 槽年化 +24.2% 對 0050 +16.1%，但 5 槽僅 +7.8%）。上市驗證方向不一致（量≥500 同向、量≥5000 反向），所以僅用在上櫃名單、且標為觀察用。被排除的股票收在名單下方的折疊區，可以自己看。新版「包絡法」頂背離在大單推升訊號上只有約 1% 觸發，無法當濾網，所以用簡易版。</dd>
         </dl>
       </details>`;
     el.querySelector('#pick-refresh').onclick = () => load(true);

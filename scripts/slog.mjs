@@ -64,8 +64,17 @@ try {
       if (rel >= REL_MIN && chg > CHG_MIN && c0 > ma20 && vol5 >= LIQ_MIN) out.push({ code, close: c0, rel, chg });
     }
     out.sort((a, b) => b.rel - a.rel);
-    for (const r of out.slice(0, TOP_N)) add({ k: 'pk', s: r.code + '.TWO', sigD: last, close: r.close, rel: +r.rel.toFixed(2), chg: +r.chg.toFixed(4) });
-    console.log(`策略記錄：台股 ${last} 符合 ${out.length} 檔，取前 ${Math.min(TOP_N, out.length)}（已有 ${n} 個交易日資料）`);
+    // 排除帶 MACD 頂背離的訊號（lib/pickDiv.js；patall 每天收盤後算好放 snap2）。標記日期對不上最新交易日就不排除並記一筆警告，這筆訊號加 nodiv:1 讓日後看得出來
+    let pd = null;
+    try {
+      const rb = process.env.SNAP2_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap2';
+      const j = await (await fetch(rb + '/pp_pkdiv.json', { headers: { 'Cache-Control': 'no-cache' } })).json();
+      if (j && j.flags && String(j.asof).replace(/-/g, '') === last) pd = j.flags;
+    } catch {}
+    const kept = pd ? out.filter((r) => pd[r.code] !== 1) : out;
+    if (pd) console.log(`策略記錄：頂背離排除 ${out.length - kept.length} 檔`); else console.log('策略記錄：頂背離標記不是最新一天，這次沒排除（訊號標 nodiv）');
+    for (const r of kept.slice(0, TOP_N)) add({ k: 'pk', s: r.code + '.TWO', sigD: last, close: r.close, rel: +r.rel.toFixed(2), chg: +r.chg.toFixed(4), ...(pd ? {} : { nodiv: 1 }) });
+    console.log(`策略記錄：台股 ${last} 符合 ${out.length} 檔，排除後 ${kept.length}，取前 ${Math.min(TOP_N, kept.length)}（已有 ${n} 個交易日資料）`);
   } else console.log(`策略記錄：台股資料 ${n}/21 天，還在累積`);
 } catch (e) { console.error('策略記錄台股失敗', e.message); }
 

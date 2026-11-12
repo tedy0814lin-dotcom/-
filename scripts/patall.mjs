@@ -62,6 +62,18 @@ const FKEY = 'pp_factor_tw.json';
     console.log(`因子排名：母體 ${ranked.length} 檔，收盤日 ${asof}，前瞻記錄 ${log.length} 天`);
   } else console.log('因子排名：母體太少（' + ranked.length + '），這次不輸出');
 }
+// ---- 大單推升的頂背離標記（lib/pickDiv.js）：全部台股，選股頁用它把「帶頂背離」的訊號移出優先名單；策略實盤記錄（slog.mjs）也讀這份 ----
+{
+  const dcount = {}; for (const r of Object.values(results)) if (r.d1) dcount[r.d1] = (dcount[r.d1] || 0) + 1;
+  const asofMD = Object.entries(dcount).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  const yr = +day.slice(0, 4) - (asofMD > day.slice(5) ? 1 : 0), asof = asofMD ? `${yr}-${asofMD}` : day;
+  const flags = {};
+  for (const [code, r] of Object.entries(results)) if (r.pkd != null && r.d1 === asofMD) flags[code] = r.pkd;
+  if (Object.keys(flags).length >= 300) {
+    fs.writeFileSync(path.join(OUT, 'pp_pkdiv.json'), JSON.stringify({ asof, n: Object.keys(flags).length, flags }));
+    console.log(`頂背離標記：${Object.keys(flags).length} 檔，其中有標記 ${Object.values(flags).filter(Boolean).length} 檔，收盤日 ${asof}`);
+  } else console.log('頂背離標記：可算的太少（' + Object.keys(flags).length + '），這次不輸出');
+}
 const shards = {};
 for (const [c, r] of Object.entries(results)) (shards[c.slice(0, 2)] ||= {})[c] = r;
 for (const [k, v] of Object.entries(shards)) fs.writeFileSync(path.join(OUT, `pp_tw_${k}.json`), JSON.stringify({ day, results: v }));
