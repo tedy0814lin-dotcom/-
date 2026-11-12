@@ -71,12 +71,14 @@ try {
       const j = await (await fetch(rb + '/pp_pkdiv.json', { headers: { 'Cache-Control': 'no-cache' } })).json();
       if (j && j.flags && String(j.asof).replace(/-/g, '') === last) pd = j.flags;
     } catch {}
+    // 頂背離標記要等 patall 收盤後（約台北 16:00）算好；還沒好就先不記（記了就不能補排除，id 已存在），下一輪（30 分鐘後）再試；到台北 22:00 還沒有才放棄排除、照記並標 nodiv
+    if (!pd && tp.getUTCHours() < 22) { console.log(`策略記錄：${last} 的頂背離標記還沒算好，這輪不記大單推升（符合 ${out.length} 檔，下一輪再試）`); throw new Error('wait-pkdiv'); }
     const kept = pd ? out.filter((r) => pd[r.code] !== 1) : out;
     if (pd) console.log(`策略記錄：頂背離排除 ${out.length - kept.length} 檔`); else console.log('策略記錄：頂背離標記不是最新一天，這次沒排除（訊號標 nodiv）');
     for (const r of kept.slice(0, TOP_N)) add({ k: 'pk', s: r.code + '.TWO', sigD: last, close: r.close, rel: +r.rel.toFixed(2), chg: +r.chg.toFixed(4), ...(pd ? {} : { nodiv: 1 }) });
     console.log(`策略記錄：台股 ${last} 符合 ${out.length} 檔，排除後 ${kept.length}，取前 ${Math.min(TOP_N, kept.length)}（已有 ${n} 個交易日資料）`);
   } else console.log(`策略記錄：台股資料 ${n}/21 天，還在累積`);
-} catch (e) { console.error('策略記錄台股失敗', e.message); }
+} catch (e) { if (e.message === 'wait-pkdiv') console.log('策略記錄：等待頂背離標記'); else console.error('策略記錄台股失敗', e.message); }
 
 db.updated = now;
 fs.mkdirSync(DIR, { recursive: true });
