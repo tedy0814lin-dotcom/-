@@ -120,7 +120,7 @@ export function createPickTab({ api, el }) {
     const otcAll = rows.filter((r) => r.mkt === '上櫃' && r.pass).sort((a, b) => b.rel - a.rel);
     const otcDiv = pd ? otcAll.filter((r) => pd[r.code] === 1) : [];
     const otc = pd ? otcAll.filter((r) => pd[r.code] !== 1) : otcAll;
-    const divNote = pd ? '' : `<div class="status err">最新一天（${fmtD(last)}）的頂背離標記還沒算好（每個交易日收盤後每 30 分鐘由排程算一次，通常 14:30 前後就有），下面的名單<b>尚未排除頂背離</b>；算好後按「更新最新資料」。</div>`;
+    const divNote = pd ? '' : `<div class="status err">最新一天（${fmtD(last)}）的頂背離標記還沒算好（每個交易日 13:30 與 14:00 由排程算），下面的名單<b>尚未排除頂背離</b>；算好後按「更新最新資料」。</div>`;
     const sii = rows.filter((r) => r.mkt === '上市' && r.pass).sort((a, b) => b.rel - a.rel);
     const missNote = st.miss.length ? `<div class="status err">部分資料沒抓到（${esc(st.miss.slice(0, 3).join('；'))}），名單可能不完整，稍後按「更新」再試。</div>` : '';
     el.innerHTML = `

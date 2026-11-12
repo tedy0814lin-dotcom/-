@@ -71,7 +71,7 @@ try {
       const j = await (await fetch(rb + '/pp_pkdiv.json', { headers: { 'Cache-Control': 'no-cache' } })).json();
       if (j && j.flags && String(j.asof).replace(/-/g, '') === last) pd = j.flags;
     } catch {}
-    // 頂背離標記要等 patall 收盤後（台北 14:10 起每 30 分鐘算一次）算好；還沒好就先不記（記了就不能補排除，id 已存在），下一輪（30 分鐘後）再試；到台北 22:00 還沒有才放棄排除、照記並標 nodiv
+    // 頂背離標記要等 patall 收盤後（台北 13:30、14:00 各算一次）算好；還沒好就先不記（記了就不能補排除，id 已存在），之後每 30 分鐘的記錄輪次再試；到台北 22:00 還沒有才放棄排除、照記並標 nodiv
     if (!pd && tp.getUTCHours() < 22) { console.log(`策略記錄：${last} 的頂背離標記還沒算好，這輪不記大單推升（符合 ${out.length} 檔，下一輪再試）`); throw new Error('wait-pkdiv'); }
     const kept = pd ? out.filter((r) => pd[r.code] !== 1) : out;
     if (pd) console.log(`策略記錄：頂背離排除 ${out.length - kept.length} 檔`); else console.log('策略記錄：頂背離標記不是最新一天，這次沒排除（訊號標 nodiv）');
