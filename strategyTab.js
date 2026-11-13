@@ -5,9 +5,13 @@ import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
 import { createFactTab } from '/factTab.js';
+import { createS6Tab } from '/s6Tab.js';
 
 const LS = 'wr_strat_sub';
 const CARDS = [
+  { id: 's6', mk: '台股', tf: '月線・長期', side: '做多', by: 'Claude 設計', title: '長期核心：價值＋低波動＋趨勢',
+    note: '每月定期定額，持有名單前 5～10 檔等權，名次掉出前 2N 名才賣，不設停損。頁內有操作助手：算每月買幾股、先買什麼，打勾記錄成交價、標出該賣的持股、比較同樣的錢買 0050，紀錄可匯出備份。⚠ 回測排除 2026；預測長期只比 0050 多 1～2 個百分點（約六成機率），大空頭仍會跌 30～45%。',
+    stats: [['定期定額年化（2009～2025）', '+20.4%'], ['0050 同樣定期定額', '+16.6%'], ['最大回撤', '−15～−18%（0050 −29%）'], ['驗證期（2018～2025）', '23.1% vs 23.2%（持平）']] },
   { id: 'cs', mk: '加密', tf: '日線', side: '做多', by: 'Claude 設計', title: '大陽線突破新高',
     note: '大陽線＋收盤創 55 日新高＋帶量，BTC 在 50 日線上才進場；7 倍 ATR 追蹤停損，不設獲利目標。⚠ 數字是幣安資料的回測，改用 BingX 資料後尚未重驗。',
     stats: [['年化', '+49%'], ['驗證期年化', '+23%'], ['最大回撤', '−45%'], ['勝率', '24%']] },
@@ -22,20 +26,21 @@ const CARDS = [
     stats: [['做多期望（BingX 近似）', '+0.15R'], ['做空期望（BingX 近似）', '+0.13R'], ['幣安真 Delta 多／空', '+0.28／+0.11R'], ['2026-11-07 重測 104 幣', '4R 出場']] },
 ];
 CARDS.push({ id: 'fa', mk: '台股', tf: '日線', side: '做多', by: 'Claude 設計', title: '四因子排名（觀察用）',
-  note: '近 250 日高＋120 日動能＋日內強＋量增，四個百分位平均，前 20 名等權、每 20 日換股。⚠ 2026-11-12 用排除 2026 的資料重測：2022～2023 贏 0050、2024～2025 輸 0050，全期沒贏；單因子 IC 只有「近 250 日高」顯著。有倖存者偏誤，所以只當觀察，從上線日起做前瞻記錄；不是買賣訊號。',
+  note: '📌 長期投資請看第一張卡「長期核心」（價值＋低波動＋趨勢，回測贏 0050）；這張是價格型因子，沒贏 0050，只做觀察。近 250 日高＋120 日動能＋日內強＋量增，四個百分位平均，前 20 名等權、每 20 日換股。⚠ 2026-11-12 用排除 2026 的資料重測：2022～2023 贏 0050、2024～2025 輸 0050，全期沒贏；單因子 IC 只有「近 250 日高」顯著。有倖存者偏誤，所以只當觀察，從上線日起做前瞻記錄；不是買賣訊號。',
   stats: [['年化（排除 2026）', '+17.9%'], ['0050 同期', '+19.4%'], ['2022～23 對 0050', '+13.0% vs −3.3%'], ['2024～25 對 0050', '+23.4% vs +48.7%']] });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function createStrategyTab({ api, el, goto }) {
-  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-cs"></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div><div id="st-fa" hidden></div>';
+  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div><div id="st-fa" hidden></div>';
   const kids = {
+    s6: createS6Tab({ api, el: el.querySelector('#st-s6') }),
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
     vg: createVegasTab({ api, el: el.querySelector('#st-vg') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
     fa: createFactTab({ api, el: el.querySelector('#st-fa') }),
   };
-  let sub = 'cs';
+  let sub = 's6';
   try { const s = localStorage.getItem(LS); if (kids[s]) sub = s; } catch {}
 
   function cards() {

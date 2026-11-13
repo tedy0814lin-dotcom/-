@@ -6,7 +6,9 @@ export async function onRequest({ request, env, params }) {
   if (!(await currentUser(env, request))) return json({ error: '請先登入' }, 401);
   const key = String(params.key || '');
   // 全台股型態（每天收盤後算一次）放在 snap2 分支，檔名 pp_tw_<代號前兩碼>
-  const BASE = key.startsWith('pp_') ? (env.SNAP2_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap2') : (env.SNAP_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap');
+  // 長期核心策略（S6-U）每日名單放在 snap3 分支，檔名 s6_u（獨立分支：patall 每次會整個覆蓋 snap2，不能共用）
+  const BASE = key.startsWith('s6_') ? (env.SNAP3_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap3')
+    : key.startsWith('pp_') ? (env.SNAP2_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap2') : (env.SNAP_BASE || 'https://raw.githubusercontent.com/tedy0814lin-dotcom/-/snap');
   if (!/^[a-z0-9_]{1,40}$/i.test(key)) return json({ error: '名稱不對' }, 400);
   const headers = { 'User-Agent': 'whale-radar', 'Cache-Control': 'no-cache' };
   if (env.GH_TOKEN) headers.Authorization = 'Bearer ' + env.GH_TOKEN;

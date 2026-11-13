@@ -1,0 +1,24 @@
+name: 長期核心名單（S6-U）
+on:
+  schedule:
+    # 台北 15:30（UTC 07:30）週一～週五：收盤後證交所本益比等資料更新完才算；週六 10:00 補一次
+    - cron: '30 7 * * 1-5'
+    - cron: '0 2 * * 6'
+  workflow_dispatch:
+jobs:
+  s6u:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    concurrency:
+      group: s6u
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: timeout 1500 node scripts/s6u.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

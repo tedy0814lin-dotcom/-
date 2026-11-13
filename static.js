@@ -66,6 +66,7 @@ export async function staticApi(path) {
       return c;
     }
     case 'pkdiv': return snap('pp_pkdiv', 10 * 60e3); // 大單推升的頂背離標記（每天收盤後算，放 snap2 分支）
+    case 's6u': return snap('s6_u', 10 * 60e3); // 長期核心策略（價值＋低波動＋趨勢）每日名單，放 snap3 分支
     case 'factor': return snap('pp_factor_tw', 10 * 60e3); // 台股四因子排名＋前瞻記錄（每天收盤後算，放 snap2 分支）
     default: throw new Error('靜態版沒有這個資料：' + name);
   }
