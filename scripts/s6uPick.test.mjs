@@ -6,13 +6,13 @@ import { TIERS, buildListInfo, newState, makePlan, parseImport, exportState, pla
 const mk = (n) => Array.from({ length: n }, (_, i) => ({ code: String(1000 + i), name: 'S' + i, close: 50 + i, rank: i + 1, ind: i % 2 ? '金融保險' : '半導體' }));
 const L = mk(40);
 // ---- 三版本最大檔數 ----
-assert.deepEqual(['base', 'R', 'A'].map((k) => TIERS[k].nMax), [10, 8, 5]);
-for (const [ver, exp] of [['base', 10], ['R', 8], ['A', 5]]) {
+assert.deepEqual(['base', 'R', 'A'].map((k) => TIERS[k].nMax), [10, 10, 10]);
+for (const [ver, exp] of [['base', 10], ['R', 10], ['A', 10]]) {
   const st = newState({ start: '2026-11-01', monthly: 100000, cash: 1000000 }); st.ver = ver;
   const r = planMonth({ list: L, holdings: [], cash: 1000000, ...planArgs(st, ver) });
   assert.equal(r.N, exp, 'nMax ' + ver); assert.equal(r.buys.filter((b) => b.status === 'buy').length, exp);
 }
-// 小資金時進攻版仍是 5 檔（不會少於回測驗證的 5 檔）
+// 小資金：三版本檔數規則相同（資金夠就 5 檔起、每多 3 萬加一檔）
 { const r = planMonth({ list: L, holdings: [], cash: 60000, ...planArgs(newState({ start: '2026-11-01' }), 'A') }); assert.equal(r.N, 5); }
 
 // ---- 排除：該檔不會被買，後面的名次遞補，名次重新編 ----
@@ -61,24 +61,24 @@ for (const [ver, exp] of [['base', 10], ['R', 8], ['A', 5]]) {
 // ---- 名單：三個版本各取各的欄位 ----
 {
   const data = { rotOk: true, month: '2026-11', asof: '2026-11-12', finalMonth: '2026-10',
-    list: [{ code: '1000', name: 'A', close: 10, rank: 1, rankR: 2, rankA: 3 }, { code: '1001', name: 'B', close: 11, rank: 2, rankR: 1, rankA: 1 }, { code: '1002', name: 'C', close: 12, rank: 3, rankR: 3, rankA: 2 }],
-    months: [{ month: '2026-10', day: '2026-10-30', top: [['1000', 'x', 9, 1]], topR: [['1001', 'x', 9, 1]], topA: [['1002', 'x', 9, 1]] }] };
+    list: [{ code: '1000', name: 'A', close: 10, rank: 1, rankM: 2, rankH: 3 }, { code: '1001', name: 'B', close: 11, rank: 2, rankM: 1, rankH: 1 }, { code: '1002', name: 'C', close: 12, rank: 3, rankM: 3, rankH: 2 }],
+    months: [{ month: '2026-10', day: '2026-10-30', top: [['1000', 'x', 9, 1]], topM: [['1001', 'x', 9, 1]], topH: [['1002', 'x', 9, 1]] }] };
   assert.equal(buildListInfo(data, 'preview', 'A').list.sort((a, b) => a.rank - b.rank)[0].code, '1001');
   assert.equal(buildListInfo(data, 'preview', 'R').list.sort((a, b) => a.rank - b.rank)[0].code, '1001');
   assert.equal(buildListInfo(data, 'preview', 'base').list.sort((a, b) => a.rank - b.rank)[0].code, '1000');
   const f = buildListInfo(data, 'final', 'A'); assert.equal(f.list[0].code, '1002'); assert.equal(f.list[0].name, 'C'); assert.equal(f.list[0].close, 12);
   assert.equal(f.list.find((x) => x.code === '1000').rank, 999);
   assert.equal(buildListInfo({ ...data, rotOk: false }, 'preview', 'A'), null);
-  assert.equal(buildListInfo({ ...data, months: [{ ...data.months[0], topA: undefined }] }, 'final', 'A'), null);
+  assert.equal(buildListInfo({ ...data, months: [{ ...data.months[0], topH: undefined }] }, 'final', 'A'), null);
   assert.ok(buildListInfo({ ...data, rotOk: false }, 'preview', 'base'));
 }
 // ---- makePlan 使用該版本的檔數與指定／排除；匯出匯入保留 ----
 {
-  const st = newState({ start: '2026-11-01', monthly: 100000, cash: 500000 }); st.ver = 'A'; st.pins = ['1030']; st.exclude = ['1000'];
+  const st = newState({ start: '2026-11-01', monthly: 100000, cash: 1000000 }); st.ver = 'A'; st.pins = ['1030']; st.exclude = ['1000'];
   const info = { kind: 'preview', ver: 'A', month: '2026-11', day: '2026-11-12', list: L };
   const pl = makePlan(st, '2026-11', info, '2026-11-12');
-  assert.equal(pl.ver, 'A'); assert.equal(pl.N, 5);
-  const buys = pl.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 5); assert.equal(buys[0].code, '1030'); assert.equal(buys[0].pinned, true);
+  assert.equal(pl.ver, 'A'); assert.equal(pl.N, 10);
+  const buys = pl.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 10); assert.equal(buys[0].code, '1030'); assert.equal(buys[0].pinned, true);
   assert.ok(!buys.some((x) => x.code === '1000'));
   const back = parseImport(exportState(st)); assert.deepEqual(back.pins, ['1030']); assert.deepEqual(back.exclude, ['1000']);
   // 舊版紀錄沒有 pins／exclude → 匯入時補空陣列

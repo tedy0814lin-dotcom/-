@@ -15,18 +15,15 @@ for (const v of V) {
   const sameTop = [...top].sort().join() === [...v.top30].sort().join();
   // 容許：價格因子在「理論上同分」的檔（例如同時創 12 月新高 → 接近度=1）可能因浮點雜訊在 Python/JS 排出相差半個名次，
   // 最大分數差 <1e-2、前 30 名成員必須完全相同；多數月底應逐位相同。
-  // 進攻版（資金輪動）：分數與前 30 名
-  let maxR = 0; const gotR = Object.fromEntries(res.ranked.map((o) => [o.code, o.scoreR]));
-  for (const c of Object.keys(v.expectR)) maxR = Math.max(maxR, Math.abs((gotR[c] ?? NaN) - v.expectR[c]) || 0);
-  const topR = res.ranked.slice().sort((a, b) => a.rankR - b.rankR).slice(0, 30).map((o) => o.code);
-  const sameTopR = [...topR].sort().join() === [...v.top30R].sort().join();
-  console.log('   進攻版', `最大分數差=${maxR.toExponential(2)} 前30成員一致=${sameTopR}`);
-  let maxA = 0; const gotA = Object.fromEntries(res.ranked.map((o) => [o.code, o.scoreA]));
-  for (const c of Object.keys(v.expectA)) maxA = Math.max(maxA, Math.abs((gotA[c] ?? NaN) - v.expectA[c]) || 0);
-  const topA = res.ranked.slice().sort((a, b) => a.rankA - b.rankA).slice(0, 30).map((o) => o.code);
-  const sameTopA = [...topA].sort().join() === [...v.top30A].sort().join();
-  console.log('   進攻版(A)', `最大分數差=${maxA.toExponential(2)} 前30成員一致=${sameTopA}`);
-  const ok = maxA < 1e-2 && sameTopA && maxR < 1e-2 && sameTopR && maxd < 1e-2 && !miss && !extra && sameTop;
+  // 平衡版(M)、進攻版(H)：分數與前 30 名
+  const chk = (key, sk, rk, top30) => {
+    const g = Object.fromEntries(res.ranked.map((o) => [o.code, o[sk]])); let mx = 0;
+    for (const c of Object.keys(v['expect' + key])) mx = Math.max(mx, Math.abs((g[c] ?? NaN) - v['expect' + key][c]) || 0);
+    const t = res.ranked.slice().sort((a, b) => a[rk] - b[rk]).slice(0, 30).map((o) => o.code), same = [...t].sort().join() === [...top30].sort().join();
+    console.log('   ' + key, `最大分數差=${mx.toExponential(2)} 前30成員一致=${same}`); return mx < 2e-2 && same; // 趨勢權重×2，同分檔的浮點雜訊差被放大，容許 <2e-2；前 30 名成員必須一致
+  };
+  const okM = chk('M', 'scoreM', 'rankM', v.top30M), okH = chk('H', 'scoreH', 'rankH', v.top30H);
+  const ok = okM && okH && maxd < 1e-2 && !miss && !extra && sameTop;
   if (!ok) bad++;
   console.log(v.date, ok ? 'OK ' : 'FAIL', `n=${ek.length} 缺${miss} 多${extra} maxdiff=${maxd.toExponential(2)} 前30成員一致=${sameTop} 順序一致=${sameOrder}`);
 }

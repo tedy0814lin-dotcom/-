@@ -40,7 +40,7 @@ export function createS6Tab({ api, el }) {
 
   function render() {
     const d = S.data;
-    const head = `<div class="s6-banner"><b>長期核心</b>：每月定期定額，持有排名前 5～10 檔（依版本），名次掉出才賣、不設停損。保守／平衡／進攻三個版本，風險由低到高；預設保守版（回測定期定額年化 <b class="num">20.4%</b>，0050 <b class="num">16.6%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。</div>`;
+    const head = `<div class="s6-banner"><b>長期核心</b>：每月定期定額，持有排名前 5～10 檔（依版本），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">20.4%</b>，0050 <b class="num">16.6%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。</div>`;
     if (S.loading && !d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
     if (S.error && !d) { el.innerHTML = head + `<div class="s6-note bad">讀不到名單：${esc(S.error)}</div><button class="refresh" id="s6-reload" type="button">重試</button>`; el.querySelector('#s6-reload').onclick = load; return; }
     if (!d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
@@ -97,13 +97,13 @@ export function createS6Tab({ api, el }) {
     const lsel = `<select id="ls-sel" class="select" aria-label="採用哪份名單"><option value="final" ${S.which === 'final' ? 'selected' : ''} ${fin ? '' : 'disabled'}>月底正式名單${fin ? '（' + esc(fin.month) + '）' : '（尚無）'}</option><option value="preview" ${S.which === 'preview' ? 'selected' : ''}>今日預覽（${esc(S.data.asof)}）</option></select>`;
     const V = verNow();
     const TXT = {
-      base: '<b>保守</b>：價值、低波動、趨勢各 1/3，最多 10 檔分散。回測（2009～2025，排除 2026）定期定額年化 <b class="num">20.4%</b>、波動 17%、最大回撤 <b class="num">−16%</b>。對照 0050：16.6%／波動 19%／回撤 −29%。風險最低，報酬也最低。',
-      R: '<b>平衡</b>：趨勢權重加倍＋「產業動能」（近 6 個月強勢的產業加分），最多 8 檔。回測年化 <b class="num">25.7%</b>、波動 23%、最大回撤 <b class="num">−22%</b>，最差連續 12 個月 −16%（0050 −25%）。報酬貢獻集中在 2021 航運大多頭等少數年份，排除 2021 後逐年複利仍有 25.9%（0050 16.6%）；回測有挑參數，預期請打對折以上。',
-      A: '<b>進攻（觀察用）</b>：在平衡版上再把低波動權重減半，只持有 5 檔，會集中在強勢股與強勢產業。回測年化 <b class="num">25.6%</b>、波動 30%、最大回撤 <b class="num">−31%</b>（接近 0050 的 −29% 再多一點）、最差連續 12 個月 −22%。<b>報酬沒有比平衡版高</b>（多承擔的 9 個百分點回撤沒換到報酬），2022～2025 年化 18.9%，輸 0050 的 19.5%。除非你就是想要集中持股，否則平衡版較划算。',
+      base: '<b>保守</b>：價值、低波動、趨勢各占 1/3（強勢股只占 1/3），持有 10 檔。回測（2009～2025，排除 2026，每月定期定額）年化 <b class="num">20.4%</b>、波動 17%、最大回撤 <b class="num">−16%</b>，最差連續 12 個月 −9%。對照 0050：16.6%／波動 19%／回撤 −29%／最差 12 個月 −25%。報酬小贏 0050、風險大降。',
+      R: '<b>平衡</b>：強勢股（6 個月動能、接近 12 月高點、站上均線，加「強勢產業」加分）占分數 2/3，價值與低波動合占 1/3，持有 10 檔。回測年化 <b class="num">24.4%</b>、波動 29%、最大回撤 <b class="num">−26%</b>（略小於 0050），最差連續 12 個月 −19%。2022～2025 年化 22.6%（0050 19.5%）。排除 2021 航運大多頭後逐年複利仍 24.0%（0050 16.6%）。',
+      A: '<b>進攻（觀察用）</b>：強勢股占分數 71%，低波動只剩很小權重，同樣持有 10 檔。回測年化 <b class="num">23.8%</b>、波動 33%、最大回撤 <b class="num">−33%</b>（比 0050 的 −29% 多 4 個百分點），最差連續 12 個月 −27%（0050 −25%）。<b>報酬沒有比平衡版高</b>（多承擔的風險在回測裡沒換到報酬）；2022～2025 年化 17.9%，輸 0050 的 19.5%；若從 2021 年才開始投入則年化 17.7%（0050 26.6%）。強勢股會集中在強勢產業，請看下方持股的產業分布。',
     };
     const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${TIERS[k].needRot && S.data.rotOk !== true ? 'disabled' : ''}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（觀察用）' : ''}</option>`;
     const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select">${opt('base')}${opt('R')}${opt('A')}</select></div>
-      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">10 檔・回撤 −16%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">8 檔・回撤 −22%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">5 檔・回撤 −31%</span></div></div>
+      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −16%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">強勢股 67%・回撤 −26%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">強勢股 71%・回撤 −33%</span></div></div>
       <div class="status">${TXT[V]}</div>${pickView(i, V)}</section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
@@ -190,7 +190,7 @@ export function createS6Tab({ api, el }) {
   function guide() {
     return `<div class="s6-sec"><h4>規則與回測</h4><dl class="s6-dl">
       <dt>怎麼選股</dt><dd>母體＝上市普通股、股價 ≥10、當日成交值排前 300。三個面向各自排百分位後平均：價值（本益比倒數、淨值比倒數、殖利率）、低波動（近 12 個月月報酬波動越小越好）、趨勢（6-1 月動能、距 12 個月高點、站上 10 月均線）。這三類在美、歐、日、亞太都有長期證據，不是只靠台灣資料挑出來的。</dd>
-      <dt>怎麼買賣（每月一次）</dt><dd>持股檔數 N＝總資產 ÷ 3 萬，限制 5～10 檔（保守最多 10、平衡最多 8、進攻固定 5；總資產不到 1.5 萬時降到 3～4 檔，不然每檔不到 3,000 元買不了）。名次掉到 2N 名之外或不在名單的賣出；不足 N 檔依名次補進；依名次把每檔補到「總資產 ÷ N」，單筆不到 3,000 元就跳過、現金留到下月。1 萬元第一個月通常只存現金。</dd>
+      <dt>怎麼買賣（每月一次）</dt><dd>持股檔數 N＝總資產 ÷ 3 萬，限制 5～10 檔（三個版本檔數規則相同，都分散在最多 10 檔，差別只在選股分數裡「強勢股」的比重；總資產不到 1.5 萬時降到 3～4 檔，不然每檔不到 3,000 元買不了）。名次掉到 2N 名之外或不在名單的賣出；不足 N 檔依名次補進；依名次把每檔補到「總資產 ÷ N」，單筆不到 3,000 元就跳過、現金留到下月。1 萬元第一個月通常只存現金。</dd>
       <dt>回測（2009～2025，排除 2026）</dt><dd>每月 1 萬、10 檔、緩衝 2 倍：年化 20.4% vs 0050 定期定額 16.6%；開發期 18.3% vs 10.6%、驗證期 23.1% vs 23.2%（持平）；手續費加倍 19.4%；隨機名次對照組 5.9%。波動約 0050 的 0.85 倍、最大回撤 −15～−18%（0050 −29%）。</dd>
       <dt>預測與限制</dt><dd>保守預測長期超額約 +1～2 個百分點、約六成機率贏 0050；回測沒有 2000／2008 這樣的大空頭，大空頭同樣會跌 30～45%（推論）。名單每天由證交所公開資料＋Yahoo 還原價計算，與回測名單前 30 名重疊 28～30 檔。這不是投資建議。</dd>
       <dt>跟其他卡片</dt><dd>「四因子排名」是價格型因子，沒贏 0050，維持觀察用。研究時的三因子、四因子報酬較低，已被這套取代。</dd></dl></div>`;
