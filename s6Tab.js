@@ -26,7 +26,7 @@ export function createS6Tab({ api, el }) {
     finally { S.loading = false; render(); }
   }
 
-  const verNow = () => (S.st?.ver === 'R' && S.data?.rotOk !== false ? 'R' : 'base');
+  const verNow = () => (S.st?.ver === 'R' && S.data?.rotOk === true ? 'R' : 'base');
   const info = () => (S.data ? buildListInfo(S.data, S.which, verNow()) || buildListInfo(S.data, 'preview', verNow()) : null);
   const curPrice = (code) => S.data?.list.find((x) => x.code === code)?.close;
 
@@ -96,7 +96,7 @@ export function createS6Tab({ api, el }) {
       ? `<div class="s6-deposit"><label>${m} 本月投入（元）<input id="dp-amt" type="number" min="0" step="1000" value="${st.monthly}"></label><button class="refresh" id="dp-go" type="button">入帳並產生清單</button></div>` : '';
     const lsel = `<select id="ls-sel" class="select" aria-label="採用哪份名單"><option value="final" ${S.which === 'final' ? 'selected' : ''} ${fin ? '' : 'disabled'}>月底正式名單${fin ? '（' + esc(fin.month) + '）' : '（尚無）'}</option><option value="preview" ${S.which === 'preview' ? 'selected' : ''}>今日預覽（${esc(S.data.asof)}）</option></select>`;
     const R = verNow() === 'R';
-    const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select"><option value="base" ${R ? '' : 'selected'}>穩健版（預設）</option><option value="R" ${R ? 'selected' : ''} ${S.data.rotOk === false ? 'disabled' : ''}>進攻版：資金輪動＋強勢股（觀察用）</option></select></div>
+    const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select"><option value="base" ${R ? '' : 'selected'}>穩健版（預設）</option><option value="R" ${R ? 'selected' : ''} ${S.data.rotOk === true ? '' : 'disabled'}>進攻版：資金輪動＋強勢股（觀察用）</option></select></div>
       <div class="status">${R ? '進攻版＝趨勢權重加倍＋加入「產業動能」（近 6 個月強勢的產業加分），會追強勢股、也會往強勢產業集中。回測（2009～2025，排除 2026）年化 <b class="num">23.4%</b>（穩健版 20.4%、0050 16.6%），但<b>波動 22%（穩健版 17%、0050 19%）、最大回撤 −21%（穩健版 −16%、0050 −29%）</b>。依附於 2021 航運大多頭與某幾年，近 4 年（2022～2025）落後穩健版。報酬較高、風險也較高，所以只當選用，預設仍是穩健版。' : '穩健版＝價值＋低波動＋趨勢各 1/3，回測風險最低；想追強勢股可切到「進攻版」。'}</div></section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
