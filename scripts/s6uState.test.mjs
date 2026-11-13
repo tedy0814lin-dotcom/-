@@ -5,17 +5,20 @@ const mk = (n, base = 100) => Array.from({ length: n }, (_, i) => ({ code: Strin
 const info = (list) => ({ kind: 'final', month: '2026-10', day: '2026-10-30', list });
 let st = newState({ start: '2026-11-02', monthly: 10000, cash: 10000 });
 let d = derive(st); assert.equal(d.cash, 10000); assert.equal(d.positions.length, 0);
-// 第 1 個月：1 萬 → 5 檔每檔 2000 < 3000 → 沒有買進，現金留著
-let p = makePlan(st, '2026-11', info(mk(40))); assert.equal(p.N, 5); assert.equal(p.items.filter((x) => x.kind === 'buy').length, 0); st.plans['2026-11'] = p;
-// 第 2 個月：再入帳 1 萬 → 現金 2 萬、買 5 檔
-st.deposits['2026-12'] = 10000; p = makePlan(st, '2026-12', info(mk(40))); const buys = p.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 5);
+// 第 1 個月：1 萬 → 3 檔每檔 3333 ≥ 3000 → 買 3 檔
+let p = makePlan(st, '2026-11', info(mk(40))); assert.equal(p.N, 3); assert.equal(p.items.filter((x) => x.kind === 'buy').length, 3);
+assert.equal(makePlan(newState({ start: '2026-11-02', cash: 4000 }), '2026-11', info(mk(40))).items.filter((x) => x.kind === 'buy').length, 0, '4000 元：每檔 1333 < 3000 先存現金');
+st = newState({ start: '2026-11-02', monthly: 10000, cash: 10000 }); // 重置：接著測第 2 個月累積現金的情境
+st.deposits['2026-11'] = 0; 
+// 第 2 個月：資金 15 萬 → 5 檔，每檔 3 萬
+st.deposits['2026-12'] = 150000; p = makePlan(st, '2026-12', info(mk(40))); const buys = p.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 5);
 assert.deepEqual(buys.map((b) => b.code), ['2000', '2001', '2002', '2003', '2004']);
 st.plans['2026-12'] = p;
 // 打勾 3 檔（實際價格略不同）→ 持股與現金
 buys.slice(0, 3).forEach((b, i) => { b.done = true; b.fill = { price: b.price * 1.002, shares: b.shares, date: '2026-12-03' }; });
 d = derive(st); assert.equal(d.positions.length, 3);
 const spent = buys.slice(0, 3).reduce((a, b) => a + b.shares * b.price * 1.002 * 1.001425, 0);
-assert.ok(Math.abs(d.cash - (20000 - spent)) < 1e-6, 'cash ' + d.cash);
+assert.ok(Math.abs(d.cash - (150000 - spent)) < 1e-6, 'cash ' + d.cash);
 // 重算：已打勾保留，其餘依新現金重算；不會重複買已持有的
 const before = p.items.filter((x) => x.done).map((x) => x.id);
 const p2 = makePlan(st, '2026-12', info(mk(40))); assert.deepEqual(p2.items.filter((x) => x.done).map((x) => x.id), before);
