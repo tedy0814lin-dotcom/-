@@ -89,8 +89,8 @@ export function createS6Tab({ api, el }) {
     const plan = st.plans[m], dep = st.deposits[m];
     const fin = buildListInfo(S.data, 'final', verNow());
     const hero = `<section class="s6-hero"><div class="s6-hl">總資產（持股市值＋現金）</div><div class="s6-big num">${n0(total)}<small>元</small></div>
-      <div class="s6-sub num"><span>持股 ${n0(mv)}</span><span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.invested > 0 ? `<span class="${cls(total - dv.invested)}">損益 ${pct(total / dv.invested - 1)}</span>` : ''}${dv.realized ? `<span class="${cls(dv.realized)}">已實現損益 ${n0(dv.realized)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
-      <div class="s6-addmoney"><label>新投入／領出（元，領出填負數）<input id="fl-amt" type="number" step="1000" value="${st.monthly}"></label><button class="refresh" id="fl-go" type="button">加入現金</button></div>
+      <div class="s6-sub num"><span>持股 ${n0(mv)}</span><span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.withdrawn > 0 ? `<span>已領出 ${n0(dv.withdrawn)}</span>` : ''}${dv.invested > 0 ? `<span class="${cls(total + dv.withdrawn - dv.invested)}">損益 ${n0(total + dv.withdrawn - dv.invested)}（${pct((total + dv.withdrawn) / dv.invested - 1)}）</span>` : ''}${dv.realized ? `<span class="${cls(dv.realized)}">已實現損益 ${n0(dv.realized)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
+      <div class="s6-addmoney"><label>新投入／領出（元，領出填負數；領出不會讓損益變負，會另外列「已領出」）<input id="fl-amt" type="number" step="1000" value="${st.monthly}"></label><button class="refresh" id="fl-go" type="button">加入現金</button><button class="ghost" id="rs-top" type="button" title="清除全部紀錄，回到一開始重新填開始日、每月投入、現金與持股">重新設定（歸零）</button></div>
       <div class="s6-sub s6-hint"><span>總資產由系統自動算：持股用最新收盤估值＋現金。你的成本是「打勾時填的實際成交價」，賣出損益用你填的賣出價，不是上面預估價。</span></div></section>`;
     const need = dep == null
       ? `<div class="s6-deposit"><label>${m} 本月投入（元）<input id="dp-amt" type="number" min="0" step="1000" value="${st.monthly}"></label><button class="refresh" id="dp-go" type="button">入帳並產生清單</button></div>` : '';
@@ -228,7 +228,8 @@ export function createS6Tab({ api, el }) {
     const fl = el.querySelector('#fl-go'); if (fl) fl.onclick = () => {
       const v = +el.querySelector('#fl-amt').value; if (!v || !Number.isFinite(v)) { S.msg = '請填新投入的金額（領出填負數）'; render(); return; }
       if (v < 0 && -v > derive(st).cash) { S.msg = '領出金額超過現金，請先賣出持股'; render(); return; }
-      S.msg = ''; act(() => { st.deposits[m] = (st.deposits[m] || 0) + v; (st.flows ||= []).push({ date: today(), amount: v }); const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); });
+      // 領出記在 withdrawals（不從「累計投入」扣掉，損益＝總資產＋已領出−累計投入）；投入照舊加進當月
+      S.msg = ''; act(() => { if (v < 0) (st.withdrawals ||= []).push({ date: today(), amount: -v }); else { st.deposits[m] = (st.deposits[m] || 0) + v; (st.flows ||= []).push({ date: today(), amount: v }); } const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); });
     };
     const ca = el.querySelector('#ca-go'); if (ca) ca.onclick = () => {
       const t = +el.querySelector('#ca-amt').value; if (!(t >= 0)) return; const dv = derive(st); act(() => { st.cashAdj = (st.cashAdj || 0) + (t - dv.cash); const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); });
@@ -254,7 +255,8 @@ export function createS6Tab({ api, el }) {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportState(st)], { type: 'application/json' }));
       a.download = `chip-radar-長期核心-${today().replace(/-/g, '')}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     };
-    el.querySelector('#rs-go').onclick = () => { if (confirm('會清除這個瀏覽器裡全部的長期核心紀錄（建議先匯出備份），確定嗎？')) { try { localStorage.removeItem(LSK); } catch {} S.st = null; render(); } };
+    const doReset = () => { if (confirm('會把這個瀏覽器裡的長期核心紀錄全部歸零（投入、持股、成交、計畫都清掉），回到一開始重新設定。建議先到下面「備份與設定」匯出紀錄。確定要歸零嗎？')) { try { localStorage.removeItem(LSK); } catch {} S.st = null; S.msg = ''; render(); } };
+    el.querySelector('#rs-go').onclick = doReset; const rt = el.querySelector('#rs-top'); if (rt) rt.onclick = doReset;
     bindImport();
   }
 

@@ -59,6 +59,21 @@ console.log('s6uState tests PASS');
   const d3 = derive(s2); assert.ok(Math.abs(d3.realized - (3000 * (1 - 0.004425) - 2500 * 1.001425)) < 1e-6, '已實現損益以你填的買賣價為準');
   assert.equal(parseImport(exportState(s2)).flows.length, 2);
 }
+{ // 領出：不扣累計投入、損益不因領出變負；舊紀錄（負數併在 deposits）也要算對
+  const s3 = newState({ start: '2026-11-02', monthly: 10000, cash: 100000 });
+  s3.withdrawals.push({ date: '2026-11-20', amount: 30000 });
+  const d3 = derive(s3); assert.equal(d3.cash, 70000); assert.equal(d3.invested, 100000); assert.equal(d3.withdrawn, 30000);
+  // 總資產 70000＋已領出 30000−投入 100000＝0（不是 −30%）
+  assert.equal(d3.cash + d3.withdrawn - d3.invested, 0);
+  const legacy = { v: 1, start: '2026-11-02', monthly: 10000, cashAdj: 0, deposits: { '2026-11': 10000 - 30000 + 100000 }, flows: [{ date: '2026-11-02', amount: 100000 }, { date: '2026-11-10', amount: 10000 }, { date: '2026-11-20', amount: -30000 }], manual: [], plans: {} };
+  const dl = derive(legacy); assert.equal(dl.cash, 80000); assert.equal(dl.invested, 110000); assert.equal(dl.withdrawn, 30000);
+  const bench3 = [['2026-11-02', 100], ['2026-11-20', 110], ['2026-11-30', 121]];
+  const c3 = benchCompare(s3, bench3, 70000); // 0050：買 1000 股，11/20 賣 30000/110 股，剩 (1000−272.73)×121＝88000；(88000+30000)/100000−1＝18%
+  assert.ok(Math.abs(c3.benchRet - 0.18) < 1e-9); assert.ok(Math.abs(c3.mineRet - 0) < 1e-9); assert.equal(c3.withdrawn, 30000);
+  const r3 = parseImport(exportState(s3)); assert.equal(r3.withdrawals.length, 1);
+  const noW = JSON.parse(exportState(s3)); delete noW.state.withdrawals; assert.deepEqual(parseImport(JSON.stringify(noW)).withdrawals, []);
+  assert.throws(() => { const b = JSON.parse(exportState(s3)); b.state.withdrawals = [{ date: 'x', amount: 5 }]; parseImport(JSON.stringify(b)); });
+}
 console.log('flows tests PASS');
 { // 進攻版名單：預覽用 rankR、月底用 topR；rotOk=false 時不提供
   const dd = { month: '2026-11', asof: '2026-11-12', rotOk: true, eOk: true, list: [{ code: '2000', name: 'A', close: 10, rank: 1, rankM: 5, ind: '金融保險' }, { code: '2001', name: 'B', close: 20, rank: 2, rankM: 1, ind: '航運' }], months: [{ month: '2026-10', day: '2026-10-30', top: [['2000', 'A', 9, 1]], topM: [['2001', 'B', 19, 1]] }], finalMonth: '2026-10' };
