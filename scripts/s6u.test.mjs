@@ -21,7 +21,12 @@ for (const v of V) {
   const topR = res.ranked.slice().sort((a, b) => a.rankR - b.rankR).slice(0, 30).map((o) => o.code);
   const sameTopR = [...topR].sort().join() === [...v.top30R].sort().join();
   console.log('   進攻版', `最大分數差=${maxR.toExponential(2)} 前30成員一致=${sameTopR}`);
-  const ok = maxR < 1e-2 && sameTopR && maxd < 1e-2 && !miss && !extra && sameTop;
+  let maxA = 0; const gotA = Object.fromEntries(res.ranked.map((o) => [o.code, o.scoreA]));
+  for (const c of Object.keys(v.expectA)) maxA = Math.max(maxA, Math.abs((gotA[c] ?? NaN) - v.expectA[c]) || 0);
+  const topA = res.ranked.slice().sort((a, b) => a.rankA - b.rankA).slice(0, 30).map((o) => o.code);
+  const sameTopA = [...topA].sort().join() === [...v.top30A].sort().join();
+  console.log('   進攻版(A)', `最大分數差=${maxA.toExponential(2)} 前30成員一致=${sameTopA}`);
+  const ok = maxA < 1e-2 && sameTopA && maxR < 1e-2 && sameTopR && maxd < 1e-2 && !miss && !extra && sameTop;
   if (!ok) bad++;
   console.log(v.date, ok ? 'OK ' : 'FAIL', `n=${ek.length} 缺${miss} 多${extra} maxdiff=${maxd.toExponential(2)} 前30成員一致=${sameTop} 順序一致=${sameOrder}`);
 }

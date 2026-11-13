@@ -99,7 +99,7 @@ if (universe < 230) { console.error('合格股票太少（' + universe + '），
 const dow = new Date(asof + 'T00:00:00Z').getUTCDay(), nextWd = new Date(new Date(asof + 'T00:00:00Z').getTime() + (dow === 5 ? 3 : dow === 6 ? 2 : 1) * 864e5).toISOString().slice(0, 7);
 const official = nextWd !== ym; // 隔一個營業日就換月 → 今天是月底最後一個營業日（碰到連假的月底會晚一天才標成正式，見 months）
 const rd = (x, n = 4) => (Number.isFinite(x) ? +x.toFixed(n) : null);
-const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, rankR: rotOk ? o.rankR : null, im: rotOk ? rd(o.im, 3) : null, ind: IND_NAMES[o.ind] || null, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
+const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, rankR: rotOk ? o.rankR : null, rankA: rotOk ? o.rankA : null, im: rotOk ? rd(o.im, 3) : null, ind: IND_NAMES[o.ind] || null, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
 
 // ---- 4) 歷史月底記錄（先讀回舊的接著寫）----
 let prev = null;
@@ -113,9 +113,9 @@ if (repo) for (let t = 0; t < 4 && prev === null; t++) {
 // 網站剛上線時 snap3 還沒有任何月底記錄：用 2026-10 月底的名單（Python 回測面板重算、與回測逐檔一致）當第一份正式名單
 if (!(prev?.months || []).length) { try { prev = { ...(prev || {}), months: [JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url)))] }; } catch (e) { console.log('沒有種子名單', e.message); } }
 // 舊記錄補上進攻版名單（2026-10 月底那份是進攻版上線前存的）：用種子名單補
-try { const seed = JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url))); for (const e of prev?.months || []) if (e.month === seed.month && !e.topR && seed.topR) e.topR = seed.topR; } catch {}
+try { const seed = JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url))); for (const e of prev?.months || []) if (e.month === seed.month) { if (!e.topR && seed.topR) e.topR = seed.topR; if (!e.topA && seed.topA) e.topA = seed.topA; } } catch {}
 const monthsLog = (prev?.months || []).filter((e) => e.month !== ym);
-monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]), topR: rotOk ? list.filter((x) => x.rankR != null).sort((a, b) => a.rankR - b.rankR).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankR]) : null });
+monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]), topR: rotOk ? list.filter((x) => x.rankR != null).sort((a, b) => a.rankR - b.rankR).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankR]) : null, topA: rotOk ? list.filter((x) => x.rankA != null).sort((a, b) => a.rankA - b.rankA).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankA]) : null });
 monthsLog.sort((a, b) => (a.month < b.month ? -1 : 1)); while (monthsLog.length > 48) monthsLog.shift();
 // 正式名單＝最近一個「已確定」的月份：該月最後一次計算時是月底最後營業日，或已經有更晚的月份記錄
 const finalIdx = (() => { for (let i = monthsLog.length - 1; i >= 0; i--) { const e = monthsLog[i]; if (e.official || i < monthsLog.length - 1) return i; } return -1; })();
