@@ -50,3 +50,13 @@ const li = buildListInfo(data, 'final'); assert.equal(li.list[0].rank, 1); asser
 assert.equal(buildListInfo(data, 'preview').list[0].rank, 3);
 const d2 = { ...data, list: [...data.list, { code: '2330', name: 'TSMC', close: 2340, rank: 120 }] }; const l2 = buildListInfo(d2, 'final').list.find((x) => x.code === '2330'); assert.equal(l2.rank, 999); assert.equal(l2.close, 2340);
 console.log('s6uState tests PASS');
+// 新投入／領出：累計投入與現金一起變，損益以投入為基準
+{
+  const s2 = newState({ start: '2026-11-02', monthly: 10000, cash: 10000 });
+  s2.deposits['2026-11'] += 10000; s2.flows.push({ date: '2026-11-20', amount: 10000 });
+  const dv = derive(s2); assert.equal(dv.cash, 20000); assert.equal(dv.invested, 20000);
+  s2.manual.push({ id: 'b', type: 'buy', code: '2603', name: 'x', shares: 10, price: 250, date: '2026-11-21' }); s2.manual.push({ id: 's', type: 'sell', code: '2603', name: 'x', shares: 10, price: 300, date: '2026-11-25' });
+  const d3 = derive(s2); assert.ok(Math.abs(d3.realized - (3000 * (1 - 0.004425) - 2500 * 1.001425)) < 1e-6, '已實現損益以你填的買賣價為準');
+  assert.equal(parseImport(exportState(s2)).flows.length, 2);
+}
+console.log('flows tests PASS');

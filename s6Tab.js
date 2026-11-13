@@ -88,10 +88,9 @@ export function createS6Tab({ api, el }) {
     const plan = st.plans[m], dep = st.deposits[m];
     const fin = buildListInfo(S.data, 'final');
     const hero = `<section class="s6-hero"><div class="s6-hl">總資產（持股市值＋現金）</div><div class="s6-big num">${n0(total)}<small>元</small></div>
-      <div class="s6-sub num"><span>持股 ${n0(mv)}</span><span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.invested > 0 ? `<span class="${cls(total - dv.invested)}">損益 ${pct(total / dv.invested - 1)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
-      <details class="s6-adj"><summary>調整總資產／入金出金</summary>
-        <div class="s6-form"><label>總資產改成（元）<input id="ad-total" type="number" min="0" step="1000" value="${Math.round(total)}"></label><label>　<button class="refresh" id="ad-total-go" type="button">改成這個金額</button></label></div>
-        <div class="status">股價漲跌會自動算進總資產，不用改。只有你真的多存錢進來（或領出來）才調整：我會把差額當作入金／出金，並用它回推現金＝總資產 − 持股市值，損益才不會算歪。領到股息請直接調整。</div></details></section>`;
+      <div class="s6-sub num"><span>持股 ${n0(mv)}</span><span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.invested > 0 ? `<span class="${cls(total - dv.invested)}">損益 ${pct(total / dv.invested - 1)}</span>` : ''}${dv.realized ? `<span class="${cls(dv.realized)}">已實現損益 ${n0(dv.realized)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
+      <div class="s6-addmoney"><label>新投入／領出（元，領出填負數）<input id="fl-amt" type="number" step="1000" value="${st.monthly}"></label><button class="refresh" id="fl-go" type="button">加入現金</button></div>
+      <div class="s6-sub s6-hint"><span>總資產由系統自動算：持股用最新收盤估值＋現金。你的成本是「打勾時填的實際成交價」，賣出損益用你填的賣出價，不是上面預估價。</span></div></section>`;
     const need = dep == null
       ? `<div class="s6-deposit"><label>${m} 本月投入（元）<input id="dp-amt" type="number" min="0" step="1000" value="${st.monthly}"></label><button class="refresh" id="dp-go" type="button">入帳並產生清單</button></div>` : '';
     const lsel = `<select id="ls-sel" class="select" aria-label="採用哪份名單"><option value="final" ${S.which === 'final' ? 'selected' : ''} ${fin ? '' : 'disabled'}>月底正式名單${fin ? '（' + esc(fin.month) + '）' : '（尚無）'}</option><option value="preview" ${S.which === 'preview' ? 'selected' : ''}>今日預覽（${esc(S.data.asof)}）</option></select>`;
@@ -101,6 +100,7 @@ export function createS6Tab({ api, el }) {
       <details class="s6-more"><summary>更多：新增持股、成交紀錄、備份、設定、規則</summary>
         <div class="s6-sec"><h4>新增原本就有的持股／計畫外的買賣</h4>${addForm()}</div>
         <div class="s6-sec"><h4>成交紀錄</h4>${tradesView()}</div>
+        <div class="s6-sec"><h4>現金校正（領到股息、或帳上現金跟這裡不同）</h4><div class="s6-form"><label>現金改成（元）<input id="ca-amt" type="number" min="0" step="100" value="${Math.round(dv.cash)}"></label><label>　<button class="refresh" id="ca-go" type="button">校正</button></label></div><div class="status">只改現金，不算入「累計投入」，所以不會影響損益比較。</div></div>
         <div class="s6-sec"><h4>備份與設定</h4>
           <div class="s6-form"><label>每月固定投入（預設值）<input id="st-monthly" type="number" min="1000" step="1000" value="${st.monthly}"></label><label>策略開始日<input id="st-start" type="date" value="${esc(st.start)}"></label></div>
           <div class="toolbar"><button class="refresh" id="ex-go" type="button">匯出紀錄（JSON 檔）</button><button class="ghost" id="su-imp" type="button">匯入紀錄檔</button><input id="im-file" type="file" accept="application/json,.json" hidden><button class="ghost" id="rs-go" type="button">清除全部紀錄</button></div>
@@ -127,10 +127,10 @@ export function createS6Tab({ api, el }) {
       return `<div class="s6-item ${it.done ? 'done' : ''} ${it.kind}" data-id="${esc(it.id)}">
         <label class="s6-chk"><input type="checkbox" class="pi-chk" ${it.done ? 'checked' : ''} aria-label="${it.kind === 'sell' ? '已賣出' : '已買入'} ${esc(it.code)}"><span class="s6-step num">${k + 1}</span></label>
         <div class="s6-main"><div class="s6-name">${badge} <b class="num">${esc(it.code)}</b> ${esc(it.name)} <span class="muted small">名次 ${pn(it.rank)}</span></div>
-          <div class="s6-plan num"><b>${n0(it.shares)}</b> 股 × ${px(it.price)} ≈ <b>${n0(it.amount)}</b> 元${it.reason ? ` <span class="muted small">${esc(it.reason)}</span>` : ''}</div></div>
-        <div class="s6-fill"><label>實際價<input class="pi-px num" type="number" step="0.01" min="0" value="${f.price}"></label><label>股數<input class="pi-sh num" type="number" step="1" min="1" value="${f.shares}"></label></div></div>`;
+          <div class="s6-plan num">${it.done ? `已記錄：<b>${n0(it.fill.shares)}</b> 股 × <b>${px(it.fill.price)}</b> ＝ <b>${n0(it.fill.shares * it.fill.price)}</b> 元（你的成交價）` : `建議 <b>${n0(it.shares)}</b> 股，預估價 ${px(it.price)}（約 ${n0(it.amount)} 元）${it.reason ? ` <span class="muted small">${esc(it.reason)}</span>` : ''}`}</div></div>
+        <div class="s6-fill"><label>我的${it.kind === 'sell' ? '賣出' : '買入'}價<input class="pi-px num" type="number" step="0.01" min="0" value="${f.price}"></label><label>我的股數<input class="pi-sh num" type="number" step="1" min="1" value="${f.shares}"></label></div></div>`;
     }).join('');
-    return meta + `<div class="status">依序做：先賣、再買（零股交易）。買完把實際成交價與股數改成真的，打勾就記進持股。還剩 <b>${nTodo}</b> 項。</div><div class="s6-list">${rows}</div>`
+    return meta + `<div class="status">依序做：先賣、再買（零股交易）。買完把「我的買入價／股數」改成你真正成交的，再打勾；持股成本、現金、損益都以你填的為準。還剩 <b>${nTodo}</b> 項。</div><div class="s6-list">${rows}</div>`
       + (skips.length ? `<details class="s6-skip"><summary>另有 ${skips.length} 檔金額太小先跳過</summary><ul>${skips.map((it) => `<li><b class="num">${esc(it.code)}</b> ${esc(it.name)}（名次 ${pn(it.rank)}）</li>`).join('')}</ul></details>` : '');
   }
 
@@ -179,14 +179,15 @@ export function createS6Tab({ api, el }) {
   function bindMain(i) {
     const st = S.st, m = today().slice(0, 7);
     const ls = el.querySelector('#ls-sel'); if (ls) ls.onchange = () => { S.which = ls.value; const j = info(); if (st.plans[m] && j) { st.plans[m] = makePlan(st, m, j, today()); save(); } render(); };
-    const dp = el.querySelector('#dp-go'); if (dp) dp.onclick = () => { const v = +el.querySelector('#dp-amt').value; if (!(v >= 0)) return; act(() => { st.deposits[m] = v; st.plans[m] = makePlan(st, m, i, today()); }); };
+    const dp = el.querySelector('#dp-go'); if (dp) dp.onclick = () => { const v = +el.querySelector('#dp-amt').value; if (!(v >= 0)) return; act(() => { st.deposits[m] = v; (st.flows ||= []).push({ date: today(), amount: v }); st.plans[m] = makePlan(st, m, i, today()); }); };
     const re = el.querySelector('#pl-re'); if (re) re.onclick = () => ensurePlan();
-    const at = el.querySelector('#ad-total-go'); if (at) at.onclick = () => {
-      const target = +el.querySelector('#ad-total').value; if (!(target >= 0)) return;
-      const dv = derive(st), mv = dv.positions.reduce((a, p) => a + (curPrice(p.code) ?? p.cost / p.shares) * p.shares, 0), diff = target - (mv + dv.cash);
-      if (target < mv) { S.msg = `總資產不能低於持股市值 ${n0(mv)} 元`; render(); return; }
-      if (Math.abs(diff) < 1) return; S.msg = '';
-      act(() => { st.deposits[m] = (st.deposits[m] || 0) + diff; if (st.plans[m]) st.plans[m] = makePlan(st, m, i, today()); });
+    const fl = el.querySelector('#fl-go'); if (fl) fl.onclick = () => {
+      const v = +el.querySelector('#fl-amt').value; if (!v || !Number.isFinite(v)) { S.msg = '請填新投入的金額（領出填負數）'; render(); return; }
+      if (v < 0 && -v > derive(st).cash) { S.msg = '領出金額超過現金，請先賣出持股'; render(); return; }
+      S.msg = ''; act(() => { st.deposits[m] = (st.deposits[m] || 0) + v; (st.flows ||= []).push({ date: today(), amount: v }); const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); });
+    };
+    const ca = el.querySelector('#ca-go'); if (ca) ca.onclick = () => {
+      const t = +el.querySelector('#ca-amt').value; if (!(t >= 0)) return; const dv = derive(st); act(() => { st.cashAdj = (st.cashAdj || 0) + (t - dv.cash); const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); });
     };
     el.querySelectorAll('.s6-item').forEach((row) => {
       const it = st.plans[m]?.items.find((x) => x.id === row.dataset.id); if (!it) return;

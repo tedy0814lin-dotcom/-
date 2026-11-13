@@ -441,3 +441,6 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .s6-more { margin-top: 14px; font-size: 14px; } .s6-more > summary { cursor: pointer; color: var(--muted); padding: 8px 0; }
 .s6-sec { margin-top: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); display: grid; gap: 10px; } .s6-sec h4 { margin: 0; font-size: 13px; color: var(--accent); }
 .s6-dl { display: grid; gap: 10px; margin: 0; } .s6-dl dt { font-weight: 700; } .s6-dl dd { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.s6-addmoney { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); } .s6-addmoney label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); flex: 1 1 200px; }
+.s6-addmoney input { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; color: var(--fg); }
+.s6-hint { font-size: 12px; }
