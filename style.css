@@ -404,33 +404,40 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .pc-card header .muted.small { flex-basis: 100%; }
 
 /* ---------- 策略頁：長期核心（s6Tab.js） ---------- */
-.s6-banner { margin-top: 12px; padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r); background: var(--panel); font-size: 13px; line-height: 1.65; color: var(--muted); }
+.s6-banner { margin-top: 12px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 var(--r) var(--r) 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
 .s6-banner b { color: var(--fg); }
 .s6-note { margin-top: 12px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: var(--r); font-size: 13px; color: var(--muted); }
 .s6-note.bad { border: 1px solid var(--down); color: var(--fg); }
-.s6-tiles { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px; }
-.s6-tiles > div { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 12px; display: grid; gap: 2px; }
-.s6-tiles span { font-size: 12px; color: var(--muted); } .s6-tiles b { font-size: 18px; }
+.s6-hero { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; display: grid; gap: 6px; }
+.s6-hl { font-size: 13px; color: var(--muted); }
+.s6-big { font-size: 38px; font-weight: 700; line-height: 1.1; letter-spacing: -.5px; } .s6-big small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.s6-sub { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted); }
+.s6-adj { margin-top: 6px; font-size: 13px; color: var(--muted); } .s6-adj summary { cursor: pointer; width: fit-content; }
+.s6-adj .s6-form { margin-top: 10px; align-items: end; }
 .s6-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 10px; }
 .s6-form label, .s6-deposit label, .s6-fill label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
 .s6-form input, .s6-form select, .s6-deposit input, .s6-fill input { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; width: 100%; color: var(--fg); }
 .s6-deposit { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; } .s6-deposit label { flex: 1 1 180px; }
-.s6-seg { display: flex; gap: 6px; flex-wrap: wrap; }
-.s6-seg button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 13px; color: var(--muted); }
-.s6-seg button.on { border-color: var(--accent); color: var(--fg); background: var(--chip-flat); } .s6-seg button:disabled { opacity: .45; cursor: not-allowed; }
+.panel-head .select { margin-left: auto; font-size: 12.5px; padding: 5px 8px; }
+.s6-empty { padding: 14px; border: 1px dashed var(--line); border-radius: var(--r); font-size: 14px; line-height: 1.7; } .s6-empty b { display: block; font-size: 16px; margin-bottom: 4px; }
+.s6-prev { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--panel-2); }
+.s6-prevh { padding: 8px 12px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.s6-prevr { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.s6-prev .status { padding: 8px 12px; }
 .s6-list { display: grid; gap: 8px; }
 .s6-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); }
 .s6-item.sell { border-left: 3px solid var(--down); } .s6-item.buy { border-left: 3px solid var(--up); }
-.s6-item.done { opacity: .62; } .s6-item.done .s6-name { text-decoration: line-through; text-decoration-color: var(--muted); }
+.s6-item.done { opacity: .6; } .s6-item.done .s6-name { text-decoration: line-through; text-decoration-color: var(--muted); }
 .s6-chk { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .s6-chk input { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; }
 .s6-step { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); font-size: 12px; }
-.s6-name { font-size: 14.5px; } .s6-plan { font-size: 13px; color: var(--fg); margin-top: 2px; }
-.s6-fill { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; }
-.s6-fill input[type=date] { padding-left: 6px; padding-right: 4px; font-size: 13px; }
-@media (min-width: 760px) { .s6-item { grid-template-columns: auto minmax(0, 1fr) 330px; } .s6-fill { grid-column: auto; } }
+.s6-name { font-size: 15px; } .s6-plan { font-size: 13.5px; margin-top: 2px; }
+.s6-fill { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (min-width: 760px) { .s6-item { grid-template-columns: auto minmax(0, 1fr) 240px; } .s6-fill { grid-column: auto; } }
 .s6-b { display: inline-block; font-size: 11.5px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); vertical-align: middle; }
 .s6-b.sell { color: var(--down); border-color: var(--down); background: var(--chip-down); } .s6-b.new, .s6-b.add { color: var(--up); border-color: var(--up); background: var(--chip-up); } .s6-b.keep { color: var(--muted); }
 .s6-selltr td { background: var(--chip-down); }
-.s6-skip, .s6-add { font-size: 13px; color: var(--muted); } .s6-skip summary, .s6-add summary { cursor: pointer; } .s6-skip ul { margin: 6px 0 0; padding-left: 18px; }
-.s6-add > .s6-form, .s6-add > .toolbar { margin-top: 10px; }
+.s6-skip { font-size: 13px; color: var(--muted); } .s6-skip summary { cursor: pointer; } .s6-skip ul { margin: 6px 0 0; padding-left: 18px; }
+.s6-more { margin-top: 14px; font-size: 14px; } .s6-more > summary { cursor: pointer; color: var(--muted); padding: 8px 0; }
+.s6-sec { margin-top: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); display: grid; gap: 10px; } .s6-sec h4 { margin: 0; font-size: 13px; color: var(--accent); }
+.s6-dl { display: grid; gap: 10px; margin: 0; } .s6-dl dt { font-weight: 700; } .s6-dl dd { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
