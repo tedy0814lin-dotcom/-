@@ -1,0 +1,15 @@
+name: 月營收歷史下載（一次性研究用）
+on:
+  workflow_dispatch:
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git config user.name "github-actions"; git config user.email "actions@users.noreply.github.com"
+          git fetch origin revdata 2>/dev/null && git checkout -B work origin/revdata -- raw 2>/dev/null || true
+      - run: pip install requests -q && python3 scripts/revfetch.py
