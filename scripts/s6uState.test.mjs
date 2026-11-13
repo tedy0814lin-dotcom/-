@@ -10,9 +10,9 @@ let p = makePlan(st, '2026-11', info(mk(40))); assert.equal(p.N, 3); assert.equa
 assert.equal(makePlan(newState({ start: '2026-11-02', cash: 4000 }), '2026-11', info(mk(40))).items.filter((x) => x.kind === 'buy').length, 0, '4000 元：每檔 1333 < 3000 先存現金');
 st = newState({ start: '2026-11-02', monthly: 10000, cash: 10000 }); // 重置：接著測第 2 個月累積現金的情境
 st.deposits['2026-11'] = 0; 
-// 第 2 個月：資金 15 萬 → 5 檔，每檔 3 萬
-st.deposits['2026-12'] = 150000; p = makePlan(st, '2026-12', info(mk(40))); const buys = p.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 5);
-assert.deepEqual(buys.map((b) => b.code), ['2000', '2001', '2002', '2003', '2004']);
+// 第 2 個月：資金 15 萬 → 15 檔，每檔 1 萬
+st.deposits['2026-12'] = 150000; p = makePlan(st, '2026-12', info(mk(40))); const buys = p.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 15);
+assert.deepEqual(buys.map((b) => b.code).slice(0, 5), ['2000', '2001', '2002', '2003', '2004']);
 st.plans['2026-12'] = p;
 // 打勾 3 檔（實際價格略不同）→ 持股與現金
 buys.slice(0, 3).forEach((b, i) => { b.done = true; b.fill = { price: b.price * 1.002, shares: b.shares, date: '2026-12-03' }; });
@@ -26,8 +26,8 @@ const codes = p2.items.filter((x) => x.kind === 'buy' && !x.done).map((x) => x.c
 assert.ok(!codes.some((c) => ['2000', '2001', '2002'].includes(c) && p2.items.find((x) => x.code === c && x.kind === 'buy' && !x.done && x.isNew)), '不重複新買已持有的');
 // 名次掉出 → 標賣出
 st.plans['2026-12'] = p2;
-const list2 = mk(40).map((x) => (x.code === '2001' ? { ...x, rank: 30 } : x)); const p3 = makePlan(st, '2027-01', info(list2));
-assert.ok(p3.items.some((x) => x.kind === 'sell' && x.code === '2001'), '名次 30 > 2N 要賣');
+const list2 = mk(40).map((x) => (x.code === '2001' ? { ...x, rank: 31 } : x)); const p3 = makePlan(st, '2027-01', info(list2));
+assert.ok(p3.items.some((x) => x.kind === 'sell' && x.code === '2001'), '名次 31 > 2N（N=15 → 30）要賣');
 // 賣出打勾後現金增加、持股移除
 st.plans['2027-01'] = p3; const sell = p3.items.find((x) => x.kind === 'sell'); const c0 = derive(st).cash; sell.done = true; sell.fill = { price: sell.price, shares: sell.shares, date: '2027-01-05' };
 d = derive(st); assert.ok(d.cash > c0); assert.ok(!d.positions.some((x) => x.code === '2001'));

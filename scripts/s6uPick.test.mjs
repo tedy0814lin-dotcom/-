@@ -6,14 +6,14 @@ import { TIERS, buildListInfo, newState, makePlan, parseImport, exportState, pla
 const mk = (n) => Array.from({ length: n }, (_, i) => ({ code: String(1000 + i), name: 'S' + i, close: 50 + i, rank: i + 1, ind: i % 2 ? '金融保險' : '半導體' }));
 const L = mk(40);
 // ---- 三版本最大檔數 ----
-assert.deepEqual(['base', 'R', 'A'].map((k) => TIERS[k].nMax), [10, 10, 10]);
-for (const [ver, exp] of [['base', 10], ['R', 10], ['A', 10]]) {
+assert.deepEqual(['base', 'R', 'A'].map((k) => TIERS[k].nMax), [15, 15, 15]);
+for (const [ver, exp] of [['base', 15], ['R', 15], ['A', 15]]) {
   const st = newState({ start: '2026-11-01', monthly: 100000, cash: 1000000 }); st.ver = ver;
   const r = planMonth({ list: L, holdings: [], cash: 1000000, ...planArgs(st, ver) });
   assert.equal(r.N, exp, 'nMax ' + ver); assert.equal(r.buys.filter((b) => b.status === 'buy').length, exp);
 }
-// 小資金：三版本檔數規則相同（資金夠就 5 檔起、每多 3 萬加一檔）
-{ const r = planMonth({ list: L, holdings: [], cash: 60000, ...planArgs(newState({ start: '2026-11-01' }), 'A') }); assert.equal(r.N, 5); }
+// 小資金：三版本檔數規則相同（每檔至少 3,000 元，最多 15 檔：1 萬→3 檔、3 萬→10 檔、4.5 萬以上→15 檔）
+for (const [c, n] of [[10000, 3], [30000, 10], [45000, 15], [60000, 15]]) { const r = planMonth({ list: L, holdings: [], cash: c, ...planArgs(newState({ start: '2026-11-01' }), 'A') }); assert.equal(r.N, n, 'cash ' + c); }
 
 // ---- 排除：該檔不會被買，後面的名次遞補，名次重新編 ----
 {
@@ -80,8 +80,8 @@ for (const [ver, exp] of [['base', 10], ['R', 10], ['A', 10]]) {
   const st = newState({ start: '2026-11-01', monthly: 100000, cash: 1000000 }); st.ver = 'A'; st.pins = ['1030']; st.exclude = ['1000'];
   const info = { kind: 'preview', ver: 'A', month: '2026-11', day: '2026-11-12', list: L };
   const pl = makePlan(st, '2026-11', info, '2026-11-12');
-  assert.equal(pl.ver, 'A'); assert.equal(pl.N, 10);
-  const buys = pl.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 10); assert.equal(buys[0].code, '1030'); assert.equal(buys[0].pinned, true);
+  assert.equal(pl.ver, 'A'); assert.equal(pl.N, 15);
+  const buys = pl.items.filter((x) => x.kind === 'buy'); assert.equal(buys.length, 15); assert.equal(buys[0].code, '1030'); assert.equal(buys[0].pinned, true);
   assert.ok(!buys.some((x) => x.code === '1000'));
   const back = parseImport(exportState(st)); assert.deepEqual(back.pins, ['1030']); assert.deepEqual(back.exclude, ['1000']);
   // 舊版紀錄沒有 pins／exclude → 匯入時補空陣列

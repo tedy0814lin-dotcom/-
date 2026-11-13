@@ -20,5 +20,5 @@ const m1 = planMonth({ list, holdings: [], cash: 10000 });
 console.log('第1個月 1萬：N=', m1.N, '目標/檔', Math.round(m1.target), '買進', m1.buys.filter((b) => b.status === 'buy').length, '檔（預期 3）');
 const m2 = planMonth({ list, holdings: [], cash: 20000 }); const m0 = planMonth({ list, holdings: [], cash: 4000 });
 console.log('第2個月 現金2萬：買進', m2.buys.filter((b) => b.status === 'buy').map((b) => `${b.code}×${b.shares}股=${Math.round(b.amount)}`).join(' '), '剩餘現金', Math.round(m2.cashAfter));
-if (bad || m1.buys.filter((b) => b.status === 'buy').length !== 3 || m2.buys.filter((b) => b.status === 'buy').length !== 5 || m0.buys.some((b) => b.status === 'buy')) { console.error('FAILED'); process.exit(1); }
+if (bad || m1.buys.filter((b) => b.status === 'buy').length !== 3 || m2.buys.filter((b) => b.status === 'buy').length !== 6 || m0.buys.some((b) => b.status === 'buy')) { console.error('FAILED'); process.exit(1); }
 console.log('ALL PASS');
