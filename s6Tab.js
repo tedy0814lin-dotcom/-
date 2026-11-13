@@ -3,7 +3,7 @@
 // 之後它會幫你記錄持股、標出該賣的股票、比較同樣的錢買 0050 的結果。
 // 紀錄只存在你的瀏覽器，可匯出成檔案備份、換裝置時匯入；不會傳到伺服器。規則與回測：專案文件《全球多因子長期策略-S6U》。
 import { PLAN_DEFAULTS, planMonth, applyExclude } from '/lib/s6uPlan.js';
-import { RULES_VER, TIERS, tierOf, planArgs, newState, derive, buildListInfo, makePlan, benchCompare, exportState, parseImport, uid, allTrades } from '/lib/s6uState.js';
+import { RULES_VER, TIERS, tierOf, tierOk, planArgs, newState, derive, buildListInfo, makePlan, benchCompare, exportState, parseImport, uid, allTrades } from '/lib/s6uState.js';
 
 const LSK = 'wr_s6u_state_v1';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,7 +26,7 @@ export function createS6Tab({ api, el }) {
     finally { S.loading = false; render(); }
   }
 
-  const verNow = () => { const v = S.st?.ver; return TIERS[v] && (!TIERS[v].needRot || S.data?.rotOk === true) ? v : 'base'; };
+  const verNow = () => { const v = S.st?.ver; return TIERS[v] && tierOk(S.data, v) ? v : 'base'; };
   const info = () => (S.data ? buildListInfo(S.data, S.which, verNow()) || buildListInfo(S.data, 'preview', verNow()) : null);
   const curPrice = (code) => S.data?.list.find((x) => x.code === code)?.close;
 
@@ -40,7 +40,7 @@ export function createS6Tab({ api, el }) {
 
   function render() {
     const d = S.data;
-    const head = `<div class="s6-banner"><b>長期核心</b>：每月定期定額，持有排名前 5～10 檔（依版本），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">20.4%</b>，0050 <b class="num">16.6%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。</div>`;
+    const head = `<div class="s6-banner"><b>長期核心</b>：每月定期定額，持有排名前 5～10 檔（依版本），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">19.3%</b>，0050 <b class="num">16.5%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。</div>`;
     if (S.loading && !d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
     if (S.error && !d) { el.innerHTML = head + `<div class="s6-note bad">讀不到名單：${esc(S.error)}</div><button class="refresh" id="s6-reload" type="button">重試</button>`; el.querySelector('#s6-reload').onclick = load; return; }
     if (!d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
@@ -97,13 +97,13 @@ export function createS6Tab({ api, el }) {
     const lsel = `<select id="ls-sel" class="select" aria-label="採用哪份名單"><option value="final" ${S.which === 'final' ? 'selected' : ''} ${fin ? '' : 'disabled'}>月底正式名單${fin ? '（' + esc(fin.month) + '）' : '（尚無）'}</option><option value="preview" ${S.which === 'preview' ? 'selected' : ''}>今日預覽（${esc(S.data.asof)}）</option></select>`;
     const V = verNow();
     const TXT = {
-      base: '<b>保守</b>：價值、低波動、趨勢各占 1/3（強勢股只占 1/3），持有 10 檔。回測（2009～2025，排除 2026，每月定期定額）年化 <b class="num">20.4%</b>、波動 17%、最大回撤 <b class="num">−16%</b>，最差連續 12 個月 −9%。對照 0050：16.6%／波動 19%／回撤 −29%／最差 12 個月 −25%。報酬小贏 0050、風險大降。',
-      R: '<b>平衡</b>：強勢股（6 個月動能、接近 12 月高點、站上均線，加「強勢產業」加分）占分數 2/3，價值與低波動合占 1/3，持有 10 檔。回測年化 <b class="num">24.4%</b>、波動 29%、最大回撤 <b class="num">−26%</b>（略小於 0050），最差連續 12 個月 −19%。2022～2025 年化 22.6%（0050 19.5%）。排除 2021 航運大多頭後逐年複利仍 24.0%（0050 16.6%）。',
-      A: '<b>進攻（觀察用）</b>：強勢股占分數 73%，而且「強勢」包含<b>近 1 個月、近 3 個月的漲幅</b>（最近大漲的股票會加分），低波動權重降到一半，同樣持有 10 檔。回測年化 <b class="num">25.2%</b>、波動 34%、最大回撤 <b class="num">−33%</b>（比 0050 的 −29% 多 4 個百分點；持股改成 12 檔時回撤到 −36%），最差連續 12 個月 −25%。<b>報酬只比平衡版多 0.8 個百分點（在誤差內）</b>，風險卻明顯較大；2022～2025 年化 18.1%，輸 0050 的 19.5%。真正連續漲停的小型飆股，因為波動大、估值貴，仍排不進前 10 名：硬要全買那種股票，回測回撤會到 −57%，超出你的預算。',
+      base: '<b>保守</b>：價值、低波動、趨勢各占 1/3（強勢股只占 1/3），持有 10 檔。回測（2009～2025，排除 2026，每月定期定額）年化 <b class="num">19.3%</b>、波動 14%、最大回撤 <b class="num">−19%</b>，最差連續 12 個月 −13%。對照 0050：16.5%／波動 18%／回撤 −29%／最差 12 個月 −24%。2009～2017 年化 16.2%（0050 10.7%）；2018～2025 年化 22.2%，<b>略輸 0050 的 23.5%</b>，但波動與回撤小很多。報酬大致與 0050 相當到小贏、風險大降。',
+      R: '<b>平衡</b>（2026-11-13 改版）：趨勢（6 個月動能、接近 12 月高點、站上均線）占分數一半，價值占 1/4，低波動與<b>「近 3 個月每股盈餘成長」</b>各占 1/8，持有 10 檔；不再用產業加分，名單較不會擠在同一產業（回測單一產業平均占 30%，舊版 41%）。回測年化 <b class="num">26.5%</b>（持股 12／15 檔時 24.4%／23.6%）、波動 22%、最大回撤 <b class="num">−21%</b>，最差連續 12 個月 −19%；2009～2017 年化 19.6%（0050 10.7%）、2018～2025 年化 33.1%（0050 23.5%）；手續費加倍 24.2%。<b>限制</b>：2024、2025 與 2026 年 1～10 月都輸 0050（16%／6%／31% 對 49%／37%／63%，台積電帶動的大型股行情）；盈餘成長的訊號晚一個月才買效果就少掉大半，請在月初照名單執行。',
+      A: '<b>進攻（觀察用）</b>：強勢股占分數 73%，而且「強勢」包含<b>近 1 個月、近 3 個月的漲幅</b>（最近大漲的股票會加分），加「強勢產業」加分，低波動權重降到一半，同樣持有 10 檔。回測年化 <b class="num">24.3%</b>、波動 32%、最大回撤 <b class="num">−29%</b>，最差連續 12 個月 −20%。<b>報酬沒有比平衡版高</b>，風險卻明顯較大；2018～2025 年化 21.8%，輸 0050 的 23.5%。想贏槓桿型的正2（同期年化約 35%、回撤 −47%）：測過 400 多組選股組合，沒有任何一組能在相同風險下穩定贏它；只買最近最強的股票，回測回撤會到 −54%，2026 年實測還大幅落後。',
     };
-    const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${TIERS[k].needRot && S.data.rotOk !== true ? 'disabled' : ''}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（觀察用）' : ''}</option>`;
+    const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${tierOk(S.data, k) ? '' : 'disabled'}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（觀察用）' : ''}</option>`;
     const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select">${opt('base')}${opt('R')}${opt('A')}</select></div>
-      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −16%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">強勢股 67%・回撤 −26%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">強勢股 73%・回撤 −33%</span></div></div>
+      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −19%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">趨勢 50%＋盈餘成長・回撤 −21%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">強勢股 73%・回撤 −29%</span></div></div>
       <div class="status">${TXT[V]}</div>${pickView(i, V)}</section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
@@ -189,10 +189,10 @@ export function createS6Tab({ api, el }) {
 
   function guide() {
     return `<div class="s6-sec"><h4>規則與回測</h4><dl class="s6-dl">
-      <dt>怎麼選股</dt><dd>母體＝上市普通股、股價 ≥10、當日成交值排前 300。三個面向各自排百分位後平均：價值（本益比倒數、淨值比倒數、殖利率）、低波動（近 12 個月月報酬波動越小越好）、趨勢（6-1 月動能、距 12 個月高點、站上 10 月均線）。這三類在美、歐、日、亞太都有長期證據，不是只靠台灣資料挑出來的。</dd>
+      <dt>怎麼選股</dt><dd>母體＝上市普通股、股價 ≥10、當日成交值排前 300。三個面向各自排百分位後平均：價值（本益比倒數、淨值比倒數、殖利率）、低波動（近 12 個月月報酬波動越小越好）、趨勢（6-1 月動能、距 12 個月高點、站上 10 月均線）。這三類在美、歐、日、亞太都有長期證據，不是只靠台灣資料挑出來的。平衡版另外加「近 3 個月每股盈餘成長」（用本益比與還原價反推每股盈餘的變化；盈餘成長的股票之後表現較好、盈餘衰退最多的 1/5 明顯落後，上市 2009～2025 高低組每月差 0.76 個百分點）。</dd>
       <dt>怎麼買賣（每月一次）</dt><dd>持股檔數 N＝總資產 ÷ 3 萬，限制 5～10 檔（三個版本檔數規則相同，都分散在最多 10 檔，差別只在選股分數裡「強勢股」的比重；總資產不到 1.5 萬時降到 3～4 檔，不然每檔不到 3,000 元買不了）。名次掉到 2N 名之外或不在名單的賣出；不足 N 檔依名次補進；依名次把每檔補到「總資產 ÷ N」，單筆不到 3,000 元就跳過、現金留到下月。1 萬元第一個月通常只存現金。</dd>
-      <dt>回測（2009～2025，排除 2026）</dt><dd>每月 1 萬、10 檔、緩衝 2 倍：年化 20.4% vs 0050 定期定額 16.6%；開發期 18.3% vs 10.6%、驗證期 23.1% vs 23.2%（持平）；手續費加倍 19.4%；隨機名次對照組 5.9%。波動約 0050 的 0.85 倍、最大回撤 −15～−18%（0050 −29%）。</dd>
-      <dt>預測與限制</dt><dd>保守預測長期超額約 +1～2 個百分點、約六成機率贏 0050；回測沒有 2000／2008 這樣的大空頭，大空頭同樣會跌 30～45%（推論）。名單每天由證交所公開資料＋Yahoo 還原價計算，與回測名單前 30 名重疊 28～30 檔。這不是投資建議。</dd>
+      <dt>回測（2009～2025，排除 2026）</dt><dd>每月 1 萬、10 檔、緩衝 2 倍。保守版：年化 19.3% vs 0050 定期定額 16.5%；2009～2017 為 16.2% vs 10.7%、2018～2025 為 22.2% vs 23.5%（略輸）；手續費加倍 18.1%；波動約 0050 的 0.8 倍、最大回撤 −17～−19%（0050 −29%）。<b>2026-11-13 更正</b>：先前的回測資料少了 25 個月（證交所本益比檔當時沒抓到），補齊 227 個月後重算，保守版由 20.4% 更正為 19.3%、進攻版由 25.2% 更正為 24.3%，舊平衡版由 24.4% 降到 19.6%（已改用新算式）。同一套規則只因資料多寡就差 1～5 個百分點，代表只持有 10 檔的回測數字本身誤差就有這麼大，請當成大概的範圍看。</dd>
+      <dt>預測與限制</dt><dd>保守預測長期超額約 +1～2 個百分點、約六成機率贏 0050；近三年（2024～2026）0050 因台積電大漲，三個版本都落後；回測沒有 2000／2008 這樣的大空頭，大空頭同樣會跌 30～45%（推論）。名單每天由證交所公開資料＋Yahoo 還原價計算，與回測名單前 30 名重疊 28～30 檔。這不是投資建議。</dd>
       <dt>跟其他卡片</dt><dd>「四因子排名」是價格型因子，沒贏 0050，維持觀察用。研究時的三因子、四因子報酬較低，已被這套取代。</dd></dl></div>`;
   }
 

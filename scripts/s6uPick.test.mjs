@@ -60,7 +60,7 @@ for (const [ver, exp] of [['base', 10], ['R', 10], ['A', 10]]) {
 
 // ---- 名單：三個版本各取各的欄位 ----
 {
-  const data = { rotOk: true, month: '2026-11', asof: '2026-11-12', finalMonth: '2026-10',
+  const data = { rotOk: true, eOk: true, month: '2026-11', asof: '2026-11-12', finalMonth: '2026-10',
     list: [{ code: '1000', name: 'A', close: 10, rank: 1, rankM: 2, rankH: 3 }, { code: '1001', name: 'B', close: 11, rank: 2, rankM: 1, rankH: 1 }, { code: '1002', name: 'C', close: 12, rank: 3, rankM: 3, rankH: 2 }],
     months: [{ month: '2026-10', day: '2026-10-30', top: [['1000', 'x', 9, 1]], topM: [['1001', 'x', 9, 1]], topH: [['1002', 'x', 9, 1]] }] };
   assert.equal(buildListInfo(data, 'preview', 'A').list.sort((a, b) => a.rank - b.rank)[0].code, '1001');
