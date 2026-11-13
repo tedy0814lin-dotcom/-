@@ -112,6 +112,8 @@ if (repo) for (let t = 0; t < 4 && prev === null; t++) {
 }
 // 網站剛上線時 snap3 還沒有任何月底記錄：用 2026-10 月底的名單（Python 回測面板重算、與回測逐檔一致）當第一份正式名單
 if (!(prev?.months || []).length) { try { prev = { ...(prev || {}), months: [JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url)))] }; } catch (e) { console.log('沒有種子名單', e.message); } }
+// 舊記錄補上進攻版名單（2026-10 月底那份是進攻版上線前存的）：用種子名單補
+try { const seed = JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url))); for (const e of prev?.months || []) if (e.month === seed.month && !e.topR && seed.topR) e.topR = seed.topR; } catch {}
 const monthsLog = (prev?.months || []).filter((e) => e.month !== ym);
 monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]), topR: rotOk ? list.filter((x) => x.rankR != null).sort((a, b) => a.rankR - b.rankR).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankR]) : null });
 monthsLog.sort((a, b) => (a.month < b.month ? -1 : 1)); while (monthsLog.length > 48) monthsLog.shift();
