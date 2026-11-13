@@ -4,7 +4,6 @@ import { createClaudeTab } from '/claudeTab.js';
 import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
-import { createFactTab } from '/factTab.js';
 import { createS6Tab } from '/s6Tab.js';
 
 const LS = 'wr_strat_sub';
@@ -25,20 +24,16 @@ const CARDS = [
     note: '足跡圖訂單流：連 2 根 Delta 強＋價格一階階創高(低)＝買盤堆疊；下一根開盤進、4R 出場。BingX 沒有主動買賣量，Delta 用 OHLCV 近似（強度約幣安真 Delta 的 55～65%）。',
     stats: [['做多期望（BingX 近似）', '+0.15R'], ['做空期望（BingX 近似）', '+0.13R'], ['幣安真 Delta 多／空', '+0.28／+0.11R'], ['2026-11-07 重測 104 幣', '4R 出場']] },
 ];
-CARDS.push({ id: 'fa', mk: '台股', tf: '日線', side: '做多', by: 'Claude 設計', title: '四因子排名（觀察用）',
-  note: '📌 長期投資請看第一張卡「長期核心」（價值＋低波動＋趨勢，回測贏 0050）；這張是價格型因子，沒贏 0050，只做觀察。近 250 日高＋120 日動能＋日內強＋量增，四個百分位平均，前 20 名等權、每 20 日換股。⚠ 2026-11-12 用排除 2026 的資料重測：2022～2023 贏 0050、2024～2025 輸 0050，全期沒贏；單因子 IC 只有「近 250 日高」顯著。有倖存者偏誤，所以只當觀察，從上線日起做前瞻記錄；不是買賣訊號。',
-  stats: [['年化（排除 2026）', '+17.9%'], ['0050 同期', '+19.4%'], ['2022～23 對 0050', '+13.0% vs −3.3%'], ['2024～25 對 0050', '+23.4% vs +48.7%']] });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function createStrategyTab({ api, el, goto }) {
-  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div><div id="st-fa" hidden></div>';
+  el.innerHTML = '<div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div>';
   const kids = {
     s6: createS6Tab({ api, el: el.querySelector('#st-s6') }),
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
     vg: createVegasTab({ api, el: el.querySelector('#st-vg') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
-    fa: createFactTab({ api, el: el.querySelector('#st-fa') }),
   };
   let sub = 's6';
   try { const s = localStorage.getItem(LS); if (kids[s]) sub = s; } catch {}
