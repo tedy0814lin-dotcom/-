@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { s6uRank, universeMask } from '../lib/s6u.js';
+import { s6uRank, universeMask, IND_NAMES } from '../lib/s6u.js';
 
 const OUT = process.env.OUT || 's6u-out';
 const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
@@ -39,9 +39,13 @@ const asof = rocToISO(dayAll.find((r) => r.Date)?.Date);
 const bwDay = rocToISO(bw.find((r) => r.Date)?.Date);
 if (!asof || bwDay !== asof) { console.error(`成交資料日期(${asof})與本益比資料日期(${bwDay})不同，今天不更新`); process.exit(canPush ? 1 : 2); }
 const bwBy = Object.fromEntries(bw.map((r) => [r.Code, r]));
+// 產業別（進攻版的產業動能用）。抓不到就不輸出進攻版，穩健版照常
+let indBy = {}, rotOk = true;
+try { const co = await getJ('https://openapi.twse.com.tw/v1/opendata/t187ap03_L', { tries: 4, timeout: 60000 }); indBy = Object.fromEntries(co.map((r) => [r['公司代號'], r['產業別']])); if (Object.keys(indBy).length < 800) throw new Error('產業別筆數太少'); }
+catch (e) { rotOk = false; console.log('產業別抓不到，進攻版不輸出：' + e.message); }
 const rows = dayAll.map((r) => {
   const b = bwBy[r.Code] || {};
-  return { code: r.Code, name: r.Name, close: num(r.ClosingPrice) ?? NaN, amt: num(r.TradeValue) ?? NaN, pe: num(b.PEratio), pb: num(b.PBratio), dy: num(b.DividendYield), hist: null };
+  return { code: r.Code, name: r.Name, close: num(r.ClosingPrice) ?? NaN, amt: num(r.TradeValue) ?? NaN, pe: num(b.PEratio), pb: num(b.PBratio), dy: num(b.DividendYield), ind: indBy[r.Code] || null, hist: null };
 }).filter((r) => Number.isFinite(r.close) && r.close > 0 && Number.isFinite(r.amt))
   // 成交值排名的比較範圍＝回測用的面板：上市 4 碼股票＋8 檔舊式 ETF（0050 等），不含 00 開頭的新 ETF、債券 ETF、特別股、存託憑證
   .filter((r) => /^[1-9]\d{3}$/.test(r.code) || ['0050', '0051', '0052', '0053', '0055', '0056', '0057', '0061'].includes(r.code));
@@ -95,7 +99,7 @@ if (universe < 230) { console.error('合格股票太少（' + universe + '），
 const dow = new Date(asof + 'T00:00:00Z').getUTCDay(), nextWd = new Date(new Date(asof + 'T00:00:00Z').getTime() + (dow === 5 ? 3 : dow === 6 ? 2 : 1) * 864e5).toISOString().slice(0, 7);
 const official = nextWd !== ym; // 隔一個營業日就換月 → 今天是月底最後一個營業日（碰到連假的月底會晚一天才標成正式，見 months）
 const rd = (x, n = 4) => (Number.isFinite(x) ? +x.toFixed(n) : null);
-const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
+const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, rankR: rotOk ? o.rankR : null, im: rotOk ? rd(o.im, 3) : null, ind: IND_NAMES[o.ind] || null, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
 
 // ---- 4) 歷史月底記錄（先讀回舊的接著寫）----
 let prev = null;
@@ -109,13 +113,13 @@ if (repo) for (let t = 0; t < 4 && prev === null; t++) {
 // 網站剛上線時 snap3 還沒有任何月底記錄：用 2026-10 月底的名單（Python 回測面板重算、與回測逐檔一致）當第一份正式名單
 if (!(prev?.months || []).length) { try { prev = { ...(prev || {}), months: [JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url)))] }; } catch (e) { console.log('沒有種子名單', e.message); } }
 const monthsLog = (prev?.months || []).filter((e) => e.month !== ym);
-monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]) });
+monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]), topR: rotOk ? list.filter((x) => x.rankR != null).sort((a, b) => a.rankR - b.rankR).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankR]) : null });
 monthsLog.sort((a, b) => (a.month < b.month ? -1 : 1)); while (monthsLog.length > 48) monthsLog.shift();
 // 正式名單＝最近一個「已確定」的月份：該月最後一次計算時是月底最後營業日，或已經有更晚的月份記錄
 const finalIdx = (() => { for (let i = monthsLog.length - 1; i >= 0; i--) { const e = monthsLog[i]; if (e.official || i < monthsLog.length - 1) return i; } return -1; })();
 const finalEntry = finalIdx >= 0 ? monthsLog[finalIdx] : null;
 const bench = b50.filter(([d]) => d >= '2023-01-01').map(([d, , c]) => [d, +c.toFixed(2)]);
-const out = { asof, official, month: ym, universe, updatedAt: Date.now(), nBought: 0, list, months: monthsLog, finalMonth: finalEntry?.month || null, bench,
+const out = { asof, official, month: ym, universe, rotOk, updatedAt: Date.now(), nBought: 0, list, months: monthsLog, finalMonth: finalEntry?.month || null, bench,
   check: { cand: cand.length, yahooMiss: miss, pxBad: pxBad.length } };
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, KEY), JSON.stringify(out));

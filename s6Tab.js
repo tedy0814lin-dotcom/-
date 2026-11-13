@@ -21,12 +21,13 @@ export function createS6Tab({ api, el }) {
   async function load() {
     if (S.loading) return;
     S.loading = true; S.error = ''; render();
-    try { S.data = await api('/api/s6u'); S.loaded = true; if (!buildListInfo(S.data, 'final')) S.which = 'preview'; }
+    try { S.data = await api('/api/s6u'); S.loaded = true; if (!buildListInfo(S.data, 'final', verNow())) S.which = 'preview'; }
     catch (e) { S.error = e.message || String(e); }
     finally { S.loading = false; render(); }
   }
 
-  const info = () => (S.data ? buildListInfo(S.data, S.which) || buildListInfo(S.data, 'preview') : null);
+  const verNow = () => (S.st?.ver === 'R' && S.data?.rotOk !== false ? 'R' : 'base');
+  const info = () => (S.data ? buildListInfo(S.data, S.which, verNow()) || buildListInfo(S.data, 'preview', verNow()) : null);
   const curPrice = (code) => S.data?.list.find((x) => x.code === code)?.close;
 
   // ---------- 動作 ----------
@@ -86,7 +87,7 @@ export function createS6Tab({ api, el }) {
     const rankOf = new Map(i.list.map((x) => [x.code, x.rank]));
     const cmp = benchCompare(st, S.data.bench, total);
     const plan = st.plans[m], dep = st.deposits[m];
-    const fin = buildListInfo(S.data, 'final');
+    const fin = buildListInfo(S.data, 'final', verNow());
     const hero = `<section class="s6-hero"><div class="s6-hl">總資產（持股市值＋現金）</div><div class="s6-big num">${n0(total)}<small>元</small></div>
       <div class="s6-sub num"><span>持股 ${n0(mv)}</span><span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.invested > 0 ? `<span class="${cls(total - dv.invested)}">損益 ${pct(total / dv.invested - 1)}</span>` : ''}${dv.realized ? `<span class="${cls(dv.realized)}">已實現損益 ${n0(dv.realized)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
       <div class="s6-addmoney"><label>新投入／領出（元，領出填負數）<input id="fl-amt" type="number" step="1000" value="${st.monthly}"></label><button class="refresh" id="fl-go" type="button">加入現金</button></div>
@@ -94,8 +95,11 @@ export function createS6Tab({ api, el }) {
     const need = dep == null
       ? `<div class="s6-deposit"><label>${m} 本月投入（元）<input id="dp-amt" type="number" min="0" step="1000" value="${st.monthly}"></label><button class="refresh" id="dp-go" type="button">入帳並產生清單</button></div>` : '';
     const lsel = `<select id="ls-sel" class="select" aria-label="採用哪份名單"><option value="final" ${S.which === 'final' ? 'selected' : ''} ${fin ? '' : 'disabled'}>月底正式名單${fin ? '（' + esc(fin.month) + '）' : '（尚無）'}</option><option value="preview" ${S.which === 'preview' ? 'selected' : ''}>今日預覽（${esc(S.data.asof)}）</option></select>`;
+    const R = verNow() === 'R';
+    const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select"><option value="base" ${R ? '' : 'selected'}>穩健版（預設）</option><option value="R" ${R ? 'selected' : ''} ${S.data.rotOk === false ? 'disabled' : ''}>進攻版：資金輪動＋強勢股（觀察用）</option></select></div>
+      <div class="status">${R ? '進攻版＝趨勢權重加倍＋加入「產業動能」（近 6 個月強勢的產業加分），會追強勢股、也會往強勢產業集中。回測（2009～2025，排除 2026）年化 <b class="num">23.4%</b>（穩健版 20.4%、0050 16.6%），但<b>波動 22%（穩健版 17%、0050 19%）、最大回撤 −21%（穩健版 −16%、0050 −29%）</b>。依附於 2021 航運大多頭與某幾年，近 4 年（2022～2025）落後穩健版。報酬較高、風險也較高，所以只當選用，預設仍是穩健版。' : '穩健版＝價值＋低波動＋趨勢各 1/3，回測風險最低；想追強勢股可切到「進攻版」。'}</div></section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
-    return `${hero}${todo}
+    return `${hero}${vsel}${todo}
       <section class="panel"><div class="panel-head"><strong>持股</strong><span class="muted small">紅底＝該賣（名次掉出前 ${flag.lim} 名或不在名單）</span></div>${holdingsView(held, rankOf, flag)}</section>
       <details class="s6-more"><summary>更多：新增持股、成交紀錄、備份、設定、規則</summary>
         <div class="s6-sec"><h4>新增原本就有的持股／計畫外的買賣</h4>${addForm()}</div>
@@ -126,7 +130,7 @@ export function createS6Tab({ api, el }) {
       const badge = it.kind === 'sell' ? '<span class="s6-b sell">賣</span>' : it.isNew ? '<span class="s6-b new">買</span>' : '<span class="s6-b add">加碼</span>';
       return `<div class="s6-item ${it.done ? 'done' : ''} ${it.kind}" data-id="${esc(it.id)}">
         <label class="s6-chk"><input type="checkbox" class="pi-chk" ${it.done ? 'checked' : ''} aria-label="${it.kind === 'sell' ? '已賣出' : '已買入'} ${esc(it.code)}"><span class="s6-step num">${k + 1}</span></label>
-        <div class="s6-main"><div class="s6-name">${badge} <b class="num">${esc(it.code)}</b> ${esc(it.name)} <span class="muted small">名次 ${pn(it.rank)}</span></div>
+        <div class="s6-main"><div class="s6-name">${badge} <b class="num">${esc(it.code)}</b> ${esc(it.name)} <span class="muted small">${it.ind ? esc(it.ind) + '・' : ''}名次 ${pn(it.rank)}</span></div>
           <div class="s6-plan num">${it.done ? `已記錄：<b>${n0(it.fill.shares)}</b> 股 × <b>${px(it.fill.price)}</b> ＝ <b>${n0(it.fill.shares * it.fill.price)}</b> 元（你的成交價）` : `建議 <b>${n0(it.shares)}</b> 股，預估價 ${px(it.price)}（約 ${n0(it.amount)} 元）${it.reason ? ` <span class="muted small">${esc(it.reason)}</span>` : ''}`}</div></div>
         <div class="s6-fill"><label>我的${it.kind === 'sell' ? '賣出' : '買入'}價<input class="pi-px num" type="number" step="0.01" min="0" value="${f.price}"></label><label>我的股數<input class="pi-sh num" type="number" step="1" min="1" value="${f.shares}"></label></div></div>`;
     }).join('');
@@ -137,12 +141,16 @@ export function createS6Tab({ api, el }) {
   function holdingsView(held, rankOf, flag) {
     if (!held.length) return '<div class="status">目前沒有持股。照上面清單買進打勾後會出現在這；原本就有的持股請到「更多」新增。</div>';
     const sellSet = new Map(flag.sells.map((s) => [s.code, s.reason]));
+    const indOf = new Map(info().list.map((x) => [x.code, x.ind]));
+    const tot = held.reduce((a, p) => a + p.mv, 0), byInd = {};
+    for (const p of held) { const k = indOf.get(p.code) || '其他'; byInd[k] = (byInd[k] || 0) + p.mv; }
+    const mix = Object.entries(byInd).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${Math.round((v / tot) * 100)}%`).join('・');
     const rows = held.sort((a, b) => b.mv - a.mv).map((p) => {
       const r = rankOf.get(p.code), sell = sellSet.get(p.code), avg = p.cost / p.shares, pl = p.price / avg - 1;
-      return `<tr class="${sell ? 's6-selltr' : ''}"><td><b class="num">${esc(p.code)}</b> ${esc(p.name)}</td><td class="num n">${n0(p.shares)}</td><td class="num n">${px(avg)}</td><td class="num n">${px(p.price)}</td><td class="num n ${cls(pl)}">${pct(pl)}</td><td class="num n">${n0(p.mv)}</td><td class="num n">${pn(r)}</td>
+      return `<tr class="${sell ? 's6-selltr' : ''}"><td><b class="num">${esc(p.code)}</b> ${esc(p.name)} <span class="muted small">${esc(indOf.get(p.code) || '')}</span></td><td class="num n">${n0(p.shares)}</td><td class="num n">${px(avg)}</td><td class="num n">${px(p.price)}</td><td class="num n ${cls(pl)}">${pct(pl)}</td><td class="num n">${n0(p.mv)}</td><td class="num n">${pn(r)}</td>
         <td>${sell ? '<span class="s6-b sell">該賣</span>' : '<span class="s6-b keep">續抱</span>'}</td></tr>`;
     }).join('');
-    return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>股票</th><th class="n">股數</th><th class="n">成本</th><th class="n">現價</th><th class="n">損益</th><th class="n">市值</th><th class="n">名次</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="status">產業分布（依市值）：${mix}${Math.max(...Object.values(byInd)) / tot > 0.5 ? ' <b class="down">⚠ 單一產業超過一半</b>' : ''}</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>股票</th><th class="n">股數</th><th class="n">成本</th><th class="n">現價</th><th class="n">損益</th><th class="n">市值</th><th class="n">名次</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   function addForm() {
     return `<div class="s6-form"><label>類型<select id="ad-type"><option value="buy">買進（原有持股／計畫外）</option><option value="sell">賣出</option></select></label>
@@ -178,6 +186,7 @@ export function createS6Tab({ api, el }) {
   }
   function bindMain(i) {
     const st = S.st, m = today().slice(0, 7);
+    const vs = el.querySelector('#ver-sel'); if (vs) vs.onchange = () => { st.ver = vs.value; if (S.which === 'final' && !buildListInfo(S.data, 'final', verNow())) S.which = 'preview'; const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); save(); render(); };
     const ls = el.querySelector('#ls-sel'); if (ls) ls.onchange = () => { S.which = ls.value; const j = info(); if (st.plans[m] && j) { st.plans[m] = makePlan(st, m, j, today()); save(); } render(); };
     const dp = el.querySelector('#dp-go'); if (dp) dp.onclick = () => { const v = +el.querySelector('#dp-amt').value; if (!(v >= 0)) return; act(() => { st.deposits[m] = v; (st.flows ||= []).push({ date: today(), amount: v }); st.plans[m] = makePlan(st, m, i, today()); }); };
     const re = el.querySelector('#pl-re'); if (re) re.onclick = () => ensurePlan();

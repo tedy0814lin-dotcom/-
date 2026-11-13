@@ -60,3 +60,10 @@ console.log('s6uState tests PASS');
   assert.equal(parseImport(exportState(s2)).flows.length, 2);
 }
 console.log('flows tests PASS');
+{ // 進攻版名單：預覽用 rankR、月底用 topR；rotOk=false 時不提供
+  const dd = { month: '2026-11', asof: '2026-11-12', rotOk: true, list: [{ code: '2000', name: 'A', close: 10, rank: 1, rankR: 5, ind: '金融保險' }, { code: '2001', name: 'B', close: 20, rank: 2, rankR: 1, ind: '航運' }], months: [{ month: '2026-10', day: '2026-10-30', top: [['2000', 'A', 9, 1]], topR: [['2001', 'B', 19, 1]] }], finalMonth: '2026-10' };
+  assert.equal(buildListInfo(dd, 'preview', 'R').list.find((x) => x.code === '2001').rank, 1);
+  const f = buildListInfo(dd, 'final', 'R'); assert.equal(f.list[0].code, '2001'); assert.equal(f.list.find((x) => x.code === '2000').rank, 999); assert.equal(f.list[0].ind, '航運');
+  assert.equal(buildListInfo({ ...dd, rotOk: false }, 'preview', 'R'), null);
+  console.log('rotation list tests PASS');
+}

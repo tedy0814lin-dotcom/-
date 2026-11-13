@@ -15,7 +15,13 @@ for (const v of V) {
   const sameTop = [...top].sort().join() === [...v.top30].sort().join();
   // 容許：價格因子在「理論上同分」的檔（例如同時創 12 月新高 → 接近度=1）可能因浮點雜訊在 Python/JS 排出相差半個名次，
   // 最大分數差 <1e-2、前 30 名成員必須完全相同；多數月底應逐位相同。
-  const ok = maxd < 1e-2 && !miss && !extra && sameTop;
+  // 進攻版（資金輪動）：分數與前 30 名
+  let maxR = 0; const gotR = Object.fromEntries(res.ranked.map((o) => [o.code, o.scoreR]));
+  for (const c of Object.keys(v.expectR)) maxR = Math.max(maxR, Math.abs((gotR[c] ?? NaN) - v.expectR[c]) || 0);
+  const topR = res.ranked.slice().sort((a, b) => a.rankR - b.rankR).slice(0, 30).map((o) => o.code);
+  const sameTopR = [...topR].sort().join() === [...v.top30R].sort().join();
+  console.log('   進攻版', `最大分數差=${maxR.toExponential(2)} 前30成員一致=${sameTopR}`);
+  const ok = maxR < 1e-2 && sameTopR && maxd < 1e-2 && !miss && !extra && sameTop;
   if (!ok) bad++;
   console.log(v.date, ok ? 'OK ' : 'FAIL', `n=${ek.length} 缺${miss} 多${extra} maxdiff=${maxd.toExponential(2)} 前30成員一致=${sameTop} 順序一致=${sameOrder}`);
 }
