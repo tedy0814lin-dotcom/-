@@ -99,11 +99,11 @@ export function createS6Tab({ api, el }) {
     const TXT = {
       base: '<b>保守</b>：價值、低波動、趨勢各占 1/3（強勢股只占 1/3），持有 10 檔。回測（2009～2025，排除 2026，每月定期定額）年化 <b class="num">20.4%</b>、波動 17%、最大回撤 <b class="num">−16%</b>，最差連續 12 個月 −9%。對照 0050：16.6%／波動 19%／回撤 −29%／最差 12 個月 −25%。報酬小贏 0050、風險大降。',
       R: '<b>平衡</b>：強勢股（6 個月動能、接近 12 月高點、站上均線，加「強勢產業」加分）占分數 2/3，價值與低波動合占 1/3，持有 10 檔。回測年化 <b class="num">24.4%</b>、波動 29%、最大回撤 <b class="num">−26%</b>（略小於 0050），最差連續 12 個月 −19%。2022～2025 年化 22.6%（0050 19.5%）。排除 2021 航運大多頭後逐年複利仍 24.0%（0050 16.6%）。',
-      A: '<b>進攻（觀察用）</b>：強勢股占分數 71%，低波動只剩很小權重，同樣持有 10 檔。回測年化 <b class="num">23.8%</b>、波動 33%、最大回撤 <b class="num">−33%</b>（比 0050 的 −29% 多 4 個百分點），最差連續 12 個月 −27%（0050 −25%）。<b>報酬沒有比平衡版高</b>（多承擔的風險在回測裡沒換到報酬）；2022～2025 年化 17.9%，輸 0050 的 19.5%；若從 2021 年才開始投入則年化 17.7%（0050 26.6%）。強勢股會集中在強勢產業，請看下方持股的產業分布。',
+      A: '<b>進攻（觀察用）</b>：強勢股占分數 73%，而且「強勢」包含<b>近 1 個月、近 3 個月的漲幅</b>（最近大漲的股票會加分），低波動權重降到一半，同樣持有 10 檔。回測年化 <b class="num">25.2%</b>、波動 34%、最大回撤 <b class="num">−33%</b>（比 0050 的 −29% 多 4 個百分點；持股改成 12 檔時回撤到 −36%），最差連續 12 個月 −25%。<b>報酬只比平衡版多 0.8 個百分點（在誤差內）</b>，風險卻明顯較大；2022～2025 年化 18.1%，輸 0050 的 19.5%。真正連續漲停的小型飆股，因為波動大、估值貴，仍排不進前 10 名：硬要全買那種股票，回測回撤會到 −57%，超出你的預算。',
     };
     const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${TIERS[k].needRot && S.data.rotOk !== true ? 'disabled' : ''}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（觀察用）' : ''}</option>`;
     const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select">${opt('base')}${opt('R')}${opt('A')}</select></div>
-      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −16%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">強勢股 67%・回撤 −26%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">強勢股 71%・回撤 −33%</span></div></div>
+      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −16%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">強勢股 67%・回撤 −26%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">強勢股 73%・回撤 −33%</span></div></div>
       <div class="status">${TXT[V]}</div>${pickView(i, V)}</section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
