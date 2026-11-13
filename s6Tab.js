@@ -46,7 +46,8 @@ export function createS6Tab({ api, el }) {
     const i = info();
     if (S.st && i) { // 規則版本更新或換名單：沒有任何打勾的舊計畫自動重算，避免看到過時的空清單
       const m = today().slice(0, 7), pl = S.st.plans[m];
-      if (pl && pl.rv !== RULES_VER && !pl.items.some((x) => x.done)) { S.st.plans[m] = makePlan(S.st, m, i, today()); save(); }
+      if (!pl && S.st.deposits[m] != null) { S.st.plans[m] = makePlan(S.st, m, i, today()); save(); } // 已入帳但還沒有本月清單（舊版紀錄）：直接產生
+      else if (pl && pl.rv !== RULES_VER && !pl.items.some((x) => x.done)) { S.st.plans[m] = makePlan(S.st, m, i, today()); save(); }
     }
     const warn = (S.msg ? `<div class="s6-note bad">${esc(S.msg)}</div>` : '') + (S.storeOk ? '' : '<div class="s6-note bad">這個瀏覽器無法保存紀錄（可能是無痕模式），請操作後到「更多」匯出備份。</div>');
     if (!S.st) { el.innerHTML = head + warn + setupView() ; bindSetup(); return; }
@@ -94,7 +95,7 @@ export function createS6Tab({ api, el }) {
     const need = dep == null
       ? `<div class="s6-deposit"><label>${m} 本月投入（元）<input id="dp-amt" type="number" min="0" step="1000" value="${st.monthly}"></label><button class="refresh" id="dp-go" type="button">入帳並產生清單</button></div>` : '';
     const lsel = `<select id="ls-sel" class="select" aria-label="採用哪份名單"><option value="final" ${S.which === 'final' ? 'selected' : ''} ${fin ? '' : 'disabled'}>月底正式名單${fin ? '（' + esc(fin.month) + '）' : '（尚無）'}</option><option value="preview" ${S.which === 'preview' ? 'selected' : ''}>今日預覽（${esc(S.data.asof)}）</option></select>`;
-    const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}${plan ? '<button class="ghost" id="pl-re" type="button">重新計算</button>' : ''}</div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
+    const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${todo}
       <section class="panel"><div class="panel-head"><strong>持股</strong><span class="muted small">紅底＝該賣（名次掉出前 ${flag.lim} 名或不在名單）</span></div>${holdingsView(held, rankOf, flag)}</section>
       <details class="s6-more"><summary>更多：新增持股、成交紀錄、備份、設定、規則</summary>
