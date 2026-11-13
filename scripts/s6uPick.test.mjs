@@ -1,7 +1,7 @@
 // 三版本設定、「指定／排除」功能的測試
 import assert from 'node:assert/strict';
 import { planMonth, applyExclude } from '../lib/s6uPlan.js';
-import { TIERS, buildListInfo, newState, makePlan, parseImport, exportState, planArgs } from '../lib/s6uState.js';
+import { TIERS, buildListInfo, newState, makePlan, parseImport, exportState, planArgs, planTier, derive, LEV } from '../lib/s6uState.js';
 
 const mk = (n) => Array.from({ length: n }, (_, i) => ({ code: String(1000 + i), name: 'S' + i, close: 50 + i, rank: i + 1, ind: i % 2 ? '金融保險' : '半導體' }));
 const L = mk(40);
@@ -60,16 +60,19 @@ for (const [ver, exp] of [['base', 10], ['R', 10], ['A', 10]]) {
 
 // ---- 名單：三個版本各取各的欄位 ----
 {
-  const data = { rotOk: true, eOk: true, month: '2026-11', asof: '2026-11-12', finalMonth: '2026-10',
+  const data = { rotOk: true, eOk: true, lev: { code: '00631L', close: 200 }, month: '2026-11', asof: '2026-11-12', finalMonth: '2026-10',
     list: [{ code: '1000', name: 'A', close: 10, rank: 1, rankM: 2, rankH: 3 }, { code: '1001', name: 'B', close: 11, rank: 2, rankM: 1, rankH: 1 }, { code: '1002', name: 'C', close: 12, rank: 3, rankM: 3, rankH: 2 }],
     months: [{ month: '2026-10', day: '2026-10-30', top: [['1000', 'x', 9, 1]], topM: [['1001', 'x', 9, 1]], topH: [['1002', 'x', 9, 1]] }] };
   assert.equal(buildListInfo(data, 'preview', 'A').list.sort((a, b) => a.rank - b.rank)[0].code, '1001');
   assert.equal(buildListInfo(data, 'preview', 'R').list.sort((a, b) => a.rank - b.rank)[0].code, '1001');
   assert.equal(buildListInfo(data, 'preview', 'base').list.sort((a, b) => a.rank - b.rank)[0].code, '1000');
-  const f = buildListInfo(data, 'final', 'A'); assert.equal(f.list[0].code, '1002'); assert.equal(f.list[0].name, 'C'); assert.equal(f.list[0].close, 12);
+  // 進攻版（2026-11-14 起）＝平衡版名單＋正2：用 rankM／topM，需要 EPS 資料與正2 收盤價
+  const f = buildListInfo(data, 'final', 'A'); assert.equal(f.list[0].code, '1001'); assert.equal(f.list[0].name, 'B'); assert.equal(f.list[0].close, 11); assert.equal(f.levPrice, 200);
   assert.equal(f.list.find((x) => x.code === '1000').rank, 999);
-  assert.equal(buildListInfo({ ...data, rotOk: false }, 'preview', 'A'), null);
-  assert.equal(buildListInfo({ ...data, months: [{ ...data.months[0], topH: undefined }] }, 'final', 'A'), null);
+  assert.equal(buildListInfo({ ...data, eOk: false }, 'preview', 'A'), null);
+  assert.equal(buildListInfo({ ...data, lev: null }, 'preview', 'A'), null); assert.ok(buildListInfo({ ...data, lev: null }, 'preview', 'R'));
+  assert.ok(buildListInfo({ ...data, rotOk: false }, 'preview', 'A'));
+  assert.equal(buildListInfo({ ...data, months: [{ ...data.months[0], topM: undefined }] }, 'final', 'A'), null);
   assert.ok(buildListInfo({ ...data, rotOk: false }, 'preview', 'base'));
 }
 // ---- makePlan 使用該版本的檔數與指定／排除；匯出匯入保留 ----
@@ -85,5 +88,35 @@ for (const [ver, exp] of [['base', 10], ['R', 10], ['A', 10]]) {
   const old = JSON.parse(exportState(newState({ start: '2026-11-01' }))); delete old.state.pins; delete old.state.exclude;
   const o = parseImport(JSON.stringify(old)); assert.deepEqual(o.pins, []); assert.deepEqual(o.exclude, []);
   assert.throws(() => parseImport(JSON.stringify({ ...old, state: { ...old.state, pins: ['abc'] } })), /指定/);
+}
+// ---- 進攻版：平衡名單 60%＋正2 40% ----
+{
+  const st0 = newState({ start: '2026-11-01', monthly: 10000, cash: 10000 }); st0.ver = 'A';
+  // 第一個月 1 萬：正2 缺口 4000、個股缺口 6000 → 買約 4000 元正2，其餘排個股
+  const r1 = planTier({ list: L, holdings: [], cash: 10000, st: st0, ver: 'A', levPrice: 200 });
+  assert.equal(r1.lev.buy.shares, Math.floor(4000 / (200 * 1.001425))); assert.ok(!r1.lev.sell);
+  assert.ok(Math.abs(r1.V - (10000 - r1.lev.buy.amount)) < 1e-6);   // 個股部分只拿到剩下的錢
+  // 其他版本不碰正2
+  assert.equal(planTier({ list: L, holdings: [], cash: 10000, st: st0, ver: 'R', levPrice: 200 }).lev, null);
+  // 已在目標附近（40%±5%）→ 不買不賣；正2 不會被當成「不在名單」賣掉
+  const c1000 = L.find((x) => x.code === '1000').close; const hold = [{ code: LEV.code, shares: 200, px: 200 }, { code: '1000', shares: 60000 / c1000, px: c1000 }];   // 正2 40000、個股 60000
+  const r2 = planTier({ list: L, holdings: hold, cash: 0, st: st0, ver: 'A', levPrice: 200 });
+  assert.ok(!r2.lev.buy && !r2.lev.sell); assert.ok(!r2.sells.some((x) => x.code === LEV.code));
+  // 正2 大漲後占比 >45% → 賣回 40%
+  const r3 = planTier({ list: L, holdings: hold, cash: 0, st: st0, ver: 'A', levPrice: 300 });   // 正2 60000／總 120000＝50%
+  assert.equal(r3.lev.sell.shares, Math.floor((60000 - 48000) / 300)); assert.ok(r3.lev.sell.reason.includes('50%'));
+  // 正2 占比偏低（<40%）但沒有新資金 → 不賣個股來補；有新資金時優先補正2
+  const r4 = planTier({ list: L, holdings: hold, cash: 0, st: st0, ver: 'A', levPrice: 150 }); assert.ok(!r4.lev.buy && !r4.lev.sell);
+  const r5 = planTier({ list: L, holdings: hold, cash: 10000, st: st0, ver: 'A', levPrice: 150 });   // 總 100000：正2 30000→目標 40000；個股 60000＝目標 → 現金全補正2
+  assert.equal(r5.lev.buy.shares, Math.floor(10000 / (150 * 1.001425)));
+  // makePlan：計畫裡有正2 的買進項目，打勾後算進持股，下個月以它的市值計算
+  const info = { kind: 'preview', ver: 'A', month: '2026-11', day: '2026-11-12', list: L, levPrice: 200 };
+  const pl = makePlan(st0, '2026-11', info, '2026-11-12'); const li = pl.items.find((x) => x.code === LEV.code);
+  assert.ok(li && li.kind === 'buy' && li.lev && pl.lev.w === 0.4);
+  li.done = true; li.fill = { price: 200, shares: li.shares, date: '2026-11-12' }; st0.plans['2026-11'] = pl;
+  assert.equal(derive(st0).positions.find((p) => p.code === LEV.code).shares, li.shares);
+  // 換回平衡版：正2 變成「不在名單」的持股 → 標賣出
+  const rb = planTier({ list: L, holdings: [{ code: LEV.code, shares: 10, px: 200 }], cash: 50000, st: st0, ver: 'R', levPrice: 200 });
+  assert.ok(rb.sells.some((x) => x.code === LEV.code));
 }
 console.log('s6uPick tests PASS');

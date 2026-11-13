@@ -3,7 +3,7 @@
 // 之後它會幫你記錄持股、標出該賣的股票、比較同樣的錢買 0050 的結果。
 // 紀錄只存在你的瀏覽器，可匯出成檔案備份、換裝置時匯入；不會傳到伺服器。規則與回測：專案文件《全球多因子長期策略-S6U》。
 import { PLAN_DEFAULTS, planMonth, applyExclude } from '/lib/s6uPlan.js';
-import { RULES_VER, TIERS, tierOf, tierOk, planArgs, newState, derive, buildListInfo, makePlan, benchCompare, exportState, parseImport, uid, allTrades } from '/lib/s6uState.js';
+import { RULES_VER, TIERS, tierOf, tierOk, planArgs, planTier, LEV, newState, derive, buildListInfo, makePlan, benchCompare, exportState, parseImport, uid, allTrades } from '/lib/s6uState.js';
 
 const LSK = 'wr_s6u_state_v1';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,7 +28,7 @@ export function createS6Tab({ api, el }) {
 
   const verNow = () => { const v = S.st?.ver; return TIERS[v] && tierOk(S.data, v) ? v : 'base'; };
   const info = () => (S.data ? buildListInfo(S.data, S.which, verNow()) || buildListInfo(S.data, 'preview', verNow()) : null);
-  const curPrice = (code) => S.data?.list.find((x) => x.code === code)?.close;
+  const curPrice = (code) => (code === LEV.code ? S.data?.lev?.close : S.data?.list.find((x) => x.code === code)?.close);
 
   // ---------- 動作 ----------
   function act(fn) { fn(); save(); render(); }
@@ -83,7 +83,7 @@ export function createS6Tab({ api, el }) {
     const st = S.st, m = today().slice(0, 7), dv = derive(st);
     const held = dv.positions.map((p) => { const c = curPrice(p.code) ?? p.cost / p.shares; return { ...p, price: c, mv: c * p.shares }; });
     const mv = held.reduce((a, p) => a + p.mv, 0), total = mv + dv.cash;
-    const flag = planMonth({ list: i.list, holdings: dv.positions.map((p) => ({ code: p.code, shares: p.shares, px: p.cost / p.shares })), cash: dv.cash, ...planArgs(st, verNow()) });
+    const flag = planTier({ list: i.list, holdings: dv.positions.map((p) => ({ code: p.code, shares: p.shares, px: p.cost / p.shares })), cash: dv.cash, st, ver: verNow(), levPrice: S.data.lev?.close });
     const rankOf = new Map(applyExclude(i.list, st.exclude).map((x) => [x.code, x.rank]));
     const cmp = benchCompare(st, S.data.bench, total);
     const plan = st.plans[m], dep = st.deposits[m];
@@ -99,11 +99,11 @@ export function createS6Tab({ api, el }) {
     const TXT = {
       base: '<b>保守</b>：價值、低波動、趨勢各占 1/3（強勢股只占 1/3），持有 10 檔。回測（2009～2025，排除 2026，每月定期定額）年化 <b class="num">19.3%</b>、波動 14%、最大回撤 <b class="num">−19%</b>，最差連續 12 個月 −13%。對照 0050：16.5%／波動 18%／回撤 −29%／最差 12 個月 −24%。2009～2017 年化 16.2%（0050 10.7%）；2018～2025 年化 22.2%，<b>略輸 0050 的 23.5%</b>，但波動與回撤小很多。報酬大致與 0050 相當到小贏、風險大降。',
       R: '<b>平衡</b>（2026-11-13 改版）：趨勢（6 個月動能、接近 12 月高點、站上均線）占分數一半，價值占 1/4，低波動與<b>「近 3 個月每股盈餘成長」</b>各占 1/8，持有 10 檔；不再用產業加分，名單較不會擠在同一產業（回測單一產業平均占 30%，舊版 41%）。回測年化 <b class="num">26.5%</b>（持股 12／15 檔時 24.4%／23.6%）、波動 22%、最大回撤 <b class="num">−21%</b>，最差連續 12 個月 −19%；2009～2017 年化 19.6%（0050 10.7%）、2018～2025 年化 33.1%（0050 23.5%）；手續費加倍 24.2%。<b>限制</b>：2024、2025 與 2026 年 1～10 月都輸 0050（16%／6%／31% 對 49%／37%／63%，台積電帶動的大型股行情）；盈餘成長的訊號晚一個月才買效果就少掉大半，請在月初照名單執行。',
-      A: '<b>進攻（觀察用）</b>：強勢股占分數 73%，而且「強勢」包含<b>近 1 個月、近 3 個月的漲幅</b>（最近大漲的股票會加分），加「強勢產業」加分，低波動權重降到一半，同樣持有 10 檔。回測年化 <b class="num">24.3%</b>、波動 32%、最大回撤 <b class="num">−29%</b>，最差連續 12 個月 −20%。<b>報酬沒有比平衡版高</b>，風險卻明顯較大；2018～2025 年化 21.8%，輸 0050 的 23.5%。想贏槓桿型的正2（同期年化約 35%、回撤 −47%）：測過 400 多組選股組合，沒有任何一組能在相同風險下穩定贏它；只買最近最強的股票，回測回撤會到 −54%，2026 年實測還大幅落後。',
+      A: '<b>進攻</b>（2026-11-14 改版）：<b>六成資金照平衡版名單買個股，四成買「元大台灣50正2」（00631L）</b>。每月新資金優先補不足的那一邊；正2 占比超過 45% 才賣回 40%。回測（2015-03～2025-12，正2 有真實資料的期間，每月定期定額；個股部分 10／12／15 檔）年化 <b class="num">31.8～35.5%</b>、波動 22～23%、最大回撤 <b class="num">−27～−28%</b>、最差連續 12 個月 −20%。同期單買正2：35.3%／波動 33%／回撤 −47%；0050：20.6%／回撤 −29%。2026 年 1～10 月 +69～77%（正2 +136%、0050 +63%）。<b>限制</b>：報酬大約跟正2 打平（重抽樣十年後贏正2 的機率 48%）、不是穩贏，好處是跌得比較少；2024、2025 輸 0050；如果平衡版名單未來沒有超額，會退化成年化約 27%、回撤 −37%；回測期間沒有 2008 那種大空頭（粗估 0050 −43% 時正2 約 −72%，這個配置約 −57%）。正2 是槓桿 ETF，盤整時會耗損，不適合短期要用的錢。原本「近期強勢股」的進攻算式回測報酬輸平衡版，已停用。',
     };
-    const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${tierOk(S.data, k) ? '' : 'disabled'}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（觀察用）' : ''}</option>`;
+    const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${tierOk(S.data, k) ? '' : 'disabled'}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（含正2）' : ''}</option>`;
     const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select">${opt('base')}${opt('R')}${opt('A')}</select></div>
-      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −19%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">趨勢 50%＋盈餘成長・回撤 −21%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">強勢股 73%・回撤 −29%</span></div></div>
+      <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −19%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">趨勢 50%＋盈餘成長・回撤 −21%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">平衡名單 60%＋正2 40%・回撤 −27%</span></div></div>
       <div class="status">${TXT[V]}</div>${pickView(i, V)}</section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
@@ -139,10 +139,10 @@ export function createS6Tab({ api, el }) {
     const acts = plan.items.filter((it) => it.kind !== 'skip'), skips = plan.items.filter((it) => it.kind === 'skip');
     acts.sort((a, b) => (a.kind === b.kind ? (a.rank ?? 999) - (b.rank ?? 999) : a.kind === 'sell' ? -1 : 1));
     const nTodo = acts.filter((x) => !x.done).length;
-    const meta = `<div class="status">${esc(tierOf(plan.ver).label)}版・依據 ${basis}・總資產 ${n0(plan.V)} 元分 ${plan.N} 檔・每檔約 ${n0(plan.target)} 元</div>`;
+    const meta = `<div class="status">${esc(tierOf(plan.ver).label)}版・依據 ${basis}・${plan.lev ? `總資產 ${n0(plan.lev.V)} 元：正2 目標 ${Math.round(plan.lev.w * 100)}%（${n0(plan.lev.target)} 元，現有 ${n0(plan.lev.held)} 元）・個股部分 ` : '總資產 '}${n0(plan.V)} 元分 ${plan.N} 檔・每檔約 ${n0(plan.target)} 元</div>`;
     if (!acts.length) {
       // 沒有可做的事：說明原因，並預告下個月存入後會買什麼
-      const nxt = planMonth({ list: i.list, holdings: derive(S.st).positions.map((p) => ({ code: p.code, shares: p.shares, px: p.cost / p.shares })), cash: derive(S.st).cash + S.st.monthly });
+      const nxt = planTier({ list: i.list, holdings: derive(S.st).positions.map((p) => ({ code: p.code, shares: p.shares, px: p.cost / p.shares })), cash: derive(S.st).cash + S.st.monthly, st: S.st, ver: plan.ver, levPrice: S.data.lev?.close });
       const nb = nxt.buys.filter((b) => b.status === 'buy');
       const why = plan.cashBefore < 1 ? '現金不足。' : `這個月先不買：${n0(plan.V)} 元分成 ${plan.N} 檔，每檔只有約 ${n0(plan.target)} 元，不到最低單筆 ${n0(PLAN_DEFAULTS.minTicket)} 元。錢太少硬買會被手續費吃掉，也不符合回測的做法，現金留著下個月合併買（回測也是這樣）。`;
       return meta + `<div class="s6-empty"><b>今天沒有要買賣的。</b>${why}</div>` + (nb.length ? `<div class="s6-prev"><div class="s6-prevh">預告：下個月再存入 ${n0(S.st.monthly)} 元（現金約 ${n0(derive(S.st).cash + S.st.monthly)} 元），會買這 ${nb.length} 檔</div>${nb.map((b) => `<div class="s6-prevr"><span><b class="num">${esc(b.code)}</b> ${esc(b.name)} <span class="muted small">名次 ${pn(b.rank)}</span></span><span class="num">${n0(b.shares)} 股 ≈ ${n0(b.amount)} 元</span></div>`).join('')}<div class="status">名次會隨月底名單更新，這只是預覽，不是現在要買。</div></div>` : '');
@@ -152,12 +152,12 @@ export function createS6Tab({ api, el }) {
       const badge = it.kind === 'sell' ? '<span class="s6-b sell">賣</span>' : it.isNew ? '<span class="s6-b new">買</span>' : '<span class="s6-b add">加碼</span>';
       return `<div class="s6-item ${it.done ? 'done' : ''} ${it.kind}" data-id="${esc(it.id)}">
         <label class="s6-chk"><input type="checkbox" class="pi-chk" ${it.done ? 'checked' : ''} aria-label="${it.kind === 'sell' ? '已賣出' : '已買入'} ${esc(it.code)}"><span class="s6-step num">${k + 1}</span></label>
-        <div class="s6-main"><div class="s6-name">${badge} <b class="num">${esc(it.code)}</b> ${esc(it.name)} <span class="muted small">${it.ind ? esc(it.ind) + '・' : ''}名次 ${pn(it.rank)}</span>${it.pinned ? ' <span class="s6-b pin">你指定</span>' : ''}${it.kind === 'buy' && !it.done && !it.pinned ? ` <button class="ghost s6-x pk-ex" data-code="${esc(it.code)}" type="button">不買這檔</button>` : ''}</div>
+        <div class="s6-main"><div class="s6-name">${badge} <b class="num">${esc(it.code)}</b> ${esc(it.name)} <span class="muted small">${it.ind ? esc(it.ind) + '・' : ''}名次 ${(it.lev ? '正2' : pn(it.rank))}</span>${it.pinned ? ' <span class="s6-b pin">你指定</span>' : ''}${it.kind === 'buy' && !it.done && !it.pinned ? ` <button class="ghost s6-x pk-ex" data-code="${esc(it.code)}" type="button">不買這檔</button>` : ''}</div>
           <div class="s6-plan num">${it.done ? `已記錄：<b>${n0(it.fill.shares)}</b> 股 × <b>${px(it.fill.price)}</b> ＝ <b>${n0(it.fill.shares * it.fill.price)}</b> 元（你的成交價）` : `建議 <b>${n0(it.shares)}</b> 股，預估價 ${px(it.price)}（約 ${n0(it.amount)} 元）${it.reason ? ` <span class="muted small">${esc(it.reason)}</span>` : ''}`}</div></div>
         <div class="s6-fill"><label>我的${it.kind === 'sell' ? '賣出' : '買入'}價<input class="pi-px num" type="number" step="0.01" min="0" value="${f.price}"></label><label>我的股數<input class="pi-sh num" type="number" step="1" min="1" value="${f.shares}"></label></div></div>`;
     }).join('');
     return meta + `<div class="status">依序做：先賣、再買（零股交易）。買完把「我的買入價／股數」改成你真正成交的，再打勾；持股成本、現金、損益都以你填的為準。還剩 <b>${nTodo}</b> 項。</div><div class="s6-list">${rows}</div>`
-      + (skips.length ? `<details class="s6-skip"><summary>另有 ${skips.length} 檔金額太小先跳過</summary><ul>${skips.map((it) => `<li><b class="num">${esc(it.code)}</b> ${esc(it.name)}（名次 ${pn(it.rank)}）</li>`).join('')}</ul></details>` : '');
+      + (skips.length ? `<details class="s6-skip"><summary>另有 ${skips.length} 檔金額太小先跳過</summary><ul>${skips.map((it) => `<li><b class="num">${esc(it.code)}</b> ${esc(it.name)}（名次 ${(it.lev ? '正2' : pn(it.rank))}）</li>`).join('')}</ul></details>` : '');
   }
 
   function holdingsView(held, rankOf, flag) {
@@ -169,7 +169,7 @@ export function createS6Tab({ api, el }) {
     const mix = Object.entries(byInd).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${Math.round((v / tot) * 100)}%`).join('・');
     const rows = held.sort((a, b) => b.mv - a.mv).map((p) => {
       const r = rankOf.get(p.code), sell = sellSet.get(p.code), avg = p.cost / p.shares, pl = p.price / avg - 1;
-      return `<tr class="${sell ? 's6-selltr' : ''}"><td><b class="num">${esc(p.code)}</b> ${esc(p.name)} <span class="muted small">${esc(indOf.get(p.code) || '')}</span></td><td class="num n">${n0(p.shares)}</td><td class="num n">${px(avg)}</td><td class="num n">${px(p.price)}</td><td class="num n ${cls(pl)}">${pct(pl)}</td><td class="num n">${n0(p.mv)}</td><td class="num n">${pn(r)}</td>
+      return `<tr class="${sell ? 's6-selltr' : ''}"><td><b class="num">${esc(p.code)}</b> ${esc(p.name)} <span class="muted small">${esc(indOf.get(p.code) || '')}</span></td><td class="num n">${n0(p.shares)}</td><td class="num n">${px(avg)}</td><td class="num n">${px(p.price)}</td><td class="num n ${cls(pl)}">${pct(pl)}</td><td class="num n">${n0(p.mv)}</td><td class="num n">${p.code === LEV.code ? '正2' : pn(r)}</td>
         <td>${sell ? '<span class="s6-b sell">該賣</span>' : '<span class="s6-b keep">續抱</span>'}</td></tr>`;
     }).join('');
     return `<div class="status">產業分布（依市值）：${mix}${Math.max(...Object.values(byInd)) / tot > 0.5 ? ' <b class="down">⚠ 單一產業超過一半</b>' : ''}</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>股票</th><th class="n">股數</th><th class="n">成本</th><th class="n">現價</th><th class="n">損益</th><th class="n">市值</th><th class="n">名次</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;

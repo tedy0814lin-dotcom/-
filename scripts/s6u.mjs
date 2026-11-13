@@ -137,8 +137,11 @@ monthsLog.sort((a, b) => (a.month < b.month ? -1 : 1)); while (monthsLog.length 
 // 正式名單＝最近一個「已確定」的月份：該月最後一次計算時是月底最後營業日，或已經有更晚的月份記錄
 const finalIdx = (() => { for (let i = monthsLog.length - 1; i >= 0; i--) { const e = monthsLog[i]; if (e.official || i < monthsLog.length - 1) return i; } return -1; })();
 const finalEntry = finalIdx >= 0 ? monthsLog[finalIdx] : null;
+// 進攻版搭配的正2（00631L）最新收盤：抓不到就沿用上次的（進攻版需要它才能排計畫）
+let lev = prev?.lev || null;
+try { const b = await yahoo('00631L.TW', '1mo'); const x = b?.[b.length - 1]; if (x && x[2] > 0) lev = { code: '00631L', name: '元大台灣50正2', close: +x[2].toFixed(2), day: x[0] }; else console.log('抓不到正2 收盤，沿用上次'); } catch (e) { console.log('抓正2 收盤失敗：' + e.message); }
 const bench = b50.filter(([d]) => d >= '2023-01-01').map(([d, , c]) => [d, +c.toFixed(2)]);
-const out = { asof, official, month: ym, universe, rotOk, eOk, pe3: pe3 ? { day: pe3Day, map: pe3 } : (prev?.pe3 || null), updatedAt: Date.now(), nBought: 0, list, months: monthsLog, finalMonth: finalEntry?.month || null, bench,
+const out = { asof, official, month: ym, universe, rotOk, eOk, lev, pe3: pe3 ? { day: pe3Day, map: pe3 } : (prev?.pe3 || null), updatedAt: Date.now(), nBought: 0, list, months: monthsLog, finalMonth: finalEntry?.month || null, bench,
   check: { cand: cand.length, yahooMiss: miss, pxBad: pxBad.length } };
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, KEY), JSON.stringify(out));
