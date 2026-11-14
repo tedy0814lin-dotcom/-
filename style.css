@@ -516,3 +516,7 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .st-card p, .st-sec li, .cmp td, .cmp-note, .s6-ul li { line-break: strict; text-wrap: pretty; }
 .cmp .cl { margin: 0 0 3px; }
 .cmp .cl:last-child { margin-bottom: 0; }
+
+/* 卡片簡介：一句一行 */
+.st-note > span { display: block; margin: 0 0 3px; }
+.st-note > span:last-child { margin-bottom: 0; }
