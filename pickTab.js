@@ -131,7 +131,7 @@ export function createPickTab({ api, el }) {
         <h4>優先 ${TOP_N} 檔</h4>
         ${table(otc.slice(0, TOP_N), true)}
         ${otc.length > TOP_N ? `<h4>備選 ${otc.length - TOP_N} 檔</h4>${table(otc.slice(TOP_N), false)}` : ''}
-        ${otcDiv.length ? `<details style="margin-top:8px"><summary class="muted small">已排除：帶 MACD 頂背離的 ${otcDiv.length} 檔（創 20 日新高但 MACD 柱狀體沒跟上，回測這類訊號扣費後沒有優勢）</summary>${table(otcDiv, false)}</details>` : ''}
+        ${otcDiv.length ? `<details class="pk-ex" style="margin-top:8px" ${st.divOpen ? 'open' : ''}><summary class="muted small">已排除：帶 MACD 頂背離的 ${otcDiv.length} 檔（創 20 日新高但 MACD 柱狀體沒跟上，回測這類訊號扣費後沒有優勢）</summary>${table(otcDiv, false)}</details>` : ''}
         <div class="muted small" style="margin-top:8px">進場：隔天開盤價比今天收盤高超過 5% 就不買（跳空太大，回測也是這樣篩）；漲停鎖死買不到也跳過，不追價。出場：買進後收盤價跌到買價 −12% → 隔天開盤賣；否則最長抱 ${HOLD} 個交易日，第 ${HOLD} 天收盤賣。</div>
       </section>
       <section class="panel">
@@ -151,6 +151,7 @@ export function createPickTab({ api, el }) {
         </dl>
       </details>`;
     el.querySelector('#pick-refresh').onclick = () => load(true);
+    const ex = el.querySelector('details.pk-ex'); if (ex) ex.addEventListener('toggle', () => { st.divOpen = ex.open; });
     const gd = el.querySelector('details.guide'); if (gd) gd.addEventListener('toggle', () => { st.guideOpen = gd.open; });
     el.querySelector('#pick-twse').onclick = () => { st.showTwse = !st.showTwse; render(); };
   }
