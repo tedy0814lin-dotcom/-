@@ -1,0 +1,24 @@
+name: 長期核心前瞻記錄（S6-U）
+on:
+  schedule:
+    # 台北 15:50（UTC 07:50）週一～週五：s6u 排程（15:30）之後；週六 10:20 補一次
+    - cron: '50 7 * * 1-5'
+    - cron: '20 2 * * 6'
+  workflow_dispatch:
+jobs:
+  fwd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: s6u-fwd
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/s6u_fwd.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
