@@ -510,3 +510,9 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .cmp .st-v { white-space: normal; text-align: center; line-height: 1.4; }
 .cmp th:nth-child(5) { width: 12%; } .cmp th:nth-child(6) { width: 21%; } .cmp th:nth-child(2) { width: 23%; }
 @media (max-width: 760px) { .cmp th:nth-child(n) { width: 100%; } .cmp .st-v { white-space: nowrap; } }
+
+/* 不在數字／範圍中間斷行，標點避頭尾 */
+.nw { white-space: nowrap; }
+.st-card p, .st-sec li, .cmp td, .cmp-note, .s6-ul li { line-break: strict; text-wrap: pretty; }
+.cmp .cl { margin: 0 0 3px; }
+.cmp .cl:last-child { margin-bottom: 0; }
