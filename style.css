@@ -476,3 +476,37 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .st-warn h4 { color: var(--down); }
 .s6-ul { margin: 0; padding-left: 1.2em; }
 .s6-ul li { margin: 0 0 7px; line-height: 1.75; }
+
+/* 台股策略對比表：分類列、判定標籤、隱患並列；窄螢幕改成一列一張卡 */
+.st-cmp { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.cmp { font-size: 13px; }
+.cmp th, .cmp td { vertical-align: top; line-height: 1.6; }
+.cmp .cmp-grp th { background: transparent; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-align: left; padding-top: 14px; border-bottom: 1px solid var(--line); }
+.cmp .cmp-row { cursor: pointer; }
+.cmp .cmp-row:hover { background: rgba(127,127,127,.07); }
+.cmp-risk ul { margin: 0; padding-left: 1.1em; }
+.cmp-risk li { margin: 0 0 3px; color: var(--muted); }
+.cmp-note { margin: 8px 0 2px; line-height: 1.7; }
+.st-v { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); white-space: nowrap; }
+.st-v-ok { color: var(--up); border-color: currentColor; }
+.st-v-mid { color: #c98a00; border-color: currentColor; }
+.st-v-no { color: var(--down); border-color: currentColor; }
+.st-cat { font-weight: 700; }
+@media (max-width: 760px) {
+  .cmp thead { display: none; }
+  .cmp, .cmp tbody, .cmp tr, .cmp td, .cmp th { display: block; width: 100%; }
+  .cmp .cmp-row { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; margin: 8px 0; }
+  .cmp td { padding: 3px 0; border: 0; }
+  .cmp td::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); }
+  .cmp td:first-child::before { display: none; }
+  .cmp .cmp-grp th { padding: 12px 0 4px; }
+}
+.cmp { table-layout: fixed; width: 100%; }
+.cmp th, .cmp td { white-space: normal; word-break: break-word; }
+.cmp th:nth-child(1) { width: 15%; } .cmp th:nth-child(2) { width: 24%; } .cmp th:nth-child(3) { width: 16%; }
+.cmp th:nth-child(4) { width: 12%; } .cmp th:nth-child(5) { width: 9%; } .cmp th:nth-child(6) { width: 24%; }
+.cmp .cmp-grp th { width: auto; }
+@media (max-width: 760px) { .cmp { table-layout: auto; } .cmp th:nth-child(n) { width: 100%; } }
+.cmp .st-v { white-space: normal; text-align: center; line-height: 1.4; }
+.cmp th:nth-child(5) { width: 12%; } .cmp th:nth-child(6) { width: 21%; } .cmp th:nth-child(2) { width: 23%; }
+@media (max-width: 760px) { .cmp th:nth-child(n) { width: 100%; } .cmp .st-v { white-space: nowrap; } }
