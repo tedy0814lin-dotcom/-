@@ -1,4 +1,4 @@
-// 策略頁「長期核心」：價值＋低波動＋趨勢（S6-U）每月定期定額的操作助手。
+// 策略頁「三因子長期投資」：價值＋低波動＋趨勢（S6-U）每月定期定額的操作助手。
 // 做什麼：依你的起始日與每月可投入金額，算出這個月要賣什麼、先買什麼、各買幾股；你在畫面上打勾並填實際成交價，
 // 之後它會幫你記錄持股、標出該賣的股票、比較同樣的錢買 0050 的結果。
 // 紀錄只存在你的瀏覽器，可匯出成檔案備份、換裝置時匯入；不會傳到伺服器。規則與回測：專案文件《全球多因子長期策略-S6U》。
@@ -6,6 +6,17 @@ import { PLAN_DEFAULTS, planMonth, applyExclude } from '/lib/s6uPlan.js';
 import { RULES_VER, TIERS, tierOf, tierOk, planArgs, planTier, LEV, newState, derive, buildListInfo, makePlan, benchCompare, exportState, parseImport, uid, allTrades } from '/lib/s6uState.js';
 
 const LSK = 'wr_s6u_state_v1';
+// 長段說明拆成條列：在句號、分號（括號外）處斷開；標籤不跨句。
+function bullets(html) {
+  const out = []; let cur = '', depth = 0;
+  for (const ch of String(html)) {
+    if (ch === '（') depth++; else if (ch === '）') depth = Math.max(0, depth - 1);
+    cur += ch;
+    if (!depth && (ch === '。' || ch === '；')) { out.push(cur.replace(/[；]$/, '。')); cur = ''; }
+  }
+  if (cur.trim()) out.push(cur);
+  return `<ul class="s6-ul">${out.map((x) => `<li>${x}</li>`).join('')}</ul>`;
+}
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const n0 = (v) => (v == null || !Number.isFinite(v) ? '—' : Math.round(v).toLocaleString('en-US'));
 const pct = (v, d = 1) => (v == null || !Number.isFinite(v) ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(d) + '%');
@@ -42,7 +53,7 @@ export function createS6Tab({ api, el }) {
 
   function render() {
     const d = S.data;
-    const head = `<details class="s6-banner fold" ${S.bannerOpen ? 'open' : ''}><summary><b>長期核心</b><span class="muted small">簡介與風險（點開展開）</span></summary>每月定期定額，持有排名前 3～15 檔（依資金多寡，最多 15 檔），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">18.8%</b>，0050 <b class="num">16.5%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。頁內有操作助手：算每月買幾股、先買什麼，打勾記錄成交價、標出該賣的持股、比較同樣的錢買 0050，紀錄可匯出備份。回測排除 2026；預測長期只比 0050 多 1～2 個百分點（約六成機率），大空頭仍會跌 30～45%。</details>`;
+    const head = `<details class="s6-banner fold" ${S.bannerOpen ? 'open' : ''}><summary><b>三因子長期投資</b><span class="muted small">簡介與風險（點開展開）</span></summary>每月定期定額，持有排名前 3～15 檔（依資金多寡，最多 15 檔），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">18.8%</b>，0050 <b class="num">16.5%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。頁內有操作助手：算每月買幾股、先買什麼，打勾記錄成交價、標出該賣的持股、比較同樣的錢買 0050，紀錄可匯出備份。回測排除 2026；預測長期只比 0050 多 1～2 個百分點（約六成機率），大空頭仍會跌 30～45%。</details>`;
     if (S.loading && !d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
     if (S.error && !d) { el.innerHTML = head + `<div class="s6-note bad">讀不到名單：${esc(S.error)}</div><button class="refresh" id="s6-reload" type="button">重試</button>`; el.querySelector('#s6-reload').onclick = load; return; }
     if (!d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
@@ -106,7 +117,7 @@ export function createS6Tab({ api, el }) {
     const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${tierOk(S.data, k) ? '' : 'disabled'}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（含正2）' : ''}</option>`;
     const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select">${opt('base')}${opt('R')}${opt('A')}</select></div>
       <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −18%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">趨勢 50%＋盈餘成長＋營收濾網・回撤 −20%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">平衡名單 60%＋正2 40%・回撤 −28%</span></div></div>
-      <details class="fold s6-txt" ${S.txtOpen ? 'open' : ''}><summary><b>${TIERS[V].label}版說明與回測</b><span class="muted small">（點開展開）</span></summary><div class="status">${TXT[V]}</div></details>${pickView(i, V)}</section>`;
+      <details class="fold s6-txt" ${S.txtOpen ? 'open' : ''}><summary><b>${TIERS[V].label}版說明與回測</b><span class="muted small">（點開展開）</span></summary><div class="status">${bullets(TXT[V])}</div></details>${pickView(i, V)}</section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
       <section class="panel"><div class="panel-head"><strong>持股</strong><span class="muted small">紅底＝該賣（名次掉出前 ${flag.lim} 名或不在名單）</span></div>${holdingsView(held, rankOf, flag)}</section>
@@ -256,9 +267,9 @@ export function createS6Tab({ api, el }) {
     const sd = el.querySelector('#st-start'); if (sd) sd.onchange = () => { if (sd.value) act(() => { st.start = sd.value; }); };
     el.querySelector('#ex-go').onclick = () => {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportState(st)], { type: 'application/json' }));
-      a.download = `chip-radar-長期核心-${today().replace(/-/g, '')}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      a.download = `chip-radar-三因子長期投資-${today().replace(/-/g, '')}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     };
-    const doReset = () => { if (confirm('會把這個瀏覽器裡的長期核心紀錄全部歸零（投入、持股、成交、計畫都清掉），回到一開始重新設定。建議先到下面「備份與設定」匯出紀錄。確定要歸零嗎？')) { try { localStorage.removeItem(LSK); } catch {} S.st = null; S.msg = ''; render(); } };
+    const doReset = () => { if (confirm('會把這個瀏覽器裡的三因子長期投資紀錄全部歸零（投入、持股、成交、計畫都清掉），回到一開始重新設定。建議先到下面「備份與設定」匯出紀錄。確定要歸零嗎？')) { try { localStorage.removeItem(LSK); } catch {} S.st = null; S.msg = ''; render(); } };
     el.querySelector('#rs-go').onclick = doReset; const rt = el.querySelector('#rs-top'); if (rt) rt.onclick = doReset;
     bindImport();
   }

@@ -464,3 +464,15 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .st-more { margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
 .st-more p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .s6-txt { margin-top: 8px; }
+
+/* 策略卡「進出場規則與原理」：分段、條列，預設收起 */
+.st-sub { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.st-more > summary { font-size: 14px; }
+.st-sec { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); }
+.st-sec:first-of-type { border-top: 0; padding-top: 2px; }
+.st-sec h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .04em; }
+.st-sec ul { margin: 0; padding-left: 1.2em; }
+.st-sec li { margin: 0 0 5px; color: var(--muted); font-size: 13px; line-height: 1.75; }
+.st-warn h4 { color: var(--down); }
+.s6-ul { margin: 0; padding-left: 1.2em; }
+.s6-ul li { margin: 0 0 7px; line-height: 1.75; }
