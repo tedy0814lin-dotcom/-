@@ -5,6 +5,7 @@ import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
 import { createS6Tab } from '/s6Tab.js';
+import { watchTypeset } from '/lib/typeset.js';
 
 const LS = 'wr_strat_sub';
 const CARDS = [
@@ -90,6 +91,7 @@ export function createStrategyTab({ api, el, goto }) {
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
   };
+  watchTypeset(el);
   let sub = 's6';
   try { const s = localStorage.getItem(LS); if (kids[s]) sub = s; } catch {}
 
