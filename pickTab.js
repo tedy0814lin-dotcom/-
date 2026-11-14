@@ -138,8 +138,8 @@ export function createPickTab({ api, el }) {
         <div class="panel-head"><strong>上市（回測沒有優勢，僅供參考）</strong><button class="ghost" id="pick-twse" type="button">${st.showTwse ? '收起' : `展開 ${sii.length} 檔`}</button></div>
         ${st.showTwse ? `<div class="status" style="border:1px solid var(--down)">上市 481 個交易日（2024-11～2026-11）回測：同樣條件比同出場的隨機基準<b>少 1～3%</b>（前後半都是負的），所以這個條件在上市<b>沒有優勢</b>，不要當成策略訊號。</div>${table(sii, false)}` : ''}
       </section>
-      <details class="guide" open>
-        <summary>這個策略的邏輯與回測</summary>
+      <details class="guide" ${st.guideOpen ? 'open' : ''}>
+        <summary>這個策略的邏輯與回測（點開展開）</summary>
         <dl>
           <dt>選股邏輯</dt><dd>散戶單筆小，大戶單筆大。當天成交筆數沒變多、但<b>每筆平均股數</b>突然是平常的 1.5 倍以上，代表少數人在大量買進（老師說的「買家少、大戶在買」）。再要求當天收盤漲超過 4%、站上 20 日線、近 5 日均量 ≥500 張（流動性），就是「大單把價格推上去」的股票。</dd>
           <dt>回測（上櫃 893 檔、2021–2026）</dt><dd>扣手續費＋證交稅 0.585%、隔天開盤買（開盤跳空 ≥5% 不買）、每日最多 3 檔、跌 12% 停損、最長 40 天。<b>2026-11-12 起改用修復後的資料</b>（原本有 15 個上櫃日行情檔損壞，造成假的 +411% 交易）：1,178 筆，每筆平均 +2.25%，比同出場的隨機基準多賺 +1.47%（90% 區間 −0.10～+3.14%，已含 0，不能說穩定贏過隨機），贏同期持有 0050 約 +0.57%／筆（訓練期 −0.23%、驗證期 +2.68%），勝率 32%，中位數 −11%。</dd>
@@ -151,6 +151,7 @@ export function createPickTab({ api, el }) {
         </dl>
       </details>`;
     el.querySelector('#pick-refresh').onclick = () => load(true);
+    const gd = el.querySelector('details.guide'); if (gd) gd.addEventListener('toggle', () => { st.guideOpen = gd.open; });
     el.querySelector('#pick-twse').onclick = () => { st.showTwse = !st.showTwse; render(); };
   }
 

@@ -26,7 +26,7 @@ function mini(t) {
 }
 
 export function createClaudeTab({ api, el }) {
-  const st = { loading: false, error: '', data: null };
+  const st = { loading: false, error: '', data: null, rulesOpen: false };
   async function load(force = false) {
     if (st.loading) return;
     st.loading = true; st.error = ''; render();
@@ -41,7 +41,8 @@ export function createClaudeTab({ api, el }) {
       <button class="refresh" id="cs-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>${st.error ? `<div class="status err">${esc(st.error)}</div>` : ''}`;
     const rules = `
       <section class="panel">
-        <div class="panel-head"><strong>大陽線突破新高＋寬追蹤停損（加密日線，只做多）</strong><span class="muted small">完全由 Claude 設計與回測；借用你的「大陽線」「BTC 大盤濾網」規則</span></div>
+        <details class="fold" ${st.rulesOpen ? 'open' : ''}><summary><strong>大陽線突破新高＋寬追蹤停損（加密日線，只做多）</strong><span class="muted small">規則與回測（點開展開）</span></summary>
+        <p class="muted small">完全由 Claude 設計與回測；借用你的「大陽線」「BTC 大盤濾網」規則</p>
         <ol class="cs-rules">
           <li><b>可交易</b>：近 20 天平均成交額 ≥2,000 萬美元、上市滿 120 天。</li>
           <li><b>大盤</b>：BTC 日線收盤在 50 日均線之上才開新倉。</li>
@@ -55,7 +56,7 @@ export function createClaudeTab({ api, el }) {
           <tr><td>持有 BTC</td><td class="n num">11.6 倍</td><td class="n num">+44%</td><td class="n num">−77%</td><td class="n num">−11%</td></tr>
         </tbody></table></div>
         <p class="muted small">勝率約 24%、平均 +1.5R，靠少數大波段（最大一筆 +162R，前 10 筆佔總獲利 64%）——漏掉幾個訊號結果就會差很多。逐年：2021 +457%、2022 −27%、2023 +90%、2024 +1%（BTC +121%）、2025 −10%、2026 至 9 月 +52%。參數換成相近的組合，驗證期年化在 +7%～+39% 之間，合理預期約 +15～25%。手續費加倍、資金費率 3 倍時驗證期剩 +12%。資料沒有涵蓋所有下市幣，結果偏樂觀。這是回測研究，不是投資建議。</p>
-      </section>`;
+      </details></section>`;
     if (!d) { el.innerHTML = head + rules; bind(); return; }
     const fresh = d.fresh.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>幣</th><th>訊號日</th><th class="n">收盤</th><th class="n">初始停損</th><th class="n">停損距離</th><th class="n">建議部位<br><span class="muted small">風險 1%</span></th><th class="n">成交額倍數</th></tr></thead><tbody>${
       d.fresh.map((f) => `<tr><td><b>${esc(nm(f.sym))}</b></td><td class="num">${esc(f.sigDay)}</td><td class="n num">${px(f.close)}</td><td class="n num">${px(f.stop0)}</td><td class="n num">${f.riskPct.toFixed(1)}%</td><td class="n num">${Math.min(25, 100 / f.riskPct).toFixed(0)}%</td><td class="n num">${f.volX.toFixed(1)}×</td></tr>`).join('')}</tbody></table></div><p class="muted small">明天 UTC 0 點（台灣 8 點）開盤進場；開盤若已低於停損就放棄。建議部位＝總資金的百分比（1% ÷ 停損距離，最多 25%）。</p>`
@@ -75,6 +76,9 @@ export function createClaudeTab({ api, el }) {
       </dl></details>`;
     bind();
   }
-  function bind() { const b = el.querySelector('#cs-refresh'); if (b) b.onclick = () => load(true); }
+  function bind() {
+    const b = el.querySelector('#cs-refresh'); if (b) b.onclick = () => load(true);
+    const f = el.querySelector('details.fold'); if (f) f.addEventListener('toggle', () => { st.rulesOpen = f.open; });
+  }
   return { load, render, get loaded() { return !!st.data; } };
 }

@@ -14,8 +14,10 @@ const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)
 const cls = (v) => (v == null ? '' : v >= 0 ? 'up' : 'down');
 
 export function createS6Tab({ api, el }) {
-  const S = { loading: false, error: '', data: null, loaded: false, st: null, which: 'final', storeOk: true, msg: '', openMore: false };
+  const S = { loading: false, error: '', data: null, loaded: false, st: null, which: 'final', storeOk: true, msg: '', openMore: false, txtOpen: false };
   try { const raw = localStorage.getItem(LSK); if (raw) S.st = parseImport(raw); } catch (e) { if (e && e.message && !/storage|denied/i.test(e.message)) S.msg = '瀏覽器裡的舊紀錄讀不出來（' + e.message + '），請用「匯入」還原備份。'; }
+  // 簡介的展開狀態（toggle 不會往上傳，用捕獲階段在外層接）
+  el.addEventListener('toggle', (e) => { if (e.target.matches && e.target.matches('details.s6-banner')) S.bannerOpen = e.target.open; }, true);
   function save() { try { localStorage.setItem(LSK, JSON.stringify(S.st)); S.storeOk = true; } catch { S.storeOk = false; } }
 
   async function load() {
@@ -40,7 +42,7 @@ export function createS6Tab({ api, el }) {
 
   function render() {
     const d = S.data;
-    const head = `<div class="s6-banner"><b>長期核心</b>：每月定期定額，持有排名前 3～15 檔（依資金多寡，最多 15 檔），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">19.3%</b>，0050 <b class="num">16.5%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。</div>`;
+    const head = `<details class="s6-banner fold" ${S.bannerOpen ? 'open' : ''}><summary><b>長期核心</b><span class="muted small">簡介與風險（點開展開）</span></summary>每月定期定額，持有排名前 3～15 檔（依資金多寡，最多 15 檔），名次掉出才賣、不設停損。保守／平衡／進攻三個版本（都分散持有，差別在強勢股占選股分數的比重），風險由低到高；預設保守版（回測定期定額年化 <b class="num">19.3%</b>，0050 <b class="num">16.5%</b>，回撤較小）。回測有挑參數的偏差，實際請打折看；大空頭仍會跌，不保證。頁內有操作助手：算每月買幾股、先買什麼，打勾記錄成交價、標出該賣的持股、比較同樣的錢買 0050，紀錄可匯出備份。回測排除 2026；預測長期只比 0050 多 1～2 個百分點（約六成機率），大空頭仍會跌 30～45%。</details>`;
     if (S.loading && !d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
     if (S.error && !d) { el.innerHTML = head + `<div class="s6-note bad">讀不到名單：${esc(S.error)}</div><button class="refresh" id="s6-reload" type="button">重試</button>`; el.querySelector('#s6-reload').onclick = load; return; }
     if (!d) { el.innerHTML = head + '<div class="status">讀取名單中…</div>'; return; }
@@ -104,7 +106,7 @@ export function createS6Tab({ api, el }) {
     const opt = (k) => `<option value="${k}" ${V === k ? 'selected' : ''} ${tierOk(S.data, k) ? '' : 'disabled'}>${TIERS[k].label}版${k === 'base' ? '（預設）' : k === 'A' ? '（含正2）' : ''}</option>`;
     const vsel = `<section class="panel s6-ver"><div class="panel-head"><strong>策略版本</strong><select id="ver-sel" class="select">${opt('base')}${opt('R')}${opt('A')}</select></div>
       <div class="s6-tiers"><div class="s6-tier ${V === 'base' ? 'on' : ''}"><b>保守</b><span class="num">強勢股 33%・回撤 −19%</span></div><div class="s6-tier ${V === 'R' ? 'on' : ''}"><b>平衡</b><span class="num">趨勢 50%＋盈餘成長＋營收濾網・回撤 −20%</span></div><div class="s6-tier ${V === 'A' ? 'on' : ''}"><b>進攻</b><span class="num">平衡名單 60%＋正2 40%・回撤 −27%</span></div></div>
-      <div class="status">${TXT[V]}</div>${pickView(i, V)}</section>`;
+      <details class="fold s6-txt" ${S.txtOpen ? 'open' : ''}><summary><b>${TIERS[V].label}版說明與回測</b><span class="muted small">（點開展開）</span></summary><div class="status">${TXT[V]}</div></details>${pickView(i, V)}</section>`;
     const todo = `<section class="panel"><div class="panel-head"><strong>本月（${m}）要做的事</strong>${lsel}<button class="ghost" id="pl-re" type="button">重新計算</button></div>${need}${plan ? planView(plan, i) : (dep != null ? '<div class="status">按「重新計算」產生清單。</div>' : '')}</section>`;
     return `${hero}${vsel}${todo}
       <section class="panel"><div class="panel-head"><strong>持股</strong><span class="muted small">紅底＝該賣（名次掉出前 ${flag.lim} 名或不在名單）</span></div>${holdingsView(held, rankOf, flag)}</section>
@@ -208,6 +210,7 @@ export function createS6Tab({ api, el }) {
   }
   function bindMain(i) {
     const st = S.st, m = today().slice(0, 7);
+    const tx = el.querySelector('details.s6-txt'); if (tx) tx.addEventListener('toggle', () => { S.txtOpen = tx.open; });
     const vs = el.querySelector('#ver-sel'); if (vs) vs.onchange = () => { st.ver = vs.value; if (S.which === 'final' && !buildListInfo(S.data, 'final', verNow())) S.which = 'preview'; const j = info(); if (j && st.plans[m]) st.plans[m] = makePlan(st, m, j, today()); save(); render(); };
     const ls = el.querySelector('#ls-sel'); if (ls) ls.onchange = () => { S.which = ls.value; const j = info(); if (st.plans[m] && j) { st.plans[m] = makePlan(st, m, j, today()); save(); } render(); };
     const dp = el.querySelector('#dp-go'); if (dp) dp.onclick = () => { const v = +el.querySelector('#dp-amt').value; if (!(v >= 0)) return; act(() => { st.deposits[m] = v; (st.flows ||= []).push({ date: today(), amount: v }); st.plans[m] = makePlan(st, m, i, today()); }); };

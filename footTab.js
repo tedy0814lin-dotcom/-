@@ -37,7 +37,7 @@ function card(r, dir) {
 }
 
 export function createFootTab({ api, el }) {
-  const st = { loading: false, error: '', data: null };
+  const st = { loading: false, error: '', data: null, rulesOpen: false };
   async function load(force = false) {
     if (st.loading) return;
     st.loading = true; st.error = ''; render();
@@ -51,7 +51,8 @@ export function createFootTab({ api, el }) {
     const head = `<div class="toolbar"><div class="status" style="width:auto;flex:1">${d ? `資料到 ${esc(d.asOf)}（UTC・4H 收盤）・掃描 ${d.scanned} 個 USDT 永續${d.cached ? '・10 分鐘內快取' : ''}` : st.loading ? '掃描中（約 10～30 秒）…' : ''}</div>
       <button class="refresh" id="fp-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>${st.error ? `<div class="status err">${esc(st.error)}</div>` : ''}`;
     const rules = `
-      <section class="panel"><div class="panel-head"><strong>Delta 階梯（足跡圖訂單流・加密 4H・多空）</strong><span class="muted small">完全由 Claude 設計與回測</span></div>
+      <section class="panel"><details class="fold" ${st.rulesOpen ? 'open' : ''}><summary><strong>Delta 階梯（足跡圖訂單流・加密 4H・多空）</strong><span class="muted small">規則與回測（點開展開）</span></summary>
+        <p class="muted small">完全由 Claude 設計與回測</p>
         <ol class="cs-rules">
           <li><b>概念</b>：足跡圖看每根 K 棒的主動買／賣（Delta）。這裡抓「買盤一階一階把價格推上去」的連續堆疊。</li>
           <li><b>做多訊號</b>：連續 2 根 4H，每根都 ①淨買 Delta 強（≥ 近 50 根平均的 2 倍）②創新高 ③收紅 → <b>下一根 4H 開盤進場</b>。</li>
@@ -63,13 +64,16 @@ export function createFootTab({ api, el }) {
           <tr><td>做空（連 2 根）</td><td class="n num">+0.13R</td><td class="n num">隨機 −0.02</td><td class="n num">+0.11 / +0.16</td></tr>
         </tbody></table></div>
         <p class="muted small">止盈從 3R 改成 4R（2026-11-05，訓練期選的；3R 版驗證期投組略佳 +50% 對 +42%，但 4R 的事件期望、全期與合併組合都較好）。投組層級（多空、每筆風險 0.5%、複利扣費）：全期年化 +36%、最大回撤 −49%（持有 BTC +44%／−77%）；驗證期 +42%（BTC −11%）。<b>單用普通，真正的價值是分散</b>——和「大陽線突破」合併（相關 −0.07）全期 +61%、回撤 −33%，報酬與風險都贏 BTC；再配台股部位（相關 −0.01）回撤再腰斬。勝率約 30%，靠少數大波段；2022 空頭年做多為負；對手續費敏感。這是訂單流回測研究，不是投資建議。</p>
-      </section>`;
+      </details></section>`;
     if (!d) { el.innerHTML = head + rules; bind(); return; }
     const sec = (title, arr, dir) => `<section class="panel"><div class="panel-head"><strong>${title}</strong><span class="muted small">${arr.length} 個</span></div>${
       arr.length ? `<div class="cs-grid">${arr.map((r) => card(r, dir)).join('')}</div>` : '<div class="muted small">目前沒有這個方向的新訊號。</div>'}</section>`;
     el.innerHTML = head + sec('今天做多訊號', d.long, 1) + sec('今天做空訊號', d.short, -1) + rules;
     bind();
   }
-  function bind() { const b = el.querySelector('#fp-refresh'); if (b) b.onclick = () => load(true); }
+  function bind() {
+    const b = el.querySelector('#fp-refresh'); if (b) b.onclick = () => load(true);
+    const f = el.querySelector('details.fold'); if (f) f.addEventListener('toggle', () => { st.rulesOpen = f.open; });
+  }
   return { load, render, get loaded() { return !!st.data; }, get loading() { return st.loading; } };
 }

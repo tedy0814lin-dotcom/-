@@ -457,3 +457,10 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .s6-chip.pins { border-color: var(--up); } .s6-chip.exclude { border-color: var(--down); }
 .s6-chip button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 6px; }
 @media (max-width: 520px) { .s6-tier { font-size: 12px; padding: 6px 8px; } }
+
+/* 可收合的長說明（策略頁）：預設收起，點標題展開 */
+.fold > summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; padding: 4px 0; }
+.fold[open] > summary { margin-bottom: 8px; }
+.st-more { margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.st-more p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.s6-txt { margin-top: 8px; }
