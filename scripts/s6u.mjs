@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { s6uRank, universeMask, IND_NAMES } from '../lib/s6u.js';
+import { revAcc, mergeRev, trimRev, ymIdx, idxYm } from '../lib/s6uRev.js';
 
 const OUT = process.env.OUT || 's6u-out';
 const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
@@ -117,22 +118,54 @@ if (!pe3) {
 } else console.log(`3 個月前（${pe3Day}）本益比：沿用已存的 ${Object.keys(pe3).length} 檔`);
 for (const r of rows) r.pe3 = pe3 ? pe3[r.code] ?? null : null;
 
+
+// ---- 2c) 月營收加速度（平衡／進攻版的「排除營收加速度最差 10%」濾網，2026-11-14 起；見 lib/s6uRev.js）----
+// 歷史存在 snap3 的 s6_rev.json（不放進網站讀的 s6_u.json，免得變大）；讀不到就用 repo 內的種子（2025-01～2026-10）。
+// 每天從證交所 t187ap05_L 補當月、上月、去年當月三個點（單位千元）；月底快照只用到「上個月」營收：最新已公布月份 L 在月初 10 日前仍是上上個月，照實用。
+let revHist = null, rOk = true, revL = null;
+if (repo) for (let t = 0; t < 3 && revHist === null; t++) {
+  try { const r = await fetch(`https://raw.githubusercontent.com/${repo}/snap3/s6_rev.json`, { headers: { 'Cache-Control': 'no-cache' } }); if (r.status === 404) break; if (r.ok) revHist = (await r.json()).h; else throw new Error('HTTP ' + r.status); } catch (e) { await sleep(3000); }
+}
+try { const seedR = JSON.parse(fs.readFileSync(new URL('./s6u_revseed.json', import.meta.url))); for (const c of Object.keys(seedR)) revHist = revHist || {}, revHist[c] = { ...seedR[c], ...(revHist[c] || {}) }; } catch (e) { console.log('沒有營收種子', e.message); }
+revHist = revHist || {};
+try {
+  const rv = await getJ('https://openapi.twse.com.tw/v1/opendata/t187ap05_L', { tries: 5, timeout: 60000 });
+  let nOk = 0, Lx = null;
+  for (const r of rv) {
+    const ymS = String(r['資料年月'] || ''), code = String(r['公司代號'] || '').trim();
+    if (!/^\d{5}$/.test(ymS) || !code) continue;
+    const L = (+ymS.slice(0, 3) + 1911) * 12 + (+ymS.slice(3) - 1);
+    mergeRev(revHist, code, L, num(r['營業收入-當月營收']), num(r['營業收入-上月營收']), num(r['營業收入-去年當月營收']));
+    Lx = Math.max(Lx ?? 0, L); nOk++;
+  }
+  console.log(`月營收（證交所）：${nOk} 家，最新資料月 ${Lx != null ? idxYm(Lx) : '無'}`);
+} catch (e) { console.log('抓不到月營收，沿用已存歷史：' + e.message); }
+{ // 最新已公布月份：至少 300 家有值的最大月份
+  const cnt = {}; for (const c of Object.keys(revHist)) for (const k of Object.keys(revHist[c])) cnt[k] = (cnt[k] || 0) + 1;
+  const ks = Object.keys(cnt).filter((k) => cnt[k] >= 300).map(Number).sort((a, b) => b - a); revL = ks.length ? ymIdx(ks[0]) : null;
+  const ymI = +ym.slice(0, 4) * 12 + (+ym.slice(5) - 1);
+  if (revL == null || revL < ymI - 2) { rOk = false; console.log(`月營收太舊（最新 ${revL != null ? idxYm(revL) : '無'}），平衡與進攻版今天不輸出`); }
+}
+if (rOk) { for (const r of rows) r.racc = revAcc(revHist[r.code], revL); }
+
 // ---- 3) 排名 ----
 const merged = rows.map((r) => (r.hist ? r : { ...r, hist: null }));
 const { universe, ranked } = s6uRank(merged);
 if (universe < 230) { console.error('合格股票太少（' + universe + '），不更新'); process.exit(1); }
+if (rOk) { const nR = ranked.filter((o) => o.ra != null).length; console.log(`營收加速度有值 ${nR}/${universe} 檔，排除 ${ranked.filter((o) => o.rx).length} 檔`); if (nR < universe * 0.75) { rOk = false; console.log('營收有值的檔數太少，平衡與進攻版今天不輸出'); } }
+if (!rOk) eOk = false;
 const dow = new Date(asof + 'T00:00:00Z').getUTCDay(), nextWd = new Date(new Date(asof + 'T00:00:00Z').getTime() + (dow === 5 ? 3 : dow === 6 ? 2 : 1) * 864e5).toISOString().slice(0, 7);
 const official = nextWd !== ym; // 隔一個營業日就換月 → 今天是月底最後一個營業日（碰到連假的月底會晚一天才標成正式，見 months）
 const rd = (x, n = 4) => (Number.isFinite(x) ? +x.toFixed(n) : null);
-const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, rankM: eOk ? o.rankM : null, rankH: rotOk ? o.rankH : null, im: rotOk ? rd(o.im, 3) : null, eg: eOk ? rd(o.eg, 3) : null, ind: IND_NAMES[o.ind] || null, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
+const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, rankM: eOk ? o.rankM : null, rankH: rotOk ? o.rankH : null, rx: o.rx ? 1 : 0, im: rotOk ? rd(o.im, 3) : null, eg: eOk ? rd(o.eg, 3) : null, ind: IND_NAMES[o.ind] || null, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
 
 // ---- 4) 歷史月底記錄（舊記錄在 2b 之前已讀回，接著寫）----
 // 網站剛上線時 snap3 還沒有任何月底記錄：用 2026-10 月底的名單（Python 回測面板重算、與回測逐檔一致）當第一份正式名單
 if (!(prev?.months || []).length) { try { prev = { ...(prev || {}), months: [JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url)))] }; } catch (e) { console.log('沒有種子名單', e.message); } }
 // 舊記錄補上進攻版名單、並把平衡版名單換成新算式（fm=2：含 EPS 成長、不含產業動能，2026-11-13 起）：用種子名單補
-try { const seed = JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url))); for (const e of prev?.months || []) { delete e.topR; delete e.topA; if (e.month === seed.month) { if (e.fm !== 2 && seed.topM) { e.topM = seed.topM; e.fm = 2; } if (!e.topH && seed.topH) e.topH = seed.topH; } } } catch {}
+try { const seed = JSON.parse(fs.readFileSync(new URL('./s6u_seed.json', import.meta.url))); for (const e of prev?.months || []) { delete e.topR; delete e.topA; if (e.month === seed.month) { if (e.fm !== 3 && seed.topM) { e.topM = seed.topM; e.fm = 3; } if (!e.topH && seed.topH) e.topH = seed.topH; } } } catch {}
 const monthsLog = (prev?.months || []).filter((e) => e.month !== ym);
-monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]), fm: 2, topM: eOk ? list.filter((x) => x.rankM != null).sort((a, b) => a.rankM - b.rankM).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankM]) : null, topH: rotOk ? list.filter((x) => x.rankH != null).sort((a, b) => a.rankH - b.rankH).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankH]) : null });
+monthsLog.push({ month: ym, day: asof, official, top: list.slice(0, 60).map((x) => [x.code, x.name, x.close, x.rank]), fm: 3, topM: eOk ? list.filter((x) => x.rankM != null).sort((a, b) => a.rankM - b.rankM).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankM]) : null, topH: rotOk ? list.filter((x) => x.rankH != null).sort((a, b) => a.rankH - b.rankH).slice(0, 60).map((x) => [x.code, x.name, x.close, x.rankH]) : null });
 monthsLog.sort((a, b) => (a.month < b.month ? -1 : 1)); while (monthsLog.length > 48) monthsLog.shift();
 // 正式名單＝最近一個「已確定」的月份：該月最後一次計算時是月底最後營業日，或已經有更晚的月份記錄
 const finalIdx = (() => { for (let i = monthsLog.length - 1; i >= 0; i--) { const e = monthsLog[i]; if (e.official || i < monthsLog.length - 1) return i; } return -1; })();
@@ -141,10 +174,11 @@ const finalEntry = finalIdx >= 0 ? monthsLog[finalIdx] : null;
 let lev = prev?.lev || null;
 try { const b = await yahoo('00631L.TW', '1mo'); const x = b?.[b.length - 1]; if (x && x[2] > 0) lev = { code: '00631L', name: '元大台灣50正2', close: +x[2].toFixed(2), day: x[0] }; else console.log('抓不到正2 收盤，沿用上次'); } catch (e) { console.log('抓正2 收盤失敗：' + e.message); }
 const bench = b50.filter(([d]) => d >= '2023-01-01').map(([d, , c]) => [d, +c.toFixed(2)]);
-const out = { asof, official, month: ym, universe, rotOk, eOk, lev, pe3: pe3 ? { day: pe3Day, map: pe3 } : (prev?.pe3 || null), updatedAt: Date.now(), nBought: 0, list, months: monthsLog, finalMonth: finalEntry?.month || null, bench,
+const out = { asof, official, month: ym, universe, rotOk, eOk, rOk, lev, pe3: pe3 ? { day: pe3Day, map: pe3 } : (prev?.pe3 || null), updatedAt: Date.now(), nBought: 0, list, months: monthsLog, finalMonth: finalEntry?.month || null, bench,
   check: { cand: cand.length, yahooMiss: miss, pxBad: pxBad.length } };
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, KEY), JSON.stringify(out));
+if (revL != null) { trimRev(revHist, revL, 22); fs.writeFileSync(path.join(OUT, 's6_rev.json'), JSON.stringify({ L: idxYm(revL), h: revHist })); }
 console.log(`完成：母體 ${universe} 檔，收盤日 ${asof}${official ? '（月底，正式名單）' : '（預覽）'}，前 10 名：${list.slice(0, 10).map((x) => x.code + x.name).join(' ')}，檔案 ${(fs.statSync(path.join(OUT, KEY)).size / 1024).toFixed(0)} KB`);
 if (!canPush) { console.log('不推送，輸出在', OUT); process.exit(0); }
 const git = (...a) => execFileSync('git', a, { cwd: OUT, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
