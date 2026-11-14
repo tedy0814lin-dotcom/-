@@ -21,9 +21,9 @@ jobs:
     permissions:
       contents: write   # 數據記錄要推回 data 分支
       actions: write    # 讓這一輪在中途先排好「下一輪」，輪與輪之間不留空窗
-    # GitHub 的定時排程不準（實測起點間隔 40～80 分鐘），所以不靠它：
-    #   1. 每一輪啟動後自己每 15 分鐘掃一次、連續約 40 分鐘（夜間 01:00～07:59 只掃一次就結束，由定時排程 01:00／05:00／07:30 各叫一次）；
-    #   2. 第 2 次掃描開始時，用 workflow_dispatch 先排好「下一輪」（排在 concurrency 佇列，這一輪結束就立刻接上，中間只差啟動的幾十秒）；
+    # GitHub 的定時排程不準（實測約每小時才起一次），所以仍用自我接力維持間隔，但 2026-11-14 起為了降低被視為濫用的風險而減量：
+    #   1. 每一輪只掃「一次」（白天目標間隔 30 分鐘，原本 15 分鐘），掃完等到下一次掃描時間，才用 workflow_dispatch 排下一輪並結束（不再同一輪連掃多次）；
+    #   2. 夜間（台北 01:00～07:59）掃一次就結束、不接力，由定時排程 01:00／05:00／07:30 各叫一次；
     #   3. 定時排程（每 30 分鐘）只當備援：萬一接力斷掉，最慢下次排程時重新接上。
     # workflow_dispatch 事件即使用 GITHUB_TOKEN 發出也一定會建立新的 run（GitHub 官方文件）。
     concurrency:
@@ -41,31 +41,23 @@ jobs:
           restore-keys: alert-state-
       - run: |
           # 2026-11-08 搬遷：所有運算都在這裡跑（網站 Cloudflare 只讀結果）。每輪：警報 → 數據記錄 → 策略記錄 → 快照
-          # 每次掃描目標間隔 15 分鐘（台北 01:00～07:59 夜間不接力，只靠定時排程每 4 小時掃一次；做完才算，掃描本身超過 10 分鐘就連續接著做）；新一次掃描最晚在這一輪的第 35 分鐘開始（一次掃描約 8～9 分鐘，整輪約 38 分鐘結束），
-          # 確保 60 分鐘逾時前結束、把「推過哪些」存回快取（避免重複推播）
-          START=$(date +%s); i=0; NEXT=0
-          while true; do
-            i=$((i+1)); T0=$(date +%s)
-            # 第 2 次掃描開始時排好下一輪（只排一次）。test=0：不要送測試訊息
-            if [ "$NEXT" = 0 ] && [ "$i" -ge 2 ]; then
-              if gh workflow run alert.yml --ref "$GITHUB_REF_NAME" -f test=0 -f tw=0; then NEXT=1; echo "已排好下一輪"; else echo "::warning::排下一輪失敗，靠定時排程備援"; fi
-            fi
-            if [ "$i" = 1 ]; then TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
-            else timeout 600 node scripts/alert.mjs || true; fi
-            timeout 300 node scripts/log.mjs || true
-            timeout 400 node scripts/slog.mjs || true
-            # 快照（加密一定跑；台股依時段／過期自動決定，也可手動 TW=1）
-            TW="$TW_IN" timeout 1200 node scripts/snapshot.mjs || true
-            ELAPSED=$(( $(date +%s) - T0 )); TOTAL=$(( $(date +%s) - START ))
-            echo "第 $i 次掃描花 ${ELAPSED} 秒，這一輪已 ${TOTAL} 秒"
-            # 台北時間 01:00～07:59 網站沒人看、也不推播：間隔設 4 小時，等於這一輪掃一次就結束、不排下一輪（下一次由定時排程叫起）；其餘時間每 15 分鐘
-            H=$(TZ=Asia/Taipei date +%-H); INT=900; if [ "$H" -ge 1 ] && [ "$H" -lt 8 ]; then INT=14400; fi
-            WAIT=$(( INT - ELAPSED )); [ "$WAIT" -lt 0 ] && WAIT=0
-            # 下一次掃描如果要等到第 35 分鐘之後才開始，就不再等：這一輪到此結束，由已排好的下一輪接手
-            # （先前把這個判斷放在 sleep 之後，夜間 30 分鐘間隔會睡過頭、撐到 60 分鐘逾時被取消）
-            if [ $(( TOTAL + WAIT )) -gt 2100 ]; then break; fi
-            sleep "$WAIT"
-          done
+          # 2026-11-14 減量：每輪只掃一次。白天等到「這一輪開始後 INT_DAY 秒」才排下一輪（掃描本身約 8～9 分鐘，其餘是等待）；夜間不接力
+          INT_DAY="${INT_DAY:-1800}"
+          T0=$(date +%s)
+          TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
+          timeout 300 node scripts/log.mjs || true
+          timeout 400 node scripts/slog.mjs || true
+          # 快照（加密一定跑；台股依時段／過期自動決定，也可手動 TW=1）
+          TW="$TW_IN" timeout 1200 node scripts/snapshot.mjs || true
+          ELAPSED=$(( $(date +%s) - T0 ))
+          echo "這一輪掃描花 ${ELAPSED} 秒"
+          # 台北時間 01:00～07:59 網站沒人看、也不推播：掃一次就結束，不排下一輪（下一次由定時排程叫起）
+          H=$(TZ=Asia/Taipei date +%-H)
+          if [ "$H" -ge 1 ] && [ "$H" -lt 8 ]; then echo "夜間：不接力"; exit 0; fi
+          WAIT=$(( INT_DAY - ELAPSED )); [ "$WAIT" -lt 0 ] && WAIT=0
+          [ "$WAIT" -gt 0 ] && sleep "$WAIT"
+          # test=0：不要送測試訊息。排進 concurrency 佇列，這一輪結束（只差存快取的幾秒）就接上
+          if gh workflow run alert.yml --ref "$GITHUB_REF_NAME" -f test=0 -f tw=0; then echo "已排好下一輪"; else echo "::warning::排下一輪失敗，靠定時排程備援"; fi
         env:
           SNAPSHOT: '1'
           ALERT_KEY: ${{ secrets.ALERT_KEY }}
