@@ -524,3 +524,14 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 /* 展開的三角形裡有寬表格時，不准把整頁撐寬（手機會縮放、亂跳）：表格改在自己的框裡左右捲動 */
 .panel, .panel > *, details, details > * { min-width: 0; max-width: 100%; }
 .tbl-wrap { max-width: 100%; overflow-x: auto; }
+
+/* 手機字型較寬時，策略卡統計格的不斷行數字把卡片撐出螢幕：欄位允許縮小、窄螢幕改單欄、過長時可換行 */
+.st-card { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.st-card > * { min-width: 0; max-width: 100%; }
+.st-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.st-stats > div { min-width: 0; }
+.st-stats dd { overflow-wrap: anywhere; }
+.st-stats > .wide { grid-column: 1 / -1; }
+
+/* 幣名＋標籤＋價格同列太長時換行，不撐出螢幕（維加斯／訊號卡片的 card-head） */
+.card-head { flex-wrap: wrap; row-gap: 2px; }

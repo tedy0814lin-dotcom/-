@@ -100,7 +100,7 @@ export function createStrategyTab({ api, el, goto }) {
       <div class="st-top"><span class="st-title">${esc(c.title)}${c.sub ? `<span class="st-sub">${esc(c.sub)}</span>` : ''}</span><span class="st-by">${esc(c.by)}</span></div>
       <div class="st-tags">${c.cat ? `<span class="st-cat">${esc(c.cat)}</span>` : ''}<span>${esc(c.mk)}</span><span>${esc(c.tf)}</span><span>${esc(c.side)}</span>${c.verdict ? `<span class="st-v st-v-${c.verdict[0]}">${esc(c.verdict[1])}</span>` : ''}</div>
       <p class="st-note">${[].concat(c.note).map((x) => `<span>${fmt(x)}</span>`).join('')}</p>
-      <dl class="st-stats">${c.stats.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd class="num">${fmt(v)}</dd></div>`).join('')}</dl>
+      <dl class="st-stats">${c.stats.map(([k, v]) => `<div${String(v).length > 9 || String(k).length > 12 ? ' class="wide"' : ''}><dt>${esc(k)}</dt><dd class="num">${fmt(v)}</dd></div>`).join('')}</dl>
       </button>`).join('');
   }
   let cmpOpen = true;
