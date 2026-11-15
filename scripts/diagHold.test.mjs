@@ -36,3 +36,5 @@ assert.equal(recoverBucket(0.2).exact, true); assert.equal(recoverBucket(0.40).e
   assert.equal(r.rows[0].m6.p, 28.2); assert.equal(r.rows[1].m6.p, 32.1); assert.ok(r.rows[0].m6.p < r.rows[1].m6.p); assert.equal(r.rows[0].m12.p, 44.6); assert.equal(r.rows[0].v6.p, 28.6); }
 { const r = recoverRows({ A: false, B: false, C: false, D: false, S: true }, 0.5); assert.deepEqual(r.rows.map((x) => x.g), ['強', '全體']); }
 console.log('recover OK');
+
+{ const l = [{ code: '2330', shares: 1, cost: null }]; assert.equal(parseHoldings(exportHoldings(l, 250000)).cash, 250000); assert.equal(parseHoldings(exportHoldings(l)).cash, 0); assert.equal(parseHoldings(JSON.stringify([{ code: '2330' }])).cash, 0); assert.equal(parseHoldings(JSON.stringify({ holdings: [{ code: '2330' }], cash: -5 })).cash, 0); console.log('cash OK'); }

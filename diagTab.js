@@ -3,6 +3,7 @@
 // 只描述歷史統計，不給買賣指令；成本價只用來算損益與回本幅度。持股只存在你的瀏覽器，可匯出備份。規格：專案文件《持股診斷頁規格》。
 import { FLAG_TEXT, rowObj, diagnose, summarize, statRow, baseRow, recoverRows, upsertHolding, exportHoldings, parseHoldings, ACTION_STATS } from '/lib/diagHold.js';
 import { DIAG_STATS } from '/lib/diagStats.js';
+import { compareHoldings, FACTORS, GAP_WEAK } from '/lib/diagCompare.js';
 import { upsertCoin, exportCoins, parseCoins, findRow, diagnoseCoin, summarizeCoins } from '/lib/diagCrypto.js';
 import { normBase } from '/lib/exchanges.js';
 
@@ -15,14 +16,15 @@ const pc = (v, d = 1) => (!ok(v) ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFix
 const pn = (v, d = 1) => (!ok(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%'); // 已是百分數
 const cls = (v) => (!ok(v) ? '' : v >= 0 ? 'up' : 'down');
 const WEAK_ORDER = ['A', 'B', 'C', 'D'];
+const DIAG_ACTION_NOTE = '這是策略規則（平衡含濾網，每月定期定額、名次掉出才賣、不設停損）套用在你的持股上的結果，不是個人化的買賣建議，也沒有考慮你的稅務、風險承受度與其他資產。證據：2005-10 起回測（含 2008）年化 25.1%、0050 14.8%，對 0050 的 alpha 約 +17.6%（t 3.7，但有挑選偏差，營收濾網是看過結果才追加，t 值最膨脹）；2008 年沒有比較抗跌（最大回撤 −56%，0050 −54%）；台積電領漲的年份（2019、2020、2024、2025）策略落後 0050，持有台積電的人用這套規則會賣出它，要把這點算進去；2026 前 10 個月 +79.1% 對 0050 +63.2%，仍在前瞻驗證中，不保證贏 0050。成本價不影響規則。';
 
 export function createDiagTab({ api, el }) {
-  const S = { sub: 'tw', cx: { loading: false, error: '', data: null, xchg: null, msg: '', msgBad: false, holdings: [] }, loading: false, error: '', data: null, s6: null, holdings: [], msg: '', msgBad: false, storeOk: true, openStats: false, openAct: false };
-  try { const raw = localStorage.getItem(LSK); if (raw) { const r = parseHoldings(raw); if (r.list) S.holdings = r.list; } } catch { /* 無痕模式或被封鎖：頁面照常運作，只是不保存 */ }
+  const S = { openCard: {}, cash: 0, sub: 'tw', cx: { loading: false, error: '', data: null, xchg: null, msg: '', msgBad: false, holdings: [] }, loading: false, error: '', data: null, s6: null, holdings: [], msg: '', msgBad: false, storeOk: true, openStats: false, openAct: false };
+  try { const raw = localStorage.getItem(LSK); if (raw) { const r = parseHoldings(raw); if (r.list) { S.holdings = r.list; S.cash = r.cash || 0; } } } catch { /* 無痕模式或被封鎖：頁面照常運作，只是不保存 */ }
   try { const raw = localStorage.getItem(LSKC); if (raw) { const r = parseCoins(raw); if (r.list) S.cx.holdings = r.list; } } catch { /* 同上 */ }
   const saveC = () => { try { localStorage.setItem(LSKC, JSON.stringify({ v: 1, kind: 'wr_diag_crypto', holdings: S.cx.holdings })); S.storeOk = true; } catch { S.storeOk = false; } };
-  const save = () => { try { localStorage.setItem(LSK, JSON.stringify({ v: 1, kind: 'wr_diag', holdings: S.holdings })); S.storeOk = true; } catch { S.storeOk = false; } };
-  el.addEventListener('toggle', (e) => { const t = e.target; if (t.matches?.('details[data-k]')) S[t.dataset.k] = t.open; }, true);
+  const save = () => { try { localStorage.setItem(LSK, JSON.stringify({ v: 1, kind: 'wr_diag', holdings: S.holdings, cash: S.cash })); S.storeOk = true; } catch { S.storeOk = false; } };
+  el.addEventListener('toggle', (e) => { const t = e.target; if (t.matches?.('details[data-k]')) S[t.dataset.k] = t.open; else if (t.matches?.('details[data-card]')) S.openCard[t.dataset.card] = t.open; }, true);
 
   async function load() {
     if (S.loading) return;
@@ -84,7 +86,47 @@ export function createDiagTab({ api, el }) {
     const v = r.vals;
     const detail = `<div class="dg-grid small"><div><span class="muted">200 日均線</span><b class="num">${px(v.ma200)}</b><span class="${cls(v.px / v.ma200 - 1)} small"> ${pc(v.px / v.ma200 - 1)}</span></div><div><span class="muted">250 日高點</span><b class="num">${px(v.hi250)}</b><span class="down small"> ${pc(v.near - 1)}</span></div><div><span class="muted">6-1 動能</span><b class="num ${cls(v.mom)}">${pc(v.mom)}</b></div><div><span class="muted">趨勢分數</span><b class="num">前 ${Math.max(1, Math.round((1 - r.tPct) * 100))}%</b></div></div>`;
     const mixed = WEAK_ORDER.some((k) => r.flags[k]) && r.flags.S ? '<div class="dg-note muted">同時出現弱勢旗標與強勢，代表各指標互相矛盾（例如價格離高點很遠、但半年動能很強），兩組歷史統計都不能直接套用，請看個別指標。</div>' : '';
-    return `<section class="panel dg-card">${title}<div class="dg-flags">${flagChips(r)}</div>${money}${detail}${s6Block(r)}${mixed}${histRows(r)}${recoverBlock(r)}${liq}</section>`;
+    const sub = `<span class="dg-sumsub">${flagChips(r)}<span class="num">${px(r.px)}</span>${r.cost != null ? `<span class="num ${cls(r.pnl)}">${pc(r.pnl)}</span>` : ''}${r.liqLow ? '<span class="dg-flag none">流動性低</span>' : ''}</span>`;
+    return `<section class="panel dg-card"><details data-card="${esc(r.code)}" ${S.openCard[r.code] ? 'open' : ''}><summary class="dg-sum"><span class="dg-sumtop"><b>${esc(r.code)} ${esc(r.name)}</b><button type="button" class="dg-x" data-del="${esc(r.code)}" aria-label="刪除 ${esc(r.code)}">移除</button></span>${sub}</summary><div class="dg-body">${money}${detail}${s6Block(r)}${mixed}${histRows(r)}${recoverBlock(r)}${liq}</div></details></section>`;
+  }
+
+  // ---------- 與三因子（平衡含濾網）名單比較 ----------
+  const STATUS = { core: ['規則目標名單內', 'ok'], buffer: ['名次在緩衝區，規則不賣也不加碼', 'mid'], sell: ['依規則會賣出', 'bad'], outside: ['不在規則母體內', 'muted'] };
+  const fpc = (v) => (ok(v) ? Math.round(v * 100) : '—');
+  const gapTxt = (g) => { if (!ok(g)) return '—'; const v = Math.round(g * 100); return v === 0 ? '0' : (v > 0 ? '+' : '−') + Math.abs(v); };
+  function compareBlock(rs) {
+    const holds = rs.filter((r) => (r.status === 'ok' || r.status === 'outside') && r.shares > 0 && r.px > 0).map((r) => ({ code: r.code, shares: r.shares, px: r.px }));
+    const cashIn = `<form class="dg-cash" id="dg-cash"><label>可再投入的現金（選填）<input name="cash" inputmode="numeric" value="${S.cash > 0 ? S.cash : ''}" placeholder="0" autocomplete="off"></label><button type="submit" class="refresh">更新</button></form>`;
+    const head = `<div class="panel-head"><h4 style="margin:0">與三因子（平衡含濾網）名單比較</h4><span class="muted small">策略規則的對照，不是買賣建議</span></div>`;
+    if (!holds.length) return `<section class="panel">${head}<div class="dg-note muted">輸入持股並填股數後，會和策略頁的平衡版（含營收濾網）名單比較：每檔落在規則的哪個位置、組合缺哪個因子、規則會怎麼調整。</div>${cashIn}</section>`;
+    if (!S.s6) return `<section class="panel">${head}<div class="dg-note bad">三因子名單讀不到（策略頁的名單快照），暫時無法比較。</div></section>`;
+    const c = compareHoldings({ data: S.s6, holds, cash: S.cash });
+    if (c.error) return `<section class="panel">${head}<div class="dg-note bad">${esc(c.error)}</div></section>`;
+    const nm = (code) => rs.find((x) => x.code === code)?.name || c.rows.find((x) => x.code === code)?.name || '';
+    const prof = `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>因子</th><th class="n">你的</th><th class="n">前 ${c.N} 名</th><th class="n">差距</th><th>判讀</th></tr></thead><tbody>${c.profile.map((x) => `<tr><td>${x.label}</td><td class="n">${fpc(x.port)}</td><td class="n">${fpc(x.target)}</td><td class="n ${x.verdict === 'weak' ? 'down' : x.verdict === 'strong' ? 'up' : ''}">${gapTxt(x.gap)}</td><td>${x.verdict === 'weak' ? '偏弱' : x.verdict === 'strong' ? '較強' : x.verdict === 'same' ? '相近' : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+    const covNote = c.coverage == null ? '' : c.coverage < 0.5 ? `<div class="dg-note warn">只有 ${(c.coverage * 100).toFixed(0)}% 的市值在三因子名單內（其餘是名單以外的股票），組合因子輪廓代表性不足。</div>` : c.coverage < 0.999 ? `<div class="dg-note muted">因子輪廓只含名單內的持股，占組合市值 ${(c.coverage * 100).toFixed(0)}%。</div>` : '';
+    const weakTxt = c.weakest && c.weakest.verdict === 'weak' ? `<div class="dg-note">相對規則名單，你的組合最缺的是「<b>${c.weakest.label}</b>」（比規則名單低 ${Math.abs(Math.round(c.weakest.gap * 100))} 個百分位）。` : '<div class="dg-note">三個因子相對規則名單沒有明顯偏弱的（偏弱的門檻是低 ' + GAP_WEAK * 100 + ' 個百分位，是慣例值，沒有回測支持）。';
+    const tbl = `<div class="tbl-wrap"><table class="tbl dg-pos"><thead><tr><th>持股</th><th class="n">名次</th><th>與規則的關係</th></tr></thead><tbody>${c.rows.map((r) => {
+      const [lab, k] = STATUS[r.status];
+      const rk = r.status === 'outside' ? '—' : r.rank != null ? r.rank : '60 外';
+      const note = r.status === 'sell' ? (r.rank == null ? '（名次 60 外或掉出名單）' : `（名次 ${r.rank} > ${c.lim}）`) : '';
+      const fac = r.status === 'outside' ? '' : `<div class="muted small">價值 ${fpc(r.value)}・低波動 ${fpc(r.lowvol)}・趨勢 ${fpc(r.trend)}</div>`;
+      return `<tr><td>${esc(r.code)}<div class="small">${esc(r.name || nm(r.code))}</div></td><td class="n">${rk}</td><td class="dg-st ${k}">${lab}${note}${r.filteredNow && r.status !== 'sell' ? '<div class="muted small">最新資料已被營收濾網排除</div>' : ''}${fac}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+    const sells = c.plan.sells.length ? c.plan.sells.map((x) => `<li>賣出 ${esc(x.code)} ${esc(x.name || nm(x.code))} ${n0(x.shares)} 股（約 ${n0(x.proceeds)} 元，已扣手續費與證交稅）：${esc(x.reason)}</li>`).join('') : '<li class="muted">沒有持股需要賣出。</li>';
+    const buys = c.plan.buys.length ? c.plan.buys.map((x) => `<li>買進 ${esc(x.code)} ${esc(x.name)}（名次 ${x.rank}）${n0(x.shares)} 股，約 ${n0(x.amount)} 元${x.isNew ? '' : '（補到目標金額）'}</li>`).join('') : `<li class="muted">${c.V < 1 ? '' : '沒有可買進的項目（現金不足或每檔缺口低於最低單筆 3,000 元）。'}</li>`;
+    const cand = c.cands.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>你沒持有的前 ${c.N} 名</th><th class="n">名次</th><th class="n">價值</th><th class="n">低波</th><th class="n">趨勢</th></tr></thead><tbody>${c.cands.map((x) => `<tr><td>${esc(x.code)}<div class="small">${esc(x.name)}${x.ind ? '・' + esc(x.ind) : ''}</div></td><td class="n">${x.rank}</td><td class="n ${c.weakest?.k === 'value' ? 'up' : ''}">${fpc(x.value)}</td><td class="n ${c.weakest?.k === 'lowvol' ? 'up' : ''}">${fpc(x.lowvol)}</td><td class="n ${c.weakest?.k === 'trend' ? 'up' : ''}">${fpc(x.trend)}</td></tr>`).join('')}</tbody></table></div>` : '';
+    const stl = DIAG_ACTION_NOTE;
+    const nSell = c.plan.sells.length, nBuy = c.plan.buys.length;
+    const brief = [c.weakest && c.weakest.verdict === 'weak' ? `最缺${c.weakest.label}` : '因子無明顯偏弱', `規則會賣出 ${nSell} 檔${nBuy ? `、買進 ${nBuy} 檔` : ''}`].join('；');
+    return `<section class="panel"><details class="fold" data-k="openCmp" ${S.openCmp ? 'open' : ''}><summary><b>與三因子（平衡含濾網）名單比較</b><span class="muted small">${esc(brief)}（點開展開）</span></summary>
+      <div class="muted small">策略規則套用在你的持股上的對照，不是買賣建議。</div>
+      <div class="muted small">名單：${c.info.kind === 'final' ? '月底正式名單 ' + esc(c.info.month) : '最新預覽名單'}（規則只在月底換股），三因子分數為 ${esc(c.asof)} 最新資料；依總資金約 ${n0(c.V)} 元，規則的目標檔數 ${c.N} 檔、名次超過 ${c.lim} 才賣。</div>
+      <h4>因子輪廓：你的組合缺什麼</h4><div class="muted small">數字是百分位（0～100，越高越好）；「你的」是組合市值加權，「前 ${c.N} 名」是規則目標名單的平均。</div>${prof}${covNote}${weakTxt}${c.weakest && c.weakest.verdict === 'weak' ? '最下面「規則名單裡你還沒持有的」表中，標綠的是你最缺的那個因子的分數。' : ''}</div>
+      <h4>每檔持股在規則裡的位置</h4>${tbl}
+      <h4>規則會怎麼調整（把整個組合照規則做的對照）</h4>${cashIn}<ul class="s6-ul">${sells}${buys}</ul>
+      ${cand ? '<h4>規則名單裡你還沒持有的</h4>' + cand : ''}
+      <div class="muted small">${stl}</div></details></section>`;
   }
   function summaryBlock(rs, sm) {
     const valid = rs.filter((r) => r.status === 'ok');
@@ -138,11 +180,12 @@ export function createDiagTab({ api, el }) {
     const asof = d ? `<div class="muted small">資料日期 ${esc(d.asof)}（每個交易日收盤後更新；涵蓋 ${n0(d.nOk)} 檔）${age > 5 ? `<span class="down"> ，已經 ${age} 天沒有更新，旗標可能過期</span>` : ''}</div>` : '';
     const body = rs.length ? rs.map((r) => card(r, sm.weights[r.code])).join('') : '<div class="dg-empty muted">還沒有持股。在上面輸入代號與股數就會顯示診斷。</div>';
     const tools = `<div class="dg-tools"><button type="button" class="refresh" id="dg-exp" ${rs.length ? '' : 'disabled'}>匯出備份</button><label class="refresh dg-imp">匯入<input type="file" id="dg-imp" accept=".json,application/json" hidden></label>${S.storeOk ? '' : '<span class="down small">瀏覽器無法保存資料（可能是無痕模式），請用匯出備份。</span>'}</div>`;
-    el.innerHTML = head + form + asof + summaryBlock(rs, sm) + body + actionBlock() + statsBlock() + tools;
+    el.innerHTML = head + form + asof + summaryBlock(rs, sm) + (d ? compareBlock(rs) : '') + body + actionBlock() + statsBlock() + tools;
     bind();
   }
 
   function bind() {
+    el.querySelector('#dg-cash')?.addEventListener('submit', (e) => { e.preventDefault(); const v = Number(String(new FormData(e.target).get('cash') ?? '').replace(/[,\s]/g, '')); S.cash = Number.isFinite(v) && v > 0 ? v : 0; save(); render(); });
     el.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { S.sub = b.dataset.sub; if (S.sub === 'crypto') loadC(); render(); }));
     el.querySelector('#dg-reload')?.addEventListener('click', load);
     el.querySelector('#dg-form')?.addEventListener('submit', (e) => {
@@ -151,15 +194,15 @@ export function createDiagTab({ api, el }) {
       if (r.error) say(r.error, true); else { S.holdings = r.list; save(); say(''); }
       render();
     });
-    el.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => { S.holdings = S.holdings.filter((h) => h.code !== b.dataset.del); save(); render(); }));
+    el.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); S.holdings = S.holdings.filter((h) => h.code !== b.dataset.del); save(); render(); }));
     el.querySelector('#dg-exp')?.addEventListener('click', () => {
-      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportHoldings(S.holdings)], { type: 'application/json' }));
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportHoldings(S.holdings, S.cash)], { type: 'application/json' }));
       a.download = `持股診斷備份-${new Date().toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     });
     el.querySelector('#dg-imp')?.addEventListener('change', async (e) => {
       const f = e.target.files?.[0]; if (!f) return;
       const r = parseHoldings(await f.text());
-      if (r.error) say(r.error, true); else { S.holdings = r.list; save(); say(`已匯入 ${r.list.length} 檔` + (r.skipped?.length ? `，略過 ${r.skipped.length} 筆格式不正確的` : '')); }
+      if (r.error) say(r.error, true); else { S.holdings = r.list; S.cash = r.cash || 0; save(); say(`已匯入 ${r.list.length} 檔` + (r.skipped?.length ? `，略過 ${r.skipped.length} 筆格式不正確的` : '')); }
       render();
     });
   }

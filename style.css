@@ -574,3 +574,15 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .dg-sw button { flex: 1; padding: 9px 10px; font-size: 14px; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
 .dg-sw button[aria-selected="true"] { color: inherit; border-color: var(--accent); font-weight: 700; }
 .dg-pad { padding: 10px 2px 0; }
+.dg-cash { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.dg-cash label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); flex: 1 1 160px; }
+.dg-cash input { padding: 8px 10px; font-size: 16px; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.dg-st.ok { color: var(--up); } .dg-st.bad { color: var(--down); } .dg-st.muted { color: var(--muted); }
+.panel .tbl td.dg-st { white-space: normal; min-width: 130px; }
+.dg-sum { list-style: none; cursor: pointer; display: grid; gap: 6px; }
+.dg-sum::-webkit-details-marker { display: none; }
+.dg-sumtop { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dg-sumtop b::before { content: '▸ '; color: var(--muted); }
+.dg-card details[open] .dg-sumtop b::before { content: '▾ '; }
+.dg-sumsub { display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.dg-body { display: grid; gap: 10px; margin-top: 10px; min-width: 0; }
