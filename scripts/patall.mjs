@@ -44,7 +44,7 @@ await pool(parts, 2, async (p) => {
 // ---- 持股診斷（lib/diagTw.js）：全部台股的弱勢／強勢旗標與趨勢分數，輸出 pp_diag.json（診斷頁讀這份；定義與 Python 回測 pk/wk3.py 逐檔對照過）----
 {
   const names = Object.fromEntries((tw.rows || []).map((r) => [r.code, r.name]));
-  const codesD = Object.keys(results).filter((c) => results[c]?.dg && Number.isFinite(results[c].dg.c));
+  const codesD = Object.keys(results).filter((c) => !/^00/.test(c) && results[c]?.dg && Number.isFinite(results[c].dg.c));
   const dayCount = {}; for (const c of codesD) dayCount[results[c].dg.day] = (dayCount[results[c].dg.day] || 0) + 1;
   const asofD = Object.entries(dayCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
   // 只用「最後一根 K 棒日期＝多數日期」的股票（停牌或資料落後的不混進當日橫斷面）

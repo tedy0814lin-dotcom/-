@@ -23,3 +23,6 @@ t(() => { const rs = [diagnose({ code: 'a', shares: 100, cost: null }, row({ fla
 t(() => { const sm = summarize([diagnose({ code: 'a', shares: 100, cost: null }, row(), null)]); assert.equal(sm.warns.length, 1); }); // 單檔 100% → 集中度提醒
 t(() => { const s = statRow('A', 3), b = baseRow(3); assert.ok(s.ex < 0 && s.pWeak + s.pMid + s.pStrong === 100 && b.pMid + b.pWeak + b.pStrong === 100); assert.ok(statRow('S', 3).ex > 0); });
 console.log('diagHold OK', n);
+import { diagnose as dg2 } from '../lib/diagHold.js';
+assert.equal(dg2({ code: '0050', shares: 1, cost: null }, { name: 'ETF', px: 100, ma200: 90, hi250: 120, mom: 0.1, near: 0.8, tScore: 0.5, tPct: 0.5, flags: 16, v20: 5000, ok: 1 }, null).status, 'etf');
+console.log('etf OK');

@@ -61,13 +61,14 @@ export function createDiagTab({ api, el }) {
   }
   function card(r, w) {
     const title = `<div class="dg-head"><b>${esc(r.code)} ${esc(r.name)}</b><button type="button" class="dg-x" data-del="${esc(r.code)}" aria-label="刪除 ${esc(r.code)}">移除</button></div>`;
+    if (r.status === 'etf') return `<section class="panel dg-card">${title}<div class="dg-note muted">${esc(r.code)} 是 ETF。旗標與歷史機率只用個股回測，不適用於 ETF，所以不顯示診斷。</div></section>`;
     if (r.status === 'notfound') return `<section class="panel dg-card">${title}<div class="dg-note bad">資料裡找不到 ${esc(r.code)}（可能是興櫃、ETF、剛上市，或代號打錯）。目前只支援上市櫃的一般個股。</div></section>`;
     const money = `<div class="dg-grid"><div><span class="muted">現價</span><b class="num">${px(r.px)}</b></div>${r.shares ? `<div><span class="muted">股數</span><b class="num">${n0(r.shares)}</b></div><div><span class="muted">市值</span><b class="num">${n0(r.value)}</b>${w != null ? `<span class="muted small"> 占 ${(w * 100).toFixed(0)}%</span>` : ''}</div>` : ''}${r.cost != null ? `<div><span class="muted">成本</span><b class="num">${px(r.cost)}</b></div><div><span class="muted">損益</span><b class="num ${cls(r.pnl)}">${pc(r.pnl)}</b></div>${r.needGain > 0 ? `<div><span class="muted">回到成本需漲</span><b class="num">${pc(r.needGain)}</b></div>` : ''}` : ''}</div>`;
     const liq = r.liqLow ? `<div class="dg-note warn">近 20 日平均成交量只有 ${n0(r.v20)} 張，流動性偏低，實際成交價可能與現價有落差，歷史統計也不一定適用。</div>` : '';
     if (r.status === 'outside') return `<section class="panel dg-card">${title}${money}<div class="dg-note muted">這檔股價低於 10 元或上市時間不足，不在歷史統計的母體內，不顯示旗標與機率。</div>${liq}</section>`;
     const v = r.vals;
     const detail = `<div class="dg-grid small"><div><span class="muted">200 日均線</span><b class="num">${px(v.ma200)}</b><span class="${cls(v.px / v.ma200 - 1)} small"> ${pc(v.px / v.ma200 - 1)}</span></div><div><span class="muted">250 日高點</span><b class="num">${px(v.hi250)}</b><span class="down small"> ${pc(v.near - 1)}</span></div><div><span class="muted">6-1 動能</span><b class="num ${cls(v.mom)}">${pc(v.mom)}</b></div><div><span class="muted">趨勢分數</span><b class="num">前 ${Math.max(1, Math.round((1 - r.tPct) * 100))}%</b></div></div>`;
-    const mixed = r.flags.A && r.flags.S ? '<div class="dg-note muted">同時出現弱 A 與強勢，代表各指標互相矛盾，歷史統計不適用，請看個別指標。</div>' : '';
+    const mixed = WEAK_ORDER.some((k) => r.flags[k]) && r.flags.S ? '<div class="dg-note muted">同時出現弱勢旗標與強勢，代表各指標互相矛盾（例如價格離高點很遠、但半年動能很強），兩組歷史統計都不能直接套用，請看個別指標。</div>' : '';
     return `<section class="panel dg-card">${title}<div class="dg-flags">${flagChips(r)}</div>${money}${detail}${s6Block(r)}${mixed}${histRows(r)}${liq}</section>`;
   }
   function summaryBlock(rs, sm) {
