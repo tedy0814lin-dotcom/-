@@ -131,6 +131,14 @@ export function createDiagTab({ api, el }) {
       ${cand ? sec('cand', '規則名單裡你還沒持有的', `${c.cands.length} 檔`, cand) : ''}
       ${sec('note', '證據與限制（重要，請看一下）', '回測、2008、台積電領漲年、前瞻驗證', `<div class="muted small">${stl}</div>`)}</details></section>`;
   }
+  // 總本金與總損益（只含有填成本價的持股）
+  function totalsBlock(t, unit, fmt) {
+    if (!t || !(t.value > 0)) return '';
+    const hasCost = t.nWithCost > 0;
+    const note = !hasCost ? '填了成本價才會算總本金與總損益。' : t.nWithCost < t.nHeld ? `總本金與總損益只含有填成本的 ${t.nWithCost} 檔（占市值 ${(t.costShare * 100).toFixed(0)}%），另外 ${t.nHeld - t.nWithCost} 檔沒填成本，未計入。` : '';
+    const sign = (v) => (v >= 0 ? '+' : '−') + fmt(Math.abs(v));
+    return `<section class="panel dg-tot"><div class="dg-grid"><div><span class="muted">總市值（${unit}）</span><b class="num">${fmt(t.value)}</b></div>${hasCost ? `<div><span class="muted">總本金（成本）</span><b class="num">${fmt(t.cost)}</b></div><div><span class="muted">總損益</span><b class="num ${cls(t.pnl)}">${sign(t.pnl)}</b></div><div><span class="muted">總報酬率</span><b class="num ${cls(t.pnlPct)}">${pc(t.pnlPct)}</b></div>` : ''}</div>${note ? `<div class="dg-note muted">${note}</div>` : ''}</section>`;
+  }
   function summaryBlock(rs, sm) {
     const valid = rs.filter((r) => r.status === 'ok');
     if (rs.length < 2 && !sm.warns.length) return '';
@@ -183,7 +191,7 @@ export function createDiagTab({ api, el }) {
     const asof = d ? `<div class="muted small">資料日期 ${esc(d.asof)}（每個交易日收盤後更新；涵蓋 ${n0(d.nOk)} 檔）${age > 5 ? `<span class="down"> ，已經 ${age} 天沒有更新，旗標可能過期</span>` : ''}</div>` : '';
     const body = rs.length ? rs.map((r) => card(r, sm.weights[r.code])).join('') : '<div class="dg-empty muted">還沒有持股。在上面輸入代號與股數就會顯示診斷。</div>';
     const tools = `<div class="dg-tools"><button type="button" class="refresh" id="dg-exp" ${rs.length ? '' : 'disabled'}>匯出備份</button><label class="refresh dg-imp">匯入<input type="file" id="dg-imp" accept=".json,application/json" hidden></label>${S.storeOk ? '' : '<span class="down small">瀏覽器無法保存資料（可能是無痕模式），請用匯出備份。</span>'}</div>`;
-    el.innerHTML = head + form + asof + summaryBlock(rs, sm) + (d ? compareBlock(rs) : '') + body + actionBlock() + statsBlock() + tools;
+    el.innerHTML = head + form + asof + (d ? totalsBlock(sm.totals, '元', n0) : '') + summaryBlock(rs, sm) + (d ? compareBlock(rs) : '') + body + actionBlock() + statsBlock() + tools;
     bind();
   }
 
@@ -252,7 +260,7 @@ export function createDiagTab({ api, el }) {
     const body = rs.length ? rs.map((r) => coinCard(r, sm.weights[r.base])).join('') : '<div class="dg-empty muted">還沒有加密貨幣持倉。在上面輸入幣種與數量就會顯示損益與籌碼數據。</div>';
     const warn = sm.warns.length ? `<section class="panel">${sm.warns.map((x) => `<div class="dg-note warn">${esc(x)}</div>`).join('')}</section>` : '';
     const tools = `<div class="dg-tools"><button type="button" class="refresh" id="dc-exp" ${rs.length ? '' : 'disabled'}>匯出備份</button><label class="refresh dg-imp">匯入<input type="file" id="dc-imp" accept=".json,application/json" hidden></label>${S.storeOk ? '' : '<span class="down small">瀏覽器無法保存資料（可能是無痕模式），請用匯出備份。</span>'}</div>`;
-    el.innerHTML = head + note + form + asof + warn + body + tools; bind(); bindC();
+    el.innerHTML = head + note + form + asof + totalsBlock(sm.totals, 'USDT', usd) + warn + body + tools; bind(); bindC();
   }
   function bindC() {
     const C = S.cx;

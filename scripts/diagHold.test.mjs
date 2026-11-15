@@ -38,3 +38,11 @@ assert.equal(recoverBucket(0.2).exact, true); assert.equal(recoverBucket(0.40).e
 console.log('recover OK');
 
 { const l = [{ code: '2330', shares: 1, cost: null }]; assert.equal(parseHoldings(exportHoldings(l, 250000)).cash, 250000); assert.equal(parseHoldings(exportHoldings(l)).cash, 0); assert.equal(parseHoldings(JSON.stringify([{ code: '2330' }])).cash, 0); assert.equal(parseHoldings(JSON.stringify({ holdings: [{ code: '2330' }], cash: -5 })).cash, 0); console.log('cash OK'); }
+
+// 總本金與總損益
+{ const rs = [diagnose({ code: 'a', shares: 100, cost: 120 }, row({ px: 100 }), null), diagnose({ code: 'b', shares: 50, cost: 80 }, row({ px: 100 }), null), diagnose({ code: 'c', shares: 10, cost: null }, row({ px: 100 }), null)];
+  const t = summarize(rs).totals; assert.equal(t.value, 16000); assert.equal(t.cost, 100 * 120 + 50 * 80); assert.equal(t.pnl, (100 * 100 - 12000) + (50 * 100 - 4000)); assert.ok(Math.abs(t.pnlPct - (-1000 / 16000)) < 1e-12);
+  assert.equal(t.nHeld, 3); assert.equal(t.nWithCost, 2); assert.ok(Math.abs(t.costShare - 15000 / 16000) < 1e-12);
+  const none = summarize([diagnose({ code: 'a', shares: 100, cost: null }, row({ px: 100 }), null)]).totals; assert.equal(none.pnl, null); assert.equal(none.pnlPct, null); assert.equal(none.cost, 0); assert.equal(none.value, 10000);
+  const nf = summarize([diagnose({ code: 'x', shares: 5, cost: 9 }, null, null), diagnose({ code: '0050', shares: 5, cost: 9 }, row(), null)]).totals; assert.equal(nf.nHeld, 0); // 找不到、ETF 不計入
+  console.log('totals OK'); }

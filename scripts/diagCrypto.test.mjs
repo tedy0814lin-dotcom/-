@@ -24,4 +24,5 @@ t(() => { const r = diagnoseCoin({ base: 'BTC', qty: 1, cost: 1 }, rows[0], null
 t(() => assert.equal(diagnoseCoin({ base: 'ZZZ', qty: 1 }, null, x).status, 'notfound'));
 t(() => { const r = diagnoseCoin({ base: 'BTC', qty: 1, cost: 1 }, rows[0], x); assert.ok(!('flags' in r) && !('advice' in r)); }); // 不產生旗標或建議
 t(() => { const rs = [diagnoseCoin({ base: 'BTC', qty: 1 }, rows[0], x), diagnoseCoin({ base: 'PEPE', qty: 1000 }, rows[1], x)]; const sm = summarizeCoins(rs); assert.equal(sm.total, 110); assert.equal(sm.warns.length, 1); });
+t(() => { const rs = [diagnoseCoin({ base: 'BTC', qty: 2, cost: 125 }, rows[0], x), diagnoseCoin({ base: 'PEPE', qty: 1000, cost: null }, rows[1], x)]; const tt = summarizeCoins(rs).totals; assert.equal(tt.value, 200 + 10); assert.equal(tt.cost, 250); assert.equal(tt.pnl, -50); assert.ok(Math.abs(tt.pnlPct + 0.2) < 1e-12); assert.equal(tt.nWithCost, 1); assert.equal(tt.nHeld, 2); assert.ok(Math.abs(tt.costShare - 200 / 210) < 1e-12); });
 console.log('diagCrypto OK', n);
