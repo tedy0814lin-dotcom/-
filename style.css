@@ -570,3 +570,7 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .dg-hist { border-top: 1px dashed var(--line); padding-top: 8px; display: grid; gap: 6px; }
 .dg-hist dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; }
 .dg-hist dt { color: var(--muted); } .dg-hist dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.dg-sw { display: flex; gap: 6px; margin-top: 12px; }
+.dg-sw button { flex: 1; padding: 9px 10px; font-size: 14px; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.dg-sw button[aria-selected="true"] { color: inherit; border-color: var(--accent); font-weight: 700; }
+.dg-pad { padding: 10px 2px 0; }

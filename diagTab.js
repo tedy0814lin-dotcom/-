@@ -3,8 +3,10 @@
 // 只描述歷史統計，不給買賣指令；成本價只用來算損益與回本幅度。持股只存在你的瀏覽器，可匯出備份。規格：專案文件《持股診斷頁規格》。
 import { FLAG_TEXT, rowObj, diagnose, summarize, statRow, baseRow, upsertHolding, exportHoldings, parseHoldings, ACTION_STATS } from '/lib/diagHold.js';
 import { DIAG_STATS } from '/lib/diagStats.js';
+import { upsertCoin, exportCoins, parseCoins, findRow, diagnoseCoin, summarizeCoins } from '/lib/diagCrypto.js';
+import { normBase } from '/lib/exchanges.js';
 
-const LSK = 'wr_diag_v1';
+const LSK = 'wr_diag_v1', LSKC = 'wr_diag_crypto_v1';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ok = (v) => v != null && Number.isFinite(v);
 const n0 = (v) => (ok(v) ? Math.round(v).toLocaleString('en-US') : '—');
@@ -15,8 +17,10 @@ const cls = (v) => (!ok(v) ? '' : v >= 0 ? 'up' : 'down');
 const WEAK_ORDER = ['A', 'B', 'C', 'D'];
 
 export function createDiagTab({ api, el }) {
-  const S = { loading: false, error: '', data: null, s6: null, holdings: [], msg: '', msgBad: false, storeOk: true, openStats: false, openAct: false };
+  const S = { sub: 'tw', cx: { loading: false, error: '', data: null, xchg: null, msg: '', msgBad: false, holdings: [] }, loading: false, error: '', data: null, s6: null, holdings: [], msg: '', msgBad: false, storeOk: true, openStats: false, openAct: false };
   try { const raw = localStorage.getItem(LSK); if (raw) { const r = parseHoldings(raw); if (r.list) S.holdings = r.list; } } catch { /* 無痕模式或被封鎖：頁面照常運作，只是不保存 */ }
+  try { const raw = localStorage.getItem(LSKC); if (raw) { const r = parseCoins(raw); if (r.list) S.cx.holdings = r.list; } } catch { /* 同上 */ }
+  const saveC = () => { try { localStorage.setItem(LSKC, JSON.stringify({ v: 1, kind: 'wr_diag_crypto', holdings: S.cx.holdings })); S.storeOk = true; } catch { S.storeOk = false; } };
   const save = () => { try { localStorage.setItem(LSK, JSON.stringify({ v: 1, kind: 'wr_diag', holdings: S.holdings })); S.storeOk = true; } catch { S.storeOk = false; } };
   el.addEventListener('toggle', (e) => { const t = e.target; if (t.matches?.('details[data-k]')) S[t.dataset.k] = t.open; }, true);
 
@@ -103,10 +107,14 @@ export function createDiagTab({ api, el }) {
       <li>價格採未還原股利的收盤價，ETF 與興櫃不在範圍內。統計來源：${esc(DIAG_STATS.source)}（${esc(DIAG_STATS.built)}）。</li></ul></details>`;
   }
 
+  const switchHtml = () => `<div class="dg-sw" role="tablist"><button type="button" role="tab" data-sub="tw" aria-selected="${S.sub === 'tw'}">台股持股</button><button type="button" role="tab" data-sub="crypto" aria-selected="${S.sub === 'crypto'}">加密貨幣持倉</button></div>`;
+
   function render() {
     const d = S.data;
-    const head = `<section class="panel dg-top"><div class="panel-head"><h2 style="margin:0;font-size:18px">持股診斷</h2><span class="muted small">台股個股；只存在這個瀏覽器</span></div>
+    const head0 = `<section class="panel dg-top"><div class="panel-head"><h2 style="margin:0;font-size:18px">持股診斷</h2><span class="muted small">台股個股；只存在這個瀏覽器</span></div>
       <div class="dg-note muted">輸入你的持股，看每一檔目前有沒有觸發弱勢旗標、趨勢分數在哪、過去同條件的股票之後怎麼走。僅為歷史統計，不構成投資建議；你的成本價只用來算損益與回本幅度，不影響任何判斷。</div></section>`;
+    const head = head0 + switchHtml();
+    if (S.sub === 'crypto') { renderCrypto(head); return; }
     const form = `<form class="panel dg-form" id="dg-form"><div class="dg-fields">
       <label>代號<input name="code" inputmode="numeric" maxlength="4" placeholder="2330" autocomplete="off" required></label>
       <label>股數<input name="shares" inputmode="numeric" placeholder="1000" autocomplete="off"></label>
@@ -124,6 +132,7 @@ export function createDiagTab({ api, el }) {
   }
 
   function bind() {
+    el.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { S.sub = b.dataset.sub; if (S.sub === 'crypto') loadC(); render(); }));
     el.querySelector('#dg-reload')?.addEventListener('click', load);
     el.querySelector('#dg-form')?.addEventListener('submit', (e) => {
       e.preventDefault(); const f = new FormData(e.target); say('');
@@ -140,6 +149,71 @@ export function createDiagTab({ api, el }) {
       const f = e.target.files?.[0]; if (!f) return;
       const r = parseHoldings(await f.text());
       if (r.error) say(r.error, true); else { S.holdings = r.list; save(); say(`已匯入 ${r.list.length} 檔` + (r.skipped?.length ? `，略過 ${r.skipped.length} 筆格式不正確的` : '')); }
+      render();
+    });
+  }
+
+  // ---------- 加密貨幣持倉（只記錄，不給建議） ----------
+  const usd = (v) => (!ok(v) ? '—' : Math.abs(v) >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : n0(v));
+  const cpx = (v) => (!ok(v) ? '—' : v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(3) : v.toPrecision(3));
+  async function loadC() {
+    const C = S.cx; if (C.loading || C.data) return;
+    C.loading = true; C.error = ''; render();
+    try {
+      C.data = await api('/api/crypto');
+      const bases = [...new Set(['BTC', ...C.holdings.map((h) => normBase(h.base))])];
+      try { C.xchg = await api('/api/xchg?bases=' + bases.join(',')); } catch { C.xchg = null; } // 其他交易所讀不到也能顯示價格與損益
+    } catch (e) { C.error = e.message || String(e); }
+    finally { C.loading = false; render(); }
+  }
+  function coinCard(r, w) {
+    const title = `<div class="dg-head"><b>${esc(r.base)}</b><button type="button" class="dg-x" data-cdel="${esc(r.base)}" aria-label="移除 ${esc(r.base)}">移除</button></div>`;
+    if (r.status === 'notfound') return `<section class="panel dg-card">${title}<div class="dg-note bad">加密頁的快照裡找不到 ${esc(r.base)}（只涵蓋 BingX USDT 永續合約成交額前 120 名，或代號打錯）。</div></section>`;
+    const money = `<div class="dg-grid"><div><span class="muted">現價（USDT）</span><b class="num">${cpx(r.px)}</b>${ok(r.chg24) ? `<span class="${cls(r.chg24)} small"> 24h ${pn(r.chg24, 2)}</span>` : ''}</div>${r.qty ? `<div><span class="muted">數量</span><b class="num">${esc(String(r.qty))}</b></div><div><span class="muted">市值</span><b class="num">${usd(r.value)}</b>${w != null ? `<span class="muted small"> 占 ${(w * 100).toFixed(0)}%</span>` : ''}</div>` : ''}${r.cost != null ? `<div><span class="muted">成本</span><b class="num">${cpx(r.cost)}</b></div><div><span class="muted">損益</span><b class="num ${cls(r.pnl)}">${pc(r.pnl)}</b>${ok(r.pnlUsd) ? `<span class="${cls(r.pnlUsd)} small"> ${r.pnlUsd >= 0 ? '+' : '−'}${usd(Math.abs(r.pnlUsd))}</span>` : ''}</div>${r.needGain > 0 ? `<div><span class="muted">回到成本需漲</span><b class="num">${pc(r.needGain)}</b></div>` : ''}` : ''}</div>`;
+    const c = r.chip, f = (x) => (ok(x) ? (x >= 0 ? '+' : '') + x.toFixed(4) + '%' : '—');
+    const chip = `<div class="dg-hist"><div><b>籌碼數據</b><span class="muted small"> 現況，不是買賣訊號</span></div><dl>
+      <dt>全市場持倉</dt><dd>${ok(c.oi) ? `<b class="num">$${usd(c.oi)}</b>` : '—'}${ok(c.oiChg24) ? `<span class="${cls(c.oiChg24)} small"> 24h ${pn(c.oiChg24, 1)}</span>` : ''}${c.oiEx ? `<span class="muted small">（${c.oiEx} 所合計${c.oiChgSrc ? `；24h 變化只含 ${c.oiChgSrc} 所` : ''}）</span>` : ''}</dd>
+      <dt>資金費率</dt><dd><b class="num">${f(c.funding)}</b>${c.fundingMax && c.fundingMin ? `<span class="muted small">（${esc(c.fundingMin.ex)} ${f(c.fundingMin.funding)}～${esc(c.fundingMax.ex)} ${f(c.fundingMax.funding)}）</span>` : ''}</dd>
+      <dt>大戶多空比</dt><dd>${c.topLS ? `<b class="num">${c.topLS.now.toFixed(2)}</b><span class="muted small">（OKX，24h ${pn(c.topLS.chg, 2)}）</span>` : '<span class="muted">—（這個幣沒有資料）</span>'}</dd>
+      <dt>散戶多空比</dt><dd>${c.accLS ? `<b class="num">${c.accLS.now.toFixed(2)}</b><span class="muted small">（OKX，24h ${pn(c.accLS.chg, 2)}）</span>` : '<span class="muted">—</span>'}</dd></dl>
+      ${c.hasXchg ? '' : '<div class="dg-note muted">其他交易所的資料沒有讀到，持倉與資金費率只用 BingX。</div>'}</div>`;
+    return `<section class="panel dg-card">${title}${money}${chip}</section>`;
+  }
+  function renderCrypto(head) {
+    const C = S.cx;
+    const form = `<form class="panel dg-form" id="dc-form"><div class="dg-fields">
+      <label>幣種<input name="base" maxlength="15" placeholder="BTC" autocomplete="off" autocapitalize="characters" required></label>
+      <label>數量<input name="qty" inputmode="decimal" placeholder="0.5" autocomplete="off"></label>
+      <label>成本價 USDT（可留空）<input name="cost" inputmode="decimal" placeholder="選填" autocomplete="off"></label>
+      <button type="submit" class="refresh">加入／更新</button></div>${C.msg ? `<div class="dg-note ${C.msgBad ? 'bad' : 'muted'}">${esc(C.msg)}</div>` : ''}</form>`;
+    const note = `<div class="dg-note muted dg-pad">加密貨幣只記錄損益並顯示現有籌碼數據，<b>不提供旗標、換股或買賣建議</b>：台股的汰弱留強與三因子回測不能套用在加密貨幣，加密版目前沒有做過回測。價格來自加密頁快照（BingX USDT 永續合約），非即時；持倉只存在這個瀏覽器。</div>`;
+    if (C.loading && !C.data) { el.innerHTML = head + note + form + '<div class="status">讀取加密貨幣資料中…</div>'; bind(); bindC(); return; }
+    if (C.error && !C.data) { el.innerHTML = head + note + form + `<div class="dg-note bad">讀不到資料：${esc(C.error)}</div><button class="refresh" id="dc-reload" type="button">重試</button>`; bind(); bindC(); return; }
+    const rs = C.holdings.map((h) => diagnoseCoin(h, C.data ? findRow(C.data.rows, h.base) : null, C.xchg)), sm = summarizeCoins(rs);
+    const age = C.data?.updatedAt ? Math.round((Date.now() - C.data.updatedAt) / 60000) : null;
+    const asof = C.data ? `<div class="muted small">快照更新於 ${age != null ? (age < 90 ? age + ' 分鐘前' : Math.round(age / 60) + ' 小時前') : '—'}（${esc(C.data.source || '')}）${age > 180 ? '<span class="down">，資料偏舊</span>' : ''}</div>` : '';
+    const body = rs.length ? rs.map((r) => coinCard(r, sm.weights[r.base])).join('') : '<div class="dg-empty muted">還沒有加密貨幣持倉。在上面輸入幣種與數量就會顯示損益與籌碼數據。</div>';
+    const warn = sm.warns.length ? `<section class="panel">${sm.warns.map((x) => `<div class="dg-note warn">${esc(x)}</div>`).join('')}</section>` : '';
+    const tools = `<div class="dg-tools"><button type="button" class="refresh" id="dc-exp" ${rs.length ? '' : 'disabled'}>匯出備份</button><label class="refresh dg-imp">匯入<input type="file" id="dc-imp" accept=".json,application/json" hidden></label>${S.storeOk ? '' : '<span class="down small">瀏覽器無法保存資料（可能是無痕模式），請用匯出備份。</span>'}</div>`;
+    el.innerHTML = head + note + form + asof + warn + body + tools; bind(); bindC();
+  }
+  function bindC() {
+    const C = S.cx;
+    el.querySelector('#dc-reload')?.addEventListener('click', () => { C.error = ''; loadC(); });
+    el.querySelector('#dc-form')?.addEventListener('submit', (e) => {
+      e.preventDefault(); const f = new FormData(e.target); C.msg = ''; C.msgBad = false;
+      const r = upsertCoin(C.holdings, { base: f.get('base'), qty: f.get('qty'), cost: f.get('cost') });
+      if (r.error) { C.msg = r.error; C.msgBad = true; } else { C.holdings = r.list; saveC(); if (C.data && !C.xchg?.byBase?.[normBase(r.list[r.list.length - 1].base)]) { C.data = null; C.xchg = null; loadC(); return; } }
+      render();
+    });
+    el.querySelectorAll('[data-cdel]').forEach((b) => b.addEventListener('click', () => { C.holdings = C.holdings.filter((h) => h.base !== b.dataset.cdel); saveC(); render(); }));
+    el.querySelector('#dc-exp')?.addEventListener('click', () => {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportCoins(C.holdings)], { type: 'application/json' }));
+      a.download = `加密持倉備份-${new Date().toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    el.querySelector('#dc-imp')?.addEventListener('change', async (e) => {
+      const f = e.target.files?.[0]; if (!f) return; const r = parseCoins(await f.text());
+      if (r.error) { C.msg = r.error; C.msgBad = true; } else { C.holdings = r.list; saveC(); C.msg = `已匯入 ${r.list.length} 檔` + (r.skipped?.length ? `，略過 ${r.skipped.length} 筆格式不正確的` : ''); C.msgBad = false; C.data = null; C.xchg = null; loadC(); return; }
       render();
     });
   }
