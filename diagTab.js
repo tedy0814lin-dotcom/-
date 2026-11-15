@@ -1,7 +1,7 @@
 // 診斷頁（階段 1：台股持股診斷）。輸入代號、股數、成本價（成本可留空）→ 顯示弱勢／強勢旗標、趨勢分數百分位、
 // 三因子分數（來自策略頁名單，前 300 大才有）、同條件股票的歷史機率，以及三種做法（換強勢股／買 0050／續抱）的歷史統計。
 // 只描述歷史統計，不給買賣指令；成本價只用來算損益與回本幅度。持股只存在你的瀏覽器，可匯出備份。規格：專案文件《持股診斷頁規格》。
-import { FLAG_TEXT, rowObj, diagnose, summarize, statRow, baseRow, upsertHolding, exportHoldings, parseHoldings, ACTION_STATS } from '/lib/diagHold.js';
+import { FLAG_TEXT, rowObj, diagnose, summarize, statRow, baseRow, recoverRows, upsertHolding, exportHoldings, parseHoldings, ACTION_STATS } from '/lib/diagHold.js';
 import { DIAG_STATS } from '/lib/diagStats.js';
 import { upsertCoin, exportCoins, parseCoins, findRow, diagnoseCoin, summarizeCoins } from '/lib/diagCrypto.js';
 import { normBase } from '/lib/exchanges.js';
@@ -51,12 +51,23 @@ export function createDiagTab({ api, el }) {
     for (const k of keys) {
       const s = statRow(k, 3); if (!s) continue;
       out.push(`<div class="dg-hist"><div><b>${FLAG_TEXT[k].name}</b><span class="muted small"> 過去同條件的股票，之後 3 個月</span></div><dl>
-        <dt>相對全體平均</dt><dd><b class="num ${cls(s.ex)}">${pn(s.ex, 2)}</b><span class="muted small">（95% 區間 ${s.lo.toFixed(1)}～${s.hi.toFixed(1)}）</span></dd>
+        <dt>相對全體平均</dt><dd><b class="num ${cls(s.ex)}">${pn(s.ex, 2)}</b><span class="muted small">（90% 區間 ${s.lo.toFixed(1)}～${s.hi.toFixed(1)}）</span></dd>
         <dt>續弱／震盪／轉強</dt><dd><b class="num">${s.pWeak}%／${s.pMid}%／${s.pStrong}%</b><span class="muted small">（全體 ${base.pWeak}%／${base.pMid}%／${base.pStrong}%）</span></dd>
         <dt>上漲機率</dt><dd><b class="num">${s.pUp}%</b><span class="muted small">（全體 ${base.pUp}%）</span></dd>
         <dt>2026 年驗證</dt><dd>${s.val ? `<b class="num ${cls(s.val.ex)}">${pn(s.val.ex, 1)}</b><span class="muted small">（${s.val.months} 個訊號月，只當觀察）</span>` : '—'}</dd></dl></div>`);
     }
     return out.join('');
+  }
+  function recoverBlock(r) {
+    if (r.cost == null || !(r.needGain > 0)) return '';
+    const rec = recoverRows(r.flags, r.needGain);
+    if (!rec) return `<div class="dg-note muted">距離成本只差 ${pc(r.needGain)}，幅度很小，不另列回本機率統計。</div>`;
+    const { b } = rec, f = (c) => (c ? `<b class="num">${c.p.toFixed(0)}%</b><span class="muted small"> (${c.lo.toFixed(0)}～${c.hi.toFixed(0)})</span>` : '—');
+    const lines = rec.rows.map((x) => `<tr><td>${x.g === '全體' ? '<span class="muted">全體基準</span>' : esc(x.g)}</td><td class="n">${f(x.m6)}</td><td class="n">${f(x.m12)}</td><td class="n">${x.v6 ? x.v6.p.toFixed(0) + '%' : '—'}</td><td class="n">${x.m12 ? x.m12.dn20.toFixed(0) + '%' : '—'}</td></tr>`).join('');
+    const where = b.beyond ? `你需要漲 ${pc(r.needGain)}，已超過統計的最高檔，以下用「再漲 ${b.x}%」代表，實際機率更低` : b.exact ? `你要回到成本需要再漲 ${pc(r.needGain)}` : `你要回到成本需要再漲 ${pc(r.needGain)}，以下用最接近的「再漲 ${b.x}%」檔位`;
+    return `<div class="dg-hist"><div><b>回本機率</b><span class="muted small"> ${where}</span></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>同條件股票</th><th class="n">6 個月內回到</th><th class="n">12 個月內回到</th><th class="n">2026 驗證 6 個月</th><th class="n">12 個月內再跌 ≥20%</th></tr></thead><tbody>${lines}</tbody></table></div>
+      <div class="muted small">歷史上，月底收盤價在期間內「曾經」回到現價再漲 ${b.x}% 的比例（括號為 90% 區間；2026 只有 ${rec.valMonths['6']} 個訊號月，只當觀察）。只看月底收盤，盤中高點沒算，會略低估。這個機率不會因為你的成本價而改變，成本價只用來換算要漲多少；回本也不代表繼續持有比較好。</div></div>`;
   }
   function s6Block(r) {
     if (!r.s6) return `<div class="dg-note muted">三因子分數：這檔不在策略頁的名單內（名單只涵蓋成交值前 300 大的上市股），所以只顯示趨勢旗標。</div>`;
@@ -73,7 +84,7 @@ export function createDiagTab({ api, el }) {
     const v = r.vals;
     const detail = `<div class="dg-grid small"><div><span class="muted">200 日均線</span><b class="num">${px(v.ma200)}</b><span class="${cls(v.px / v.ma200 - 1)} small"> ${pc(v.px / v.ma200 - 1)}</span></div><div><span class="muted">250 日高點</span><b class="num">${px(v.hi250)}</b><span class="down small"> ${pc(v.near - 1)}</span></div><div><span class="muted">6-1 動能</span><b class="num ${cls(v.mom)}">${pc(v.mom)}</b></div><div><span class="muted">趨勢分數</span><b class="num">前 ${Math.max(1, Math.round((1 - r.tPct) * 100))}%</b></div></div>`;
     const mixed = WEAK_ORDER.some((k) => r.flags[k]) && r.flags.S ? '<div class="dg-note muted">同時出現弱勢旗標與強勢，代表各指標互相矛盾（例如價格離高點很遠、但半年動能很強），兩組歷史統計都不能直接套用，請看個別指標。</div>' : '';
-    return `<section class="panel dg-card">${title}<div class="dg-flags">${flagChips(r)}</div>${money}${detail}${s6Block(r)}${mixed}${histRows(r)}${liq}</section>`;
+    return `<section class="panel dg-card">${title}<div class="dg-flags">${flagChips(r)}</div>${money}${detail}${s6Block(r)}${mixed}${histRows(r)}${recoverBlock(r)}${liq}</section>`;
   }
   function summaryBlock(rs, sm) {
     const valid = rs.filter((r) => r.status === 'ok');

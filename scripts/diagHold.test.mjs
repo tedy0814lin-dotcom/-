@@ -26,3 +26,13 @@ console.log('diagHold OK', n);
 import { diagnose as dg2 } from '../lib/diagHold.js';
 assert.equal(dg2({ code: '0050', shares: 1, cost: null }, { name: 'ETF', px: 100, ma200: 90, hi250: 120, mom: 0.1, near: 0.8, tScore: 0.5, tPct: 0.5, flags: 16, v20: 5000, ok: 1 }, null).status, 'etf');
 console.log('etf OK');
+import { recoverBucket, recoverRows } from '../lib/diagHold.js';
+assert.equal(recoverBucket(0.05), null);                       // 太小不列
+assert.equal(recoverBucket(0.0799), null); assert.equal(recoverBucket(0.08).x, 10);
+assert.equal(recoverBucket(0.24).x, 20); assert.equal(recoverBucket(0.25).x, 30); assert.equal(recoverBucket(0.35).x, 30); assert.equal(recoverBucket(0.40).x, 50); assert.equal(recoverBucket(0.70).x, 50);
+assert.equal(recoverBucket(1.0).x, 100); assert.equal(recoverBucket(5).x, 100); assert.ok(recoverBucket(5).beyond); assert.ok(!recoverBucket(1.2).beyond);
+assert.equal(recoverBucket(0.2).exact, true); assert.equal(recoverBucket(0.40).exact, false);
+{ const r = recoverRows({ A: true, B: false, C: true, D: false, S: false }, 0.2); assert.deepEqual(r.rows.map((x) => x.g), ['弱A', '全體']); // C 沒有統計，不列
+  assert.equal(r.rows[0].m6.p, 28.2); assert.equal(r.rows[1].m6.p, 32.1); assert.ok(r.rows[0].m6.p < r.rows[1].m6.p); assert.equal(r.rows[0].m12.p, 44.6); assert.equal(r.rows[0].v6.p, 28.6); }
+{ const r = recoverRows({ A: false, B: false, C: false, D: false, S: true }, 0.5); assert.deepEqual(r.rows.map((x) => x.g), ['強', '全體']); }
+console.log('recover OK');
