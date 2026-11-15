@@ -74,6 +74,14 @@ button, input, select { font: inherit; color: inherit; }
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tab[hidden], .subtab[hidden] { display: none; }
+.subtabs { display: flex; gap: 6px; max-width: 1280px; margin: 8px auto 0; flex-wrap: wrap; }
+.subtabs[hidden] { display: none; }
+.subtab {
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; cursor: pointer;
+  color: var(--muted); font-weight: 600; font-size: 13px;
+}
+.subtab[aria-selected="true"] { color: var(--fg); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 /* ---------- 工具列 ---------- */
 main { max-width: 1280px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left)); }

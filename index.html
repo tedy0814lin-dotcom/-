@@ -19,12 +19,16 @@
     <button class="ghost" id="theme" type="button" aria-label="切換亮色／暗色模式" title="切換亮色／暗色模式"></button>
     <button class="ghost" id="logout" type="button">登出</button>
   </div>
-  <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tab-crypto" data-tab="crypto" aria-selected="true">加密貨幣</button>
-    <button class="tab" role="tab" id="tab-tw" data-tab="tw" aria-selected="false">台股</button>
-    <button class="tab" role="tab" id="tab-twpat" data-tab="twpat" aria-selected="false">型態</button>
+  <nav class="tabs" role="tablist" aria-label="主要分頁">
+    <button class="tab" role="tab" id="tab-scan" data-group="scan" aria-selected="true">市場掃描</button>
     <button class="tab" role="tab" id="tab-strat" data-tab="strat" aria-selected="false">策略</button>
+    <button class="tab" role="tab" id="tab-diag" data-tab="diag" aria-selected="false">診斷</button>
     <button class="tab" role="tab" id="tab-log" data-tab="log" aria-selected="false">數據記錄</button>
+  </nav>
+  <nav class="subtabs" id="subtabs" role="tablist" aria-label="市場掃描子分頁">
+    <button class="subtab" role="tab" id="tab-crypto" data-tab="crypto" aria-selected="true">加密貨幣</button>
+    <button class="subtab" role="tab" id="tab-tw" data-tab="tw" aria-selected="false">台股</button>
+    <button class="subtab" role="tab" id="tab-twpat" data-tab="twpat" aria-selected="false">型態</button>
   </nav>
 </header>
 
@@ -32,6 +36,7 @@
   <div id="pat-view" hidden></div>
   <div id="strat-view" hidden></div>
   <div id="log-view" hidden></div>
+  <div id="diag-view" hidden></div>
   <div id="main-view">
   <div class="toolbar">
     <input class="search" id="q" type="search" placeholder="搜尋代號或名稱，例如 BTC、2330、台積電" autocomplete="off">
