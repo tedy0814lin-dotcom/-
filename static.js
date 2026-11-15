@@ -65,6 +65,7 @@ export async function staticApi(path) {
       if (!c) throw new Error('這個星期的成交資料還沒有');
       return c;
     }
+    case 'diag': return snap('pp_diag', 10 * 60e3); // 持股診斷：全部台股的弱勢／強勢旗標與趨勢分數（每天收盤後算，放 snap2 分支，見 lib/diagTw.js）
     case 'pkdiv': return snap('pp_pkdiv', 10 * 60e3); // 大單推升的頂背離標記（每天收盤後算，放 snap2 分支）
     case 's6u': return snap('s6_u', 10 * 60e3); // 長期核心策略（價值＋低波動＋趨勢）每日名單，放 snap3 分支
     default: throw new Error('靜態版沒有這個資料：' + name);

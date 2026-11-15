@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { get } from './_api.mjs';
+import { crossSection } from '../lib/diagTw.js';
 
 const OUT = process.env.OUT || 'patall-out';
 const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
@@ -39,6 +40,27 @@ await pool(parts, 2, async (p) => {
     fs.writeFileSync(path.join(OUT, 'pp_pkdiv.json'), JSON.stringify({ asof, n: Object.keys(flags).length, flags }));
     console.log(`頂背離標記：${Object.keys(flags).length} 檔，其中有標記 ${Object.values(flags).filter(Boolean).length} 檔，收盤日 ${asof}`);
   } else console.log('頂背離標記：可算的太少（' + Object.keys(flags).length + '），這次不輸出');
+}
+// ---- 持股診斷（lib/diagTw.js）：全部台股的弱勢／強勢旗標與趨勢分數，輸出 pp_diag.json（診斷頁讀這份；定義與 Python 回測 pk/wk3.py 逐檔對照過）----
+{
+  const names = Object.fromEntries((tw.rows || []).map((r) => [r.code, r.name]));
+  const codesD = Object.keys(results).filter((c) => results[c]?.dg && Number.isFinite(results[c].dg.c));
+  const dayCount = {}; for (const c of codesD) dayCount[results[c].dg.day] = (dayCount[results[c].dg.day] || 0) + 1;
+  const asofD = Object.entries(dayCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  // 只用「最後一根 K 棒日期＝多數日期」的股票（停牌或資料落後的不混進當日橫斷面）
+  const cur = codesD.filter((c) => results[c].dg.day === asofD);
+  const cs = crossSection(cur.map((c) => ({ c: results[c].dg.c, v: results[c].dg.v, ma200: results[c].dg.ma200, hi250: results[c].dg.hi250, mom: results[c].dg.mom, near: results[c].dg.near, lvl: results[c].dg.lvl })));
+  if (cs.nOk >= 300) {
+    const q5 = (x) => (Number.isFinite(x) ? +Number(x).toPrecision(6) : null);
+    const rows = {};
+    cur.forEach((c, i) => {
+      const g = cs.rows[i], d = results[c].dg;
+      // [名稱, 原始收盤, 調整收盤, 200日線, 250日高, 動能, 距高點, 趨勢分數, 趨勢百分位, 旗標位元(A1 B2 C4 D8 強16), 20日均量(張), 是否在母體(ok)]
+      rows[c] = [names[c] || '', q5(d.px), q5(d.c), q5(d.ma200), q5(d.hi250), q5(d.mom), q5(d.near), q5(g.tScore), q5(g.tPct), (g.A ? 1 : 0) | (g.B ? 2 : 0) | (g.C ? 4 : 0) | (g.D ? 8 : 0) | (g.S ? 16 : 0), Math.round(d.v20 || 0), g.ok ? 1 : 0];
+    });
+    fs.writeFileSync(path.join(OUT, 'pp_diag.json'), JSON.stringify({ asof: asofD, n: cur.length, nOk: cs.nOk, q: cs.q, cols: ['name', 'px', 'adj', 'ma200', 'hi250', 'mom', 'near', 'tScore', 'tPct', 'flags', 'v20', 'ok'], rows }));
+    console.log(`持股診斷：${cur.length} 檔（母體內 ${cs.nOk}），收盤日 ${asofD}；弱A ${cs.rows.filter((g) => g.A).length}、弱B ${cs.rows.filter((g) => g.B).length}、強 ${cs.rows.filter((g) => g.S).length}`);
+  } else console.log('持股診斷：母體內可算的太少（' + cs.nOk + '），這次不輸出');
 }
 const shards = {};
 for (const [c, r] of Object.entries(results)) (shards[c.slice(0, 2)] ||= {})[c] = r;

@@ -543,3 +543,30 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 
 /* 幣名＋標籤＋價格同列太長時換行，不撐出螢幕（維加斯／訊號卡片的 card-head） */
 .card-head { flex-wrap: wrap; row-gap: 2px; }
+
+/* ---- 診斷頁 ---- */
+#diag-view { padding-bottom: 28px; }
+.dg-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.dg-fields label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.dg-fields input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; font-size: 16px; background: var(--bg, transparent); color: inherit; border: 1px solid var(--line); border-radius: 8px; }
+.dg-fields .refresh { grid-column: 1 / -1; }
+.dg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dg-x { font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 6px; }
+.dg-flags { display: flex; gap: 6px; flex-wrap: wrap; }
+.dg-flag { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.dg-flag.weak { color: var(--down); border-color: var(--down); }
+.dg-flag.strong { color: var(--up); border-color: var(--up); }
+.dg-flag.none { color: var(--muted); }
+.dg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px 12px; }
+.dg-grid > div { display: grid; gap: 2px; min-width: 0; }
+.dg-s6 { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; }
+.dg-note { font-size: 13px; line-height: 1.6; }
+.dg-note.warn { color: var(--down); }
+.dg-note.bad { color: var(--down); }
+.dg-card .tbl td, .dg-card .tbl th { white-space: normal; }
+.dg-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.dg-imp { display: inline-block; cursor: pointer; }
+.dg-empty { padding: 24px 0; text-align: center; }
+.dg-hist { border-top: 1px dashed var(--line); padding-top: 8px; display: grid; gap: 6px; }
+.dg-hist dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; }
+.dg-hist dt { color: var(--muted); } .dg-hist dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }

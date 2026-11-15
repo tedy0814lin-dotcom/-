@@ -5,6 +5,7 @@ import { CATS, classify } from '/lib/categories.js';
 import { staticApi } from '/static.js';
 import { createPatTab } from '/patTab.js';
 import { createStrategyTab } from '/strategyTab.js';
+import { createDiagTab } from '/diagTab.js';
 import { openChart } from '/chartView.js';
 import { createLogTab } from '/logTab.js';
 import { groupOf, migratePrefs } from '/lib/navPrefs.js';
@@ -380,14 +381,6 @@ function markSeen() {
   document.title = '籌碼雷達';
 }
 
-// 持股診斷：建置中（規格見專案文件《持股診斷頁規格》，階段 1 完成後替換）
-function renderDiag() {
-  $('diag-view').innerHTML = `<section class="panel" style="padding:20px 16px;line-height:1.7">
-    <h2 style="margin:0 0 8px;font-size:18px">持股診斷（建置中）</h2>
-    <p style="margin:0 0 8px">之後可以在這裡輸入自己的台股持股，查看弱勢／強勢旗標、三因子（價值、低波動、趨勢）分數，以及同條件股票的歷史機率；加密貨幣持股只記錄損益並顯示籌碼數據。</p>
-    <p class="muted" style="margin:0;font-size:13px">僅為歷史統計，不構成投資建議。</p></section>`;
-}
-
 function render() {
   const grp = groupOf(state.tab);
   document.querySelectorAll('[data-tab]').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === state.tab)));
@@ -398,7 +391,7 @@ function render() {
   $('strat-view').hidden = state.tab !== 'strat';
   $('diag-view').hidden = state.tab !== 'diag';
   $('main-view').hidden = ['log', 'twpat', 'strat', 'diag'].includes(state.tab);
-  if (state.tab === 'diag') { renderDiag(); return; }
+  if (state.tab === 'diag') { diag.render(); if (!diag.state.data && !diag.state.loading && !diag.state.error) diag.load(); return; }
   if (state.tab === 'twpat') { pat.render(); return; }
   if (state.tab === 'strat') { strat.render(); return; }
   if (state.tab === 'log') { lg.render(); return; }
@@ -557,6 +550,7 @@ async function load(tab, refresh = false) {
 // ---------- 事件 ----------
 const lg = createLogTab({ api, el: $('log-view') });
 const pat = createPatTab({ api, el: $('pat-view') });
+const diag = createDiagTab({ api, el: $('diag-view') });
 function gotoTab(t) { document.getElementById('tab-' + t)?.click(); }
 const strat = createStrategyTab({ api, el: $('strat-view'), goto: gotoTab });
 
@@ -616,7 +610,7 @@ setInterval(() => { if (state.tab === 'crypto' && !document.hidden) load('crypto
 // 先確認有登入，再開始抓
 api('/api/me').then(() => {
   render();
-  if (state.tab === 'twpat') pat.load(); else if (state.tab === 'strat') strat.load(); else if (state.tab === 'log') lg.load(); else if (state.tab === 'diag') render(); else load(state.tab);
+  if (state.tab === 'twpat') pat.load(); else if (state.tab === 'strat') strat.load(); else if (state.tab === 'log') lg.load(); else if (state.tab === 'diag') diag.load(); else load(state.tab);
 }).catch(() => {});
 render();
 
