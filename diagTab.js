@@ -19,12 +19,12 @@ const WEAK_ORDER = ['A', 'B', 'C', 'D'];
 const DIAG_ACTION_NOTE = '這是策略規則（平衡含濾網，每月定期定額、名次掉出才賣、不設停損）套用在你的持股上的結果，不是個人化的買賣建議，也沒有考慮你的稅務、風險承受度與其他資產。證據：2005-10 起回測（含 2008）年化 25.1%、0050 14.8%，對 0050 的 alpha 約 +17.6%（t 3.7，但有挑選偏差，營收濾網是看過結果才追加，t 值最膨脹）；2008 年沒有比較抗跌（最大回撤 −56%，0050 −54%）；台積電領漲的年份（2019、2020、2024、2025）策略落後 0050，持有台積電的人用這套規則會賣出它，要把這點算進去；2026 前 10 個月 +79.1% 對 0050 +63.2%，仍在前瞻驗證中，不保證贏 0050。成本價不影響規則。';
 
 export function createDiagTab({ api, el }) {
-  const S = { openCard: {}, cash: 0, sub: 'tw', cx: { loading: false, error: '', data: null, xchg: null, msg: '', msgBad: false, holdings: [] }, loading: false, error: '', data: null, s6: null, holdings: [], msg: '', msgBad: false, storeOk: true, openStats: false, openAct: false };
+  const S = { openSec: {}, openCard: {}, cash: 0, sub: 'tw', cx: { loading: false, error: '', data: null, xchg: null, msg: '', msgBad: false, holdings: [] }, loading: false, error: '', data: null, s6: null, holdings: [], msg: '', msgBad: false, storeOk: true, openStats: false, openAct: false };
   try { const raw = localStorage.getItem(LSK); if (raw) { const r = parseHoldings(raw); if (r.list) { S.holdings = r.list; S.cash = r.cash || 0; } } } catch { /* 無痕模式或被封鎖：頁面照常運作，只是不保存 */ }
   try { const raw = localStorage.getItem(LSKC); if (raw) { const r = parseCoins(raw); if (r.list) S.cx.holdings = r.list; } } catch { /* 同上 */ }
   const saveC = () => { try { localStorage.setItem(LSKC, JSON.stringify({ v: 1, kind: 'wr_diag_crypto', holdings: S.cx.holdings })); S.storeOk = true; } catch { S.storeOk = false; } };
   const save = () => { try { localStorage.setItem(LSK, JSON.stringify({ v: 1, kind: 'wr_diag', holdings: S.holdings, cash: S.cash })); S.storeOk = true; } catch { S.storeOk = false; } };
-  el.addEventListener('toggle', (e) => { const t = e.target; if (t.matches?.('details[data-k]')) S[t.dataset.k] = t.open; else if (t.matches?.('details[data-card]')) S.openCard[t.dataset.card] = t.open; }, true);
+  el.addEventListener('toggle', (e) => { const t = e.target; if (t.matches?.('details[data-k]')) S[t.dataset.k] = t.open; else if (t.matches?.('details[data-card]')) S.openCard[t.dataset.card] = t.open; else if (t.matches?.('details[data-sec]')) S.openSec[t.dataset.sec] = t.open; }, true);
 
   async function load() {
     if (S.loading) return;
@@ -94,6 +94,7 @@ export function createDiagTab({ api, el }) {
   const STATUS = { core: ['規則目標名單內', 'ok'], buffer: ['名次在緩衝區，規則不賣也不加碼', 'mid'], sell: ['依規則會賣出', 'bad'], outside: ['不在規則母體內', 'muted'] };
   const fpc = (v) => (ok(v) ? Math.round(v * 100) : '—');
   const gapTxt = (g) => { if (!ok(g)) return '—'; const v = Math.round(g * 100); return v === 0 ? '0' : (v > 0 ? '+' : '−') + Math.abs(v); };
+  const sec = (k, title, brief, body) => `<details class="dg-sec" data-sec="${k}" ${S.openSec[k] ? 'open' : ''}><summary><b>${title}</b><span class="muted small">${esc(brief)}</span></summary><div class="dg-body">${body}</div></details>`;
   function compareBlock(rs) {
     const holds = rs.filter((r) => (r.status === 'ok' || r.status === 'outside') && r.shares > 0 && r.px > 0).map((r) => ({ code: r.code, shares: r.shares, px: r.px }));
     const cashIn = `<form class="dg-cash" id="dg-cash"><label>可再投入的現金（選填）<input name="cash" inputmode="numeric" value="${S.cash > 0 ? S.cash : ''}" placeholder="0" autocomplete="off"></label><button type="submit" class="refresh">更新</button></form>`;
@@ -118,15 +119,17 @@ export function createDiagTab({ api, el }) {
     const cand = c.cands.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>你沒持有的前 ${c.N} 名</th><th class="n">名次</th><th class="n">價值</th><th class="n">低波</th><th class="n">趨勢</th></tr></thead><tbody>${c.cands.map((x) => `<tr><td>${esc(x.code)}<div class="small">${esc(x.name)}${x.ind ? '・' + esc(x.ind) : ''}</div></td><td class="n">${x.rank}</td><td class="n ${c.weakest?.k === 'value' ? 'up' : ''}">${fpc(x.value)}</td><td class="n ${c.weakest?.k === 'lowvol' ? 'up' : ''}">${fpc(x.lowvol)}</td><td class="n ${c.weakest?.k === 'trend' ? 'up' : ''}">${fpc(x.trend)}</td></tr>`).join('')}</tbody></table></div>` : '';
     const stl = DIAG_ACTION_NOTE;
     const nSell = c.plan.sells.length, nBuy = c.plan.buys.length;
+    const cnt = (k) => c.rows.filter((r) => r.status === k).length;
+    const posBrief = `目標名單內 ${cnt('core')}・緩衝區 ${cnt('buffer')}・會賣出 ${cnt('sell')}・母體外 ${cnt('outside')}`;
     const brief = [c.weakest && c.weakest.verdict === 'weak' ? `最缺${c.weakest.label}` : '因子無明顯偏弱', `規則會賣出 ${nSell} 檔${nBuy ? `、買進 ${nBuy} 檔` : ''}`].join('；');
     return `<section class="panel"><details class="fold" data-k="openCmp" ${S.openCmp ? 'open' : ''}><summary><b>與三因子（平衡含濾網）名單比較</b><span class="muted small">${esc(brief)}（點開展開）</span></summary>
       <div class="muted small">策略規則套用在你的持股上的對照，不是買賣建議。</div>
       <div class="muted small">名單：${c.info.kind === 'final' ? '月底正式名單 ' + esc(c.info.month) : '最新預覽名單'}（規則只在月底換股），三因子分數為 ${esc(c.asof)} 最新資料；依總資金約 ${n0(c.V)} 元，規則的目標檔數 ${c.N} 檔、名次超過 ${c.lim} 才賣。</div>
-      <h4>因子輪廓：你的組合缺什麼</h4><div class="muted small">數字是百分位（0～100，越高越好）；「你的」是組合市值加權，「前 ${c.N} 名」是規則目標名單的平均。</div>${prof}${covNote}${weakTxt}${c.weakest && c.weakest.verdict === 'weak' ? '最下面「規則名單裡你還沒持有的」表中，標綠的是你最缺的那個因子的分數。' : ''}</div>
-      <h4>每檔持股在規則裡的位置</h4>${tbl}
-      <h4>規則會怎麼調整（把整個組合照規則做的對照）</h4>${cashIn}<ul class="s6-ul">${sells}${buys}</ul>
-      ${cand ? '<h4>規則名單裡你還沒持有的</h4>' + cand : ''}
-      <div class="muted small">${stl}</div></details></section>`;
+      ${sec('prof', '因子輪廓：你的組合缺什麼', c.profile.map((x) => `${x.label} ${gapTxt(x.gap)}`).join('・'), `<div class="muted small">數字是百分位（0～100，越高越好）；「你的」是組合市值加權，「前 ${c.N} 名」是規則目標名單的平均。</div>${prof}${covNote}${weakTxt}${c.weakest && c.weakest.verdict === 'weak' ? '最下面「規則名單裡你還沒持有的」表中，標綠的是你最缺的那個因子的分數。' : ''}</div>`)}
+      ${sec('pos', '每檔持股在規則裡的位置', posBrief, tbl)}
+      ${sec('adj', '規則會怎麼調整（整個組合照規則做的對照）', `賣出 ${nSell} 檔・買進 ${nBuy} 檔`, cashIn + `<ul class="s6-ul">${sells}${buys}</ul>`)}
+      ${cand ? sec('cand', '規則名單裡你還沒持有的', `${c.cands.length} 檔`, cand) : ''}
+      ${sec('note', '證據與限制（重要，請看一下）', '回測、2008、台積電領漲年、前瞻驗證', `<div class="muted small">${stl}</div>`)}</details></section>`;
   }
   function summaryBlock(rs, sm) {
     const valid = rs.filter((r) => r.status === 'ok');

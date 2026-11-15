@@ -586,3 +586,8 @@ b.up, .num.up { color: var(--up); } b.down, .num.down { color: var(--down); }
 .dg-card details[open] .dg-sumtop b::before { content: '▾ '; }
 .dg-sumsub { display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; font-size: 13px; }
 .dg-body { display: grid; gap: 10px; margin-top: 10px; min-width: 0; }
+.dg-sec { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 8px; }
+.dg-sec > summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; list-style: none; }
+.dg-sec > summary::-webkit-details-marker { display: none; }
+.dg-sec > summary b::before { content: '▸ '; color: var(--muted); }
+.dg-sec[open] > summary b::before { content: '▾ '; }
