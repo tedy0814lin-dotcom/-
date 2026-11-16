@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { s6uRank, universeMask, IND_NAMES } from '../lib/s6u.js';
 import { revAcc, mergeRev, trimRev, ymIdx, idxYm } from '../lib/s6uRev.js';
 import { pickQuote } from '../lib/s6uQuote.js';
+import { latestRwd, rwdCandidates } from '../lib/twseRwd.js';
 
 const OUT = process.env.OUT || 's6u-out';
 const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
@@ -33,10 +34,21 @@ const rocToISO = (d) => { d = String(d); return d.length === 7 ? `${+d.slice(0, 
 const tpDate = (sec) => new Date(sec * 1000 + 8 * 3600e3).toISOString().slice(0, 10);
 
 // ---- 1) 證交所當日全部上市證券 ----
-const [dayAll, bw] = await Promise.all([
+let [dayAll, bw] = await Promise.all([
   getJ('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'),
   getJ('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL'),
 ]);
+// openapi 常晚數小時～一天才更新；官網介面（rwd）當晚就有同一份資料（逐檔比對一致，見 lib/twseRwd.js）。openapi 資料日落後時改用官網的較新交易日。
+const tpNow = new Date(Date.now() + 8 * 3600e3), tpDay = tpNow.toISOString().slice(0, 10), tpMin = tpNow.getUTCHours() * 60 + tpNow.getUTCMinutes();
+{
+  const oa = rocToISO(dayAll.find((r) => r.Date)?.Date);
+  const cands = rwdCandidates(tpDay, tpMin, oa || '0000-00-00');
+  if (cands.length) {
+    const rw = await latestRwd(cands, (u) => getJ(u, { tries: 3, timeout: 30000 }));
+    if (rw) { console.log(`openapi 資料日 ${oa} 落後，改用證交所官網 ${rw.ymd}：${rw.dayAll.length} 檔`); dayAll = rw.dayAll; bw = rw.bw; }
+    else console.log(`openapi 資料日 ${oa}，官網也沒有更新的資料，沿用 openapi`);
+  }
+}
 const asof = rocToISO(dayAll.find((r) => r.Date)?.Date);
 const bwDay = rocToISO(bw.find((r) => r.Date)?.Date);
 if (!asof || bwDay !== asof) { console.error(`成交資料日期(${asof})與本益比資料日期(${bwDay})不同，今天不更新`); process.exit(canPush ? 1 : 2); }
@@ -84,7 +96,6 @@ if (!gapOk) { console.error('月底日間隔異常，不更新', anchors.join())
 
 // 較新的收盤價：證交所 openapi 常在收盤後數小時才更新（排名資料日 asof 會晚一個交易日），這裡另存 Yahoo 的最新收盤給「持股現價」用。
 // 只收已收盤的日期：台北 14:10 前不收當天；價格與 asof 收盤差 >25% 視為異常不收。
-const tpNow = new Date(Date.now() + 8 * 3600e3), tpDay = tpNow.toISOString().slice(0, 10), tpMin = tpNow.getUTCHours() * 60 + tpNow.getUTCMinutes();
 const quoteMax = tpMin >= 14 * 60 + 10 ? tpDay : new Date(Date.parse(tpDay) - 864e5).toISOString().slice(0, 10);
 let miss = 0, pxBad = [];
 await pool(cand, 6, async (r, k) => {
@@ -92,6 +103,8 @@ await pool(cand, 6, async (r, k) => {
   if (!s) { miss++; r.hist = null; return; }
   const m = new Map(s.map(([d, a, c]) => [d, [a, c]]));
   r.hist = anchors.map((d) => m.get(d)?.[0] ?? null);
+  // 最新一天 Yahoo 的日線收盤常是空的（尚未定稿）：asof 是最新交易日、之後沒有除權息，還原收盤＝證交所收盤價，直接補上
+  if (r.hist[r.hist.length - 1] == null && Number.isFinite(r.close) && r.close > 0) r.hist[r.hist.length - 1] = r.close;
   const last = m.get(asof);
   r.q = pickQuote(s, s.meta, asof, quoteMax, r.close) || undefined; // 較新的收盤價（見 lib/s6uQuote.js）
   if (last && Math.abs(last[1] / r.close - 1) > 0.015) pxBad.push(`${r.code}:${last[1]}/${r.close}`);
