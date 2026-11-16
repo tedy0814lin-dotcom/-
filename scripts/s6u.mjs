@@ -7,6 +7,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { s6uRank, universeMask, IND_NAMES } from '../lib/s6u.js';
 import { revAcc, mergeRev, trimRev, ymIdx, idxYm } from '../lib/s6uRev.js';
+import { pickQuote } from '../lib/s6uQuote.js';
 
 const OUT = process.env.OUT || 's6u-out';
 const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
@@ -63,6 +64,7 @@ async function yahoo(sym, range) {
       const r = j?.chart?.result?.[0]; if (!r?.timestamp) return null;
       const adj = r.indicators?.adjclose?.[0]?.adjclose || r.indicators.quote[0].close, cl = r.indicators.quote[0].close;
       const out = []; r.timestamp.forEach((t, i) => { if (adj[i] != null && cl[i] != null) out.push([tpDate(t), adj[i], cl[i]]); });
+      out.meta = { t: r.meta?.regularMarketTime, p: r.meta?.regularMarketPrice }; // 最新一根日線有時收盤是 null（Yahoo 尚未定稿），改用報價時間與價格
       return out;
     } catch (e) { await sleep(800); }
   }
@@ -91,7 +93,7 @@ await pool(cand, 6, async (r, k) => {
   const m = new Map(s.map(([d, a, c]) => [d, [a, c]]));
   r.hist = anchors.map((d) => m.get(d)?.[0] ?? null);
   const last = m.get(asof);
-  { const lb = s[s.length - 1]; if (lb && lb[0] > asof && lb[0] <= quoteMax && lb[2] > 0 && Math.abs(lb[2] / r.close - 1) < 0.25) r.q = [lb[0], +lb[2].toFixed(2)]; }
+  r.q = pickQuote(s, s.meta, asof, quoteMax, r.close) || undefined; // 較新的收盤價（見 lib/s6uQuote.js）
   if (last && Math.abs(last[1] / r.close - 1) > 0.015) pxBad.push(`${r.code}:${last[1]}/${r.close}`);
   if ((k + 1) % 60 === 0) console.log(`Yahoo 進度 ${k + 1}/${cand.length}`);
 });
