@@ -80,6 +80,10 @@ if (anchors.length !== 13) { console.error('月底日不足 13 個：' + anchors
 const gapOk = anchors.every((d, i) => i === 0 || (new Date(d) - new Date(anchors[i - 1])) / 864e5 <= 36);
 if (!gapOk) { console.error('月底日間隔異常，不更新', anchors.join()); process.exit(1); }
 
+// 較新的收盤價：證交所 openapi 常在收盤後數小時才更新（排名資料日 asof 會晚一個交易日），這裡另存 Yahoo 的最新收盤給「持股現價」用。
+// 只收已收盤的日期：台北 14:10 前不收當天；價格與 asof 收盤差 >25% 視為異常不收。
+const tpNow = new Date(Date.now() + 8 * 3600e3), tpDay = tpNow.toISOString().slice(0, 10), tpMin = tpNow.getUTCHours() * 60 + tpNow.getUTCMinutes();
+const quoteMax = tpMin >= 14 * 60 + 10 ? tpDay : new Date(Date.parse(tpDay) - 864e5).toISOString().slice(0, 10);
 let miss = 0, pxBad = [];
 await pool(cand, 6, async (r, k) => {
   const s = await yahoo(`${r.code}.TW`, '15mo');
@@ -87,6 +91,7 @@ await pool(cand, 6, async (r, k) => {
   const m = new Map(s.map(([d, a, c]) => [d, [a, c]]));
   r.hist = anchors.map((d) => m.get(d)?.[0] ?? null);
   const last = m.get(asof);
+  { const lb = s[s.length - 1]; if (lb && lb[0] > asof && lb[0] <= quoteMax && lb[2] > 0 && Math.abs(lb[2] / r.close - 1) < 0.25) r.q = [lb[0], +lb[2].toFixed(2)]; }
   if (last && Math.abs(last[1] / r.close - 1) > 0.015) pxBad.push(`${r.code}:${last[1]}/${r.close}`);
   if ((k + 1) % 60 === 0) console.log(`Yahoo 進度 ${k + 1}/${cand.length}`);
 });
@@ -158,6 +163,8 @@ const dow = new Date(asof + 'T00:00:00Z').getUTCDay(), nextWd = new Date(new Dat
 const official = nextWd !== ym; // 隔一個營業日就換月 → 今天是月底最後一個營業日（碰到連假的月底會晚一天才標成正式，見 months）
 const rd = (x, n = 4) => (Number.isFinite(x) ? +x.toFixed(n) : null);
 const list = ranked.map((o) => ({ code: o.code, name: o.name, close: o.close, rank: o.rank, rankM: eOk ? o.rankM : null, rankH: rotOk ? o.rankH : null, rx: o.rx ? 1 : 0, im: rotOk ? rd(o.im, 3) : null, eg: eOk ? rd(o.eg, 3) : null, ind: IND_NAMES[o.ind] || null, score: rd(o.score), value: rd(o.fam.value, 3), lowvol: rd(o.fam.lowvol, 3), trend: rd(o.fam.trend, 3), pe: o.raw.pe, pb: o.raw.pb, dy: o.raw.dy, mom: rd(o.raw.mom, 3), vol: rd(o.raw.vol, 3) }));
+
+{ const qBy = new Map(cand.map((r) => [r.code, r.q])); let nq = 0; for (const x of list) { const q = qBy.get(x.code); if (q) { x.q = q; nq++; } } console.log(`較新收盤價（晚於排名資料日 ${asof}）：${nq} 檔`); }
 
 // ---- 4) 歷史月底記錄（舊記錄在 2b 之前已讀回，接著寫）----
 // 網站剛上線時 snap3 還沒有任何月底記錄：用 2026-10 月底的名單（Python 回測面板重算、與回測逐檔一致）當第一份正式名單

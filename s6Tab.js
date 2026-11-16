@@ -3,6 +3,7 @@
 // 之後它會幫你記錄持股、標出該賣的股票、比較同樣的錢買 0050 的結果。
 // 紀錄只存在你的瀏覽器，可匯出成檔案備份、換裝置時匯入；不會傳到伺服器。規則與回測：專案文件《全球多因子長期策略-S6U》。
 import { PLAN_DEFAULTS, planMonth, applyExclude } from '/lib/s6uPlan.js';
+import { priceOf } from '/lib/s6uQuote.js';
 import { RULES_VER, TIERS, tierOf, tierOk, planArgs, planTier, LEV, newState, derive, buildListInfo, makePlan, benchCompare, exportState, parseImport, uid, allTrades } from '/lib/s6uState.js';
 
 const LSK = 'wr_s6u_state_v1';
@@ -41,7 +42,7 @@ export function createS6Tab({ api, el }) {
 
   const verNow = () => { const v = S.st?.ver; return TIERS[v] && tierOk(S.data, v) ? v : 'base'; };
   const info = () => (S.data ? buildListInfo(S.data, S.which, verNow()) || buildListInfo(S.data, 'preview', verNow()) : null);
-  const curPrice = (code) => (code === LEV.code ? S.data?.lev?.close : S.data?.list.find((x) => x.code === code)?.close);
+  const curPrice = (code) => priceOf(S.data, code, LEV.code)?.close; // 名單資料較舊時，用排程補上的最新收盤價（list[].q）
 
   // ---------- 動作 ----------
   function act(fn) { fn(); save(); render(); }
@@ -96,13 +97,14 @@ export function createS6Tab({ api, el }) {
     const st = S.st, m = today().slice(0, 7), dv = derive(st);
     const held = dv.positions.map((p) => { const c = curPrice(p.code) ?? p.cost / p.shares; return { ...p, price: c, mv: c * p.shares }; });
     const mv = held.reduce((a, p) => a + p.mv, 0), total = mv + dv.cash;
+    const priceDay = held.map((p) => priceOf(S.data, p.code, LEV.code)?.day).filter(Boolean).sort()[0] || null; // 持股報價日（取最舊的一檔）
     const flag = planTier({ list: i.list, holdings: dv.positions.map((p) => ({ code: p.code, shares: p.shares, px: p.cost / p.shares })), cash: dv.cash, st, ver: verNow(), levPrice: S.data.lev?.close });
     const rankOf = new Map(applyExclude(i.list, st.exclude).map((x) => [x.code, x.rank]));
     const cmp = benchCompare(st, S.data.bench, total);
     const plan = st.plans[m], dep = st.deposits[m];
     const fin = buildListInfo(S.data, 'final', verNow());
     const hero = `<section class="s6-hero"><div class="s6-hl">總資產（持股市值＋現金）</div><div class="s6-big num">${n0(total)}<small>元</small></div>
-      <div class="s6-sub num"><span>持股 ${n0(mv)}</span><span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.withdrawn > 0 ? `<span>已領出 ${n0(dv.withdrawn)}</span>` : ''}${dv.invested > 0 ? `<span class="${cls(total + dv.withdrawn - dv.invested)}">損益 ${n0(total + dv.withdrawn - dv.invested)}（${pct((total + dv.withdrawn) / dv.invested - 1)}）</span>` : ''}${dv.realized ? `<span class="${cls(dv.realized)}">已實現損益 ${n0(dv.realized)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
+      <div class="s6-sub num"><span>持股 ${n0(mv)}</span>${priceDay ? `<span class="muted" title="持股現價與損益是依這天的收盤價算的">價格 ${esc(priceDay.slice(5))} 收盤</span>` : ''}<span>現金 ${n0(dv.cash)}</span><span>累計投入 ${n0(dv.invested)}</span>${dv.withdrawn > 0 ? `<span>已領出 ${n0(dv.withdrawn)}</span>` : ''}${dv.invested > 0 ? `<span class="${cls(total + dv.withdrawn - dv.invested)}">損益 ${n0(total + dv.withdrawn - dv.invested)}（${pct((total + dv.withdrawn) / dv.invested - 1)}）</span>` : ''}${dv.realized ? `<span class="${cls(dv.realized)}">已實現損益 ${n0(dv.realized)}</span>` : ''}${cmp ? `<span>同樣的錢買 0050：${pct(cmp.benchRet)}</span>` : ''}</div>
       <div class="s6-addmoney"><label>新投入／領出（元，領出填負數；領出不會讓損益變負，會另外列「已領出」）<input id="fl-amt" type="number" step="1000" value="${st.monthly}"></label><button class="refresh" id="fl-go" type="button">加入現金</button><button class="ghost" id="rs-top" type="button" title="清除全部紀錄，回到一開始重新填開始日、每月投入、現金與持股">重新設定（歸零）</button></div>
       <div class="s6-sub s6-hint"><span>總資產由系統自動算：持股用最新收盤估值＋現金。你的成本是「打勾時填的實際成交價」，賣出損益用你填的賣出價，不是上面預估價。</span></div></section>`;
     const need = dep == null
