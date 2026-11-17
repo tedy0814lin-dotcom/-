@@ -147,12 +147,29 @@ if (WITH_TW) {
     const tpe = new Date(Date.now() + 8 * 3600e3), mon = new Date(Date.UTC(tpe.getUTCFullYear(), tpe.getUTCMonth(), tpe.getUTCDate()));
     mon.setUTCDate(mon.getUTCDate() - ((mon.getUTCDay() + 6) % 7));
     const ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
-    const out = {};
+    const out = {}, oldAll = read('avgtrade') || {}, t0 = Date.now(), BUDGET = 8 * 60e3; // 櫃買慢的時候最多花 8 分鐘，沒抓完的下一輪接著抓（已抓到的天不會丟）
+    const today = ymd(tpe);
+    // 這一天上市、上櫃是否都齊（上市約 1,000 檔、上櫃約 880 檔）
+    const full = (c, d) => { const r = c?.rows?.[d]; if (!r) return false; let s = 0, o = 0; for (const code in r) { const m = c.names?.[code]?.[1]; if (m === '上市') s++; else if (m === '上櫃') o++; } return s >= 700 && o >= 600; };
+    const cnt = (c, d) => Object.keys(c?.rows?.[d] || {}).length;
     for (let k = 6; k >= 0; k--) {
       const a = new Date(mon.getTime() - k * 7 * 864e5), b = new Date(a.getTime() + 6 * 864e5);
-      const old = read('avgtrade')?.[ymd(a)];
-      if (old && ymd(b) < ymd(tpe) && !(old.miss || []).length) { out[ymd(a)] = old; continue; } // 已結束的週不會變，沿用
-      out[ymd(a)] = await get(`/api/avgtrade?from=${ymd(a)}&to=${ymd(b)}`);
+      const old = oldAll[ymd(a)];
+      if (old && ymd(b) < today && !(old.miss || []).length) { out[ymd(a)] = old; continue; } // 已結束且沒缺資料的週不會變，沿用
+      // 逐天處理：上市、上櫃都齊的天直接沿用，只重抓缺的天；重抓結果比舊的少就保留舊的（不讓快照退步）
+      const cur = { from: ymd(a), to: ymd(b), days: [], rows: {}, names: { ...(old?.names || {}) }, miss: [] };
+      for (let i = 0; i < 5; i++) {
+        const d = ymd(new Date(a.getTime() + i * 864e5)); if (d > today) break;
+        if (full(old, d)) { cur.days.push(d); cur.rows[d] = old.rows[d]; continue; }
+        if (Date.now() - t0 > BUDGET) { if (old?.rows?.[d]) { cur.days.push(d); cur.rows[d] = old.rows[d]; } cur.miss.push(`${d} 這輪時間用完，下一輪再抓`); continue; }
+        let c = null; try { c = await get(`/api/avgtrade?from=${d}&to=${d}`); } catch (e) { cur.miss.push(`${d}：${e.message}`); }
+        const useNew = c?.days?.includes(d) && cnt(c, d) >= cnt(old, d);
+        if (useNew) { cur.days.push(d); cur.rows[d] = c.rows[d]; Object.assign(cur.names, c.names); } else if (old?.rows?.[d]) { cur.days.push(d); cur.rows[d] = old.rows[d]; }
+        if (c?.miss?.length) cur.miss.push(...c.miss);
+      }
+      // 缺資料（有 miss）但這天其實已經齊了就不要留警告
+      cur.miss = cur.miss.filter((m) => { const d = String(m).slice(0, 8); return !full(cur, d); });
+      out[ymd(a)] = cur;
     }
     return out;
   });

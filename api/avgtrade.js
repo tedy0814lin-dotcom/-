@@ -14,6 +14,8 @@ const num = (s) => {
   return Number.isFinite(v) ? v : NaN;
 };
 const clean = (x) => String(x).replace(/<br>|\s/g, '');
+// 櫃買（有時 5 秒以上、偶爾回 HTTP 520）收盤後傍晚特別慢：每次等 30 秒、最多試 4 次（getJSON 預設 9 秒、2 次，2026-11-17 起上櫃常逾時，快照缺上櫃）
+const SLOW = { timeout: 30000, retries: 3 };
 
 // 依欄位名稱找欄位位置，交易所改欄位順序也不會抓錯
 function cols(fields) {
@@ -37,7 +39,7 @@ function parse(fields, data, mkt) {
 }
 
 async function twse(ymd) {
-  const j = await getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${ymd}&type=ALLBUT0999&response=json`);
+  const j = await getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${ymd}&type=ALLBUT0999&response=json`, SLOW);
   if (j.stat !== 'OK') return null;
   const t = (j.tables || []).find((x) => Array.isArray(x.fields) && x.fields.some((f) => clean(f).includes('成交筆數')) && x.fields.some((f) => clean(f).includes('收盤價')));
   if (!t) throw new Error('證交所每日收盤行情格式改了');
@@ -45,7 +47,7 @@ async function twse(ymd) {
 }
 
 async function tpex(ymd) {
-  const j = await getJSON(`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=${ymd.slice(0, 4)}%2F${ymd.slice(4, 6)}%2F${ymd.slice(6, 8)}&type=EW&response=json`);
+  const j = await getJSON(`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=${ymd.slice(0, 4)}%2F${ymd.slice(4, 6)}%2F${ymd.slice(6, 8)}&type=EW&response=json`, SLOW);
   if (j.stat && j.stat !== 'ok' && j.stat !== 'OK') return null;
   const t = (j.tables || [])[0];
   if (!t || !t.data || !t.data.length) return null;
