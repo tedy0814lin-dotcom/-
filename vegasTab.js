@@ -189,6 +189,7 @@ export function createVegasTab({ api, el }) {
     const dirTxt = n ? (n.dir > 0 ? '做多' : '做空') : '';
     const lvTxt = !g ? '' : `${GROUPS[g.group][0]} ${g.sc}分・${TFN[g.tf]}${g.n.status}`;
     const badge = n ? `<span class="cat ${n.dir > 0 ? 'cat-long' : 'cat-short'}">${dirTxt} <b>${lvTxt}</b></span>` : '';
+    const stats = [];
     const rowsHtml = TFS[m].map((tf) => {
       const v = r.data?.[tf];
       if (!v) return `<div class="vg-row"><span class="k">${TFN[tf]}</span><span class="muted">資料不足</span></div>`;
@@ -203,14 +204,14 @@ export function createVegasTab({ api, el }) {
       const H = v.harm;
       if (H && H.ago <= 10) now += `${now ? '<br>' : ''}<span class="${H.dir > 0 ? 'up' : 'down'}">諧波 ${esc(H.name)} ${H.dir > 0 ? '看漲' : '看跌'}</span> D ${px(H.D)}（${H.ago} 根前）${H.inBig ? '・D 在大通道' : H.inSmall ? '・D 在小通道' : ''}・停損 ${px(H.stop)}`;
       const s = v.stats;
-      const stat = s ? `<span class="muted">訊號勝率 ${s.winRate ?? '—'}%（${s.n}）・小通道反應 ${s.small.rate ?? '—'}%（${s.small.n}）・大通道 ${s.big.rate ?? '—'}%（${s.big.n}）</span>` : '';
-      return `<div class="vg-row"><span class="k">${TFN[tf]}</span>${tr}${now ? ' ・ ' + now : ''}<div>${stat}</div></div>`;
+      if (s) stats.push(`<div class="muted"><b>${TFN[tf]}</b>　訊號勝率 ${s.winRate ?? '—'}%（${s.n}）・小通道反應 ${s.small.rate ?? '—'}%（${s.small.n}）・大通道 ${s.big.rate ?? '—'}%（${s.big.n}）</div>`);
+      return `<div class="vg-row"><span class="k">${TFN[tf]}</span>${tr}${now ? ' ・ ' + now : ''}</div>`;
     }).join('');
     const tip = bt ? `<div class="muted">這檔歷史上 <b>${TFN[bt.tf]}</b> 最有效（勝率 ${bt.rate}%，${bt.n} 次）</div>` : '';
     const ex = st.charts[r.s];
     return `<article class="card"><div class="card-head"><span class="sym num">${esc(r.name)}</span>${badge}
       <div class="price"><span class="p num">${px(r.data?.[TFS[m][0]]?.price)}</span></div></div>
-      ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}${rowsHtml}${tip}
+      ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}${rowsHtml}${stats.length || tip ? `<details class="muted"><summary>歷史勝率</summary>${stats.join('')}${tip}</details>` : ''}
       <div class="vg-cwrap">${ex ? chartBlock(r, m, ex) : '<div class="muted small" style="padding:10px">載入圖中…</div>'}</div></article>`;
   }
 
