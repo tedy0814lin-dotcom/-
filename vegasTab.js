@@ -59,7 +59,7 @@ function grade(r, m) {
     else if (up && up.trend === n.dir) sc += 8;
     if (up && up.trend === -n.dir) { sc -= 20; notes.push(`逆${TFN[tfs[k + 1]]}趨勢`); }
     const s = v.stats;
-    if (s && s.n >= 4 && s.winRate != null) { sc += Math.max(-20, Math.min(20, (s.winRate - 50) * 0.5)); if (s.winRate >= 65) notes.push(`這個時區勝率 ${s.winRate}%`); }
+    if (s && s.n >= 4 && s.winRate != null) { sc += Math.max(-20, Math.min(20, (s.winRate - 50) * 0.5)); }
     const others = tfs.filter((t) => t !== tf && r.data[t]?.trend === n.dir).length;
     sc += others * 8;
     if (n.status === '確認') {
@@ -184,12 +184,11 @@ export function createVegasTab({ api, el }) {
   }
 
   function card(r, m) {
-    const g = grade(r, m), bt = bestTf(r, m);
+    const g = grade(r, m);
     const n = g?.n;
     const dirTxt = n ? (n.dir > 0 ? '做多' : '做空') : '';
     const lvTxt = !g ? '' : `${GROUPS[g.group][0]} ${g.sc}分・${TFN[g.tf]}${g.n.status}`;
     const badge = n ? `<span class="cat ${n.dir > 0 ? 'cat-long' : 'cat-short'}">${dirTxt} <b>${lvTxt}</b></span>` : '';
-    const stats = [];
     const rowsHtml = TFS[m].map((tf) => {
       const v = r.data?.[tf];
       if (!v) return `<div class="vg-row"><span class="k">${TFN[tf]}</span><span class="muted">資料不足</span></div>`;
@@ -203,15 +202,12 @@ export function createVegasTab({ api, el }) {
       }
       const H = v.harm;
       if (H && H.ago <= 10) now += `${now ? '<br>' : ''}<span class="${H.dir > 0 ? 'up' : 'down'}">諧波 ${esc(H.name)} ${H.dir > 0 ? '看漲' : '看跌'}</span> D ${px(H.D)}（${H.ago} 根前）${H.inBig ? '・D 在大通道' : H.inSmall ? '・D 在小通道' : ''}・停損 ${px(H.stop)}`;
-      const s = v.stats;
-      if (s) stats.push(`<div class="muted"><b>${TFN[tf]}</b>　訊號勝率 ${s.winRate ?? '—'}%（${s.n}）・小通道反應 ${s.small.rate ?? '—'}%（${s.small.n}）・大通道 ${s.big.rate ?? '—'}%（${s.big.n}）</div>`);
       return `<div class="vg-row"><span class="k">${TFN[tf]}</span>${tr}${now ? ' ・ ' + now : ''}</div>`;
     }).join('');
-    const tip = bt ? `<div class="muted">這檔歷史上 <b>${TFN[bt.tf]}</b> 最有效（勝率 ${bt.rate}%，${bt.n} 次）</div>` : '';
     const ex = st.charts[r.s];
     return `<article class="card"><div class="card-head"><span class="sym num">${esc(r.name)}</span>${badge}
       <div class="price"><span class="p num">${px(r.data?.[TFS[m][0]]?.price)}</span></div></div>
-      ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}${rowsHtml}${stats.length || tip ? `<details class="muted"><summary>歷史勝率</summary>${stats.join('')}${tip}</details>` : ''}
+      ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}<details class="vg-tfs"><summary>各時區訊號（進場／停損／目標）</summary>${rowsHtml}</details>
       <div class="vg-cwrap">${ex ? chartBlock(r, m, ex) : '<div class="muted small" style="padding:10px">載入圖中…</div>'}</div></article>`;
   }
 
