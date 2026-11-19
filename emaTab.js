@@ -27,7 +27,7 @@ function draw(cd, now, dir) {
 }
 
 export function createEmaTab({ api, el }) {
-  const st = { m: 'crypto', data: {}, loading: false, error: '', loaded: {}, charts: {}, group: null, dir: 0, q: '' };
+  const st = { m: 'crypto', data: {}, loading: false, error: '', loaded: {}, charts: {}, group: null, dir: 0, q: '', i: 0 };
   const items = (m) => {
     const D = st.data[m]?.d || {}, names = st.data[m]?.names || {}, out = [];
     for (const [s, v] of Object.entries(D)) {
@@ -44,22 +44,24 @@ export function createEmaTab({ api, el }) {
     const rows = !n ? `<div class="vg-row"><span class="k">日線</span>${esc(why)} ・ 位置 ${(d.pos * 100).toFixed(0)}%（250 日）・ 長均線寬度 ${d.sp.toFixed(1)}×ATR ・ 斜率 ${d.slope.toFixed(2)}</div>` : `<div class="vg-row"><span class="k">狀態</span><b>${esc(ST[n.status])}</b> ・ 突破 K 在 ${n.ageB} 根 1H 前${n.pc != null ? ` ・ 回踩處 ${n.pc} 條均線疊合` : ''}</div>
       <div class="vg-row"><span class="k">日線</span>${up ? '站上' : '跌破'}全部均線 ・ 位置 ${(d.pos * 100).toFixed(0)}%（250 日）・ 長均線寬度 ${d.sp.toFixed(1)}×ATR ・ 斜率 ${d.slope.toFixed(2)}</div>
       <div class="vg-row"><span class="k">${n.status === 'entry' ? '進場' : '預計'}</span>進 <b>${px(n.price)}</b> ・ 止損 <span class="down">${px(n.stop)}</span>（${n.stPct.toFixed(2)}%） ・ 2R ${px(n.tgt)}${n.why ? `<br><span class="muted">不符合風險範圍：${esc(n.why)}</span>` : ''}</div>`;
-    const body = ex ? (ex.loading ? '<div class="muted small" style="padding:10px">載入中…</div>' : ex.err ? `<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err)}</div>` : `<div class="vg-chart">${draw(ex.data, n, r.dir)}<div class="muted small" style="padding:4px 2px">${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}${n ? '　紅＝止損、綠＝2R 止盈（回踩最低 −0.1×ATR）' : ''}</div></div>`) : '';
-    return `<article class="card"><div class="card-head"><span class="sym num">${esc(it.name)}</span><span class="cat ${up ? 'cat-long' : 'cat-short'}">${up ? '做多' : '做空'}</span><div class="price"><span class="p num">${px(n ? n.price : r.price)}</span></div></div>${rows}
-      <div class="vg-cwrap"><button class="ghost vg-cbtn" data-chart="${esc(it.key)}">${ex ? '收起圖' : '展開看圖（1H K 線＋六條均線）'}</button>${body}</div></article>`;
+    const body = !ex || ex.loading ? '<div class="muted small" style="padding:10px">載入圖中…</div>' : ex.err ? `<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err)}</div>` : `<div class="vg-chart">${draw(ex.data, n, r.dir)}<div class="muted small" style="padding:4px 2px">${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}${n ? '　紅＝止損、綠＝2R 止盈（回踩最低 −0.1×ATR）' : ''}</div></div>`;
+    return `<article class="card"><div class="card-head"><span class="sym num">${esc(it.name)}</span><span class="cat ${up ? 'cat-long' : 'cat-short'}">${up ? '做多' : '做空'}</span><div class="price"><span class="p num">${px(n ? n.price : r.price)}</span></div></div>${rows}<div class="vg-cwrap">${body}</div></article>`;
   }
   function render() {
     const m = st.m, all = items(m), cnt = { entry: 0, pb: 0, brk: 0, late: 0, none: 0 }; all.forEach((x) => cnt[x.g]++);
     const q = st.q.toUpperCase(), shown = all.filter((x) => (q ? (x.name.toUpperCase().includes(q) || x.s.toUpperCase().startsWith(q)) : st.group ? x.g === st.group : x.g !== 'late' && x.g !== 'none') && (!st.dir || x.r.dir === st.dir)).sort((a, b) => GO[a.g] - GO[b.g] || a.name.localeCompare(b.name));
-    let html = '', cur = null;
-    for (const x of shown) { if (x.g !== cur) { cur = x.g; html += `<h3 class="vg-h">${ST[cur]}（${cnt[cur]}）</h3>`; } html += card(x); }
+    shown.sort((a, b) => GO[a.g] - GO[b.g] || a.name.localeCompare(b.name));
+    st.i = Math.max(0, Math.min(st.i, shown.length - 1));
+    const it = shown[st.i];
+    if (it && !st.charts[it.key]) loadChart(it);
+    const html = it ? `<div class="toolbar"><button class="ghost" data-step="-1" ${st.i ? '' : 'disabled'}>← 上一張</button><b>${esc(ST[it.g])}　第 ${st.i + 1} / ${shown.length} 張</b><button class="ghost" data-step="1" ${st.i < shown.length - 1 ? '' : 'disabled'}>下一張 →</button></div>${card(it)}` : '';
     const chip = (k) => `<button class="chip" data-g="${k}" aria-pressed="${st.group === k}">${ST[k]} <b>${cnt[k]}</b></button>`, at = st.data[m]?.at;
     el.innerHTML = `<div class="toolbar"><button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密（多空）</button><button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股（只做多）</button>
         <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
       <div class="toolbar">${['entry', 'pb', 'brk', 'late', 'none'].map(chip).join('')}<input id="ema-q" class="search" type="search" placeholder="搜尋代號或名稱" value="${esc(st.q)}" style="max-width:170px"><button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button><button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">${m === 'tw' ? '股價 10–200 元、成交值前 120 名；分時資料來自 Yahoo 財經。' : 'BingX 成交額前 80 名永續合約（資料用幣安合約）。'}${at ? `快照更新 ${fmtT(at)}。` : ''}日線以前一個已收盤日判斷。</p>
-      <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}</style><div class="vg-grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
+      ${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}`;
   }
   async function load(force = false) {
     const m = st.m; if (st.loading) return;
@@ -72,13 +74,15 @@ export function createEmaTab({ api, el }) {
     try { st.charts[it.key] = { data: await api(`/api/ema?chart=1&m=${st.m}&s=${encodeURIComponent(it.s)}&dir=${it.r.dir}`) }; } catch (e) { st.charts[it.key] = { err: e.message }; }
     render();
   }
-  el.addEventListener('keydown', (e) => { if (e.target.id === 'ema-q' && e.key === 'Enter') { st.q = e.target.value.trim(); render(); el.querySelector('#ema-q')?.focus(); } });
+  el.addEventListener('keydown', (e) => { if (e.target.id === 'ema-q' && e.key === 'Enter') { st.q = e.target.value.trim(); st.i = 0; render(); el.querySelector('#ema-q')?.focus(); } });
+  let x0 = null; el.addEventListener('touchstart', (e) => { x0 = e.target.closest('svg') ? e.touches[0].clientX : null; }, { passive: true });
+  el.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 70) { st.i += dx < 0 ? 1 : -1; render(); } });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.chart) { const k = b.dataset.chart; if (st.charts[k]) { delete st.charts[k]; render(); } else { const it = items(st.m).find((x) => x.key === k); if (it) loadChart(it); } }
-    else if (b.dataset.m) { st.m = b.dataset.m; render(); if (!st.loaded[st.m]) load(); }
-    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; render(); }
-    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
+    if (b.dataset.step) { st.i += +b.dataset.step; render(); window.scrollTo?.(0, el.offsetTop || 0); }
+    else if (b.dataset.m) { st.m = b.dataset.m; st.i = 0; render(); if (!st.loaded[st.m]) load(); }
+    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; st.i = 0; render(); }
+    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; st.i = 0; render(); }
     else if ('reload' in b.dataset) load(true);
   });
   return { load, render, get loaded() { return !!st.loaded[st.m]; }, get loading() { return st.loading; } };
