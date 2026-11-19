@@ -6,6 +6,7 @@ import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
 import { createS6Tab } from '/s6Tab.js';
 import { createEmaTab } from '/emaTab.js';
+import { createAmdTab } from '/amdTab.js';
 import { watchTypeset } from '/lib/typeset.js';
 
 const LS = 'wr_strat_sub';
@@ -84,12 +85,12 @@ const parts = (s) => String(s ?? '').split('；').map((x) => x.trim()).filter(Bo
 const lines = (s) => parts(s).map((x) => `<div class="cl">${fmt(x)}</div>`).join('');
 const bul = (arr) => arr.flatMap(parts).map((x) => `<li>${fmt(x)}</li>`).join('');
 
-// 維加斯頁：維加斯通道／均線突破 兩個檢視切換
+// 維加斯頁：維加斯通道／均線突破／AMD 操縱 三個檢視切換
 function createVegasWrap({ api, el }) {
-  el.innerHTML = '<div class="toolbar" id="vgw"><button class="chip" data-v="vg">維加斯通道</button><button class="chip" data-v="ema">均線突破（觀察用）</button></div><div id="vg-a"></div><div id="vg-b" hidden></div>';
-  const kid = { vg: createVegasTab({ api, el: el.querySelector('#vg-a') }), ema: createEmaTab({ api, el: el.querySelector('#vg-b') }) };
+  el.innerHTML = '<div class="toolbar" id="vgw"><button class="chip" data-v="vg">維加斯通道</button><button class="chip" data-v="ema">均線突破（觀察用）</button><button class="chip" data-v="amd">AMD 操縱（觀察用）</button></div><div id="vg-a"></div><div id="vg-b" hidden></div><div id="vg-c" hidden></div>';
+  const kid = { vg: createVegasTab({ api, el: el.querySelector('#vg-a') }), ema: createEmaTab({ api, el: el.querySelector('#vg-b') }), amd: createAmdTab({ api, el: el.querySelector('#vg-c') }) };
   let v = 'vg'; try { const x = localStorage.getItem(LS + '_vg'); if (kid[x]) v = x; } catch {}
-  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.querySelector('#vg-a').hidden = v !== 'vg'; el.querySelector('#vg-b').hidden = v !== 'ema'; kid[v].render(); };
+  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.querySelector('#vg-a').hidden = v !== 'vg'; el.querySelector('#vg-b').hidden = v !== 'ema'; el.querySelector('#vg-c').hidden = v !== 'amd'; kid[v].render(); };
   el.querySelector('#vgw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; v = b.dataset.v; try { localStorage.setItem(LS + '_vg', v); } catch {} show(); if (!kid[v].loaded && !kid[v].loading) kid[v].load(); });
   return { load() { show(); if (!kid[v].loaded) kid[v].load(); }, render: show, get loaded() { return kid[v].loaded; }, get loading() { return kid[v].loading; } };
 }
