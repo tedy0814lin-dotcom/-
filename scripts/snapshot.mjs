@@ -122,7 +122,7 @@ async function emaScan(m, L, per) {
     for (const [s, v] of Object.entries(j)) {
       if (v.error) { out[s] = { error: v.error }; continue; }
       const slim = {}, full = {};
-      for (const [k, r] of Object.entries(v)) { if (!r) continue; const { chart, ...rest } = r; slim[k] = rest; if (chart && r.now) full[k] = chart; }
+      for (const [k, r] of Object.entries(v)) { if (!r) continue; const { chart, ...rest } = r; slim[k] = rest; if (chart) full[k] = chart; }
       out[s] = slim; ok++;
       if (Object.keys(full).length) write(`ema_c_${m}_${s.replace(/[^A-Za-z0-9]/g, '_')}`, full);
     }
