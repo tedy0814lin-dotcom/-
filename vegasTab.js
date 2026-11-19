@@ -117,7 +117,7 @@ function bestTf(r, m) {
 }
 
 export function createVegasTab({ api, el }) {
-  const st = { m: 'crypto', list: {}, rows: {}, loading: false, progress: '', error: '', showAll: false, loaded: {}, charts: {}, i: 0 };
+  const st = { m: 'crypto', list: {}, rows: {}, loading: false, progress: '', error: '', showAll: false, loaded: {}, charts: {} };
 
   function chartBlock(r, m, ex) {
     const tfBtns = TFS[m].map((tf) => `<button class="chip vg-tf" data-ctf="${esc(r.s)}|${tf}" aria-pressed="${ex.tf === tf}">${TFN[tf]}</button>`).join('');
@@ -127,7 +127,7 @@ export function createVegasTab({ api, el }) {
     return `<div class="vg-chart"><div class="vg-tfbar">${tfBtns}<span class="muted small">訊號在哪個時區就看哪個；想看整體趨勢、價格在高量牆還是真空帶，就切到高時區</span></div>${body}</div>`;
   }
   async function loadChart(sym, tf) {
-    st.charts[sym] = { tf, loading: true }; render();
+    st.charts[sym] = { tf, loading: true }; paint(sym);
     const get = () => api(`/api/vegas?chart=1&m=${st.m}&s=${encodeURIComponent(sym)}&tf=${tf}`);
     try { st.charts[sym] = { tf, data: await get() }; }
     catch (e1) { // 幣安偶爾限流（429），隔 1.5 秒自動再試一次
@@ -135,7 +135,23 @@ export function createVegasTab({ api, el }) {
       if (st.charts[sym]?.tf !== tf) return;
       try { st.charts[sym] = { tf, data: await get() }; } catch (e2) { st.charts[sym] = { tf, err: e2.message }; }
     }
-    render();
+    paint(sym);
+  }
+  // 只更新那一張卡的圖，不重畫整個清單（不會跳位置）
+  function paint(sym) {
+    const w = el.querySelector(`[data-ck="${CSS.escape(sym)}"] .vg-cwrap`), r = (st.rows[st.m] || []).find((x) => x.s === sym);
+    if (w && r) w.innerHTML = chartWrap(r, st.m);
+  }
+  const chartWrap = (r, m) => { const ex = st.charts[r.s]; return ex ? chartBlock(r, m, ex) : '<div class="muted small" style="padding:10px">載入圖中…</div>'; };
+  // 滑到才載圖
+  let io;
+  function observe() {
+    io?.disconnect();
+    io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return; io.unobserve(e.target);
+      const sym = e.target.dataset.ck; if (!st.charts[sym]) loadChart(sym, e.target.dataset.tf);
+    }), { rootMargin: '700px 0px' });
+    el.querySelectorAll('article[data-ck]').forEach((a) => io.observe(a));
   }
 
   async function load(force = false) {
@@ -173,14 +189,14 @@ export function createVegasTab({ api, el }) {
     st.loading = false; st.progress = ''; render();
   }
 
-  // 一頁一張：list＝[{ r, tag }]
+  // 上下滑動：list＝[{ r, tag }]
   const dtf = (r, m) => grade(r, m)?.tf || bestTf(r, m)?.tf || TFS[m][TFS[m].length - 1];
   function page(list, m) {
-    st.i = Math.max(0, Math.min(st.i, list.length - 1));
-    const x = list[st.i]; if (!x) return '';
-    const ok = x.r.data && !x.r.data.error;
-    if (ok && !st.charts[x.r.s]) loadChart(x.r.s, dtf(x.r, m));
-    return `<div class="toolbar"><button class="ghost" data-step="-1" ${st.i ? '' : 'disabled'}>← 上一張</button><b>${esc(x.tag)}　第 ${st.i + 1} / ${list.length} 張</b><button class="ghost" data-step="1" ${st.i < list.length - 1 ? '' : 'disabled'}>下一張 →</button></div>${ok ? card(x.r, m) : `<p class="muted">${esc(x.r.name)}：資料還在載入或抓不到</p>`}`;
+    if (!list.length) return '';
+    return `<p class="muted">共 ${list.length} 檔，往下滑看下一檔</p>` + list.map((x, i) => {
+      const ok = x.r.data && !x.r.data.error;
+      return `<div class="muted small" style="margin:14px 0 4px"><b>${esc(x.tag)}</b>　${i + 1} / ${list.length}</div>${ok ? card(x.r, m) : `<p class="muted">${esc(x.r.name)}：資料還在載入或抓不到</p>`}`;
+    }).join('');
   }
 
   function card(r, m) {
@@ -204,11 +220,10 @@ export function createVegasTab({ api, el }) {
       if (H && H.ago <= 10) now += `${now ? '<br>' : ''}<span class="${H.dir > 0 ? 'up' : 'down'}">諧波 ${esc(H.name)} ${H.dir > 0 ? '看漲' : '看跌'}</span> D ${px(H.D)}（${H.ago} 根前）${H.inBig ? '・D 在大通道' : H.inSmall ? '・D 在小通道' : ''}・停損 ${px(H.stop)}`;
       return `<div class="vg-row"><span class="k">${TFN[tf]}</span>${tr}${now ? ' ・ ' + now : ''}</div>`;
     }).join('');
-    const ex = st.charts[r.s];
-    return `<article class="card"><div class="card-head"><span class="sym num">${esc(r.name)}</span>${badge}
+    return `<article class="card" data-ck="${esc(r.s)}" data-tf="${dtf(r, m)}"><div class="card-head"><span class="sym num">${esc(r.name)}</span>${badge}
       <div class="price"><span class="p num">${px(r.data?.[TFS[m][0]]?.price)}</span></div></div>
       ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}<details class="vg-tfs"><summary>各時區訊號（進場／停損／目標）</summary>${rowsHtml}</details>
-      <div class="vg-cwrap">${ex ? chartBlock(r, m, ex) : '<div class="muted small" style="padding:10px">載入圖中…</div>'}</div></article>`;
+      <div class="vg-cwrap">${chartWrap(r, m)}</div></article>`;
   }
 
   function render() {
@@ -230,6 +245,7 @@ export function createVegasTab({ api, el }) {
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">${m === 'tw' ? `股價 10–200 元、成交值前 120 名，日線通道糾纏的已跳過（${skipped} 檔）。分時資料來自 Yahoo 財經，約延遲 20 分鐘。` : 'BingX 成交額前 80 名永續合約。'}依分數由高到低排序；「觀察」預設收起，點上面的按鈕可以只看某一類。</p>
       ${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}`;
+    observe();
   }
 
   const toolbar = (m) => `<div class="toolbar">
@@ -249,6 +265,7 @@ export function createVegasTab({ api, el }) {
       return grade(r, m) ? '' : '三個時區目前都沒有訊號';
     };
     el.innerHTML = toolbar(m) + `<p class="muted">搜尋「${esc(st.q)}」：${hit.length} 筆${st.searching ? '，查詢中…' : ''}</p>${page(hit.map((r) => ({ r, tag: why(r) || r.name })), m)}`;
+    observe();
   }
 
   // 清單裡沒有的代號：直接向伺服器查
@@ -284,18 +301,15 @@ export function createVegasTab({ api, el }) {
 
   el.addEventListener('keydown', (e) => {
     if (e.target.id !== 'vg-q' || e.key !== 'Enter') return;
-    st.q = e.target.value.trim(); st.i = 0;
+    st.q = e.target.value.trim();
     if (st.q) lookup(st.m, st.q); else render();
   });
-  let x0 = null; el.addEventListener('touchstart', (e) => { x0 = e.target.closest('svg') ? e.touches[0].clientX : null; }, { passive: true });
-  el.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 70) { st.i += dx < 0 ? 1 : -1; render(); } });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.step) { st.i += +b.dataset.step; render(); }
-    else if (b.dataset.ctf) { const [sym, tf] = b.dataset.ctf.split('|'); if (st.charts[sym]?.tf !== tf || st.charts[sym]?.err) loadChart(sym, tf); }
-    else if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; st.i = 0; render(); if (!st.loaded[st.m]) load(); }
-    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; st.i = 0; render(); }
-    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; st.i = 0; render(); }
+    if (b.dataset.ctf) { const [sym, tf] = b.dataset.ctf.split('|'); if (st.charts[sym]?.tf !== tf || st.charts[sym]?.err) loadChart(sym, tf); }
+    else if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; render(); if (!st.loaded[st.m]) load(); }
+    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; render(); }
+    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
     else if ('reload' in b.dataset) load(true);
   });
   return { load, render, get loaded() { return !!st.loaded[st.m]; } };
