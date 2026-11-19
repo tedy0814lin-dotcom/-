@@ -46,7 +46,7 @@ async function crypto(sym) {
   return { '15m': m15, '1h': h1, '4h': h4 };
 }
 
-async function yahooBars(sym, interval, range) {
+export async function yahooBars(sym, interval, range) {
   let j, e0;
   for (const h of ['query1', 'query2', 'query1']) { // Yahoo 偶爾限流（429），換主機再試
     try { j = await getJSON(`https://${h}.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`, { timeout: 12000, retries: 0 }); break; }

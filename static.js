@@ -60,6 +60,14 @@ export async function staticApi(path) {
       }
       return pickKeys(await snap('vegas_scan_' + q.m), list(q.s));
     }
+    case 'crt': {
+      if (q.chart) {
+        const d = (await snap(`crt_c_${q.m}_${String(q.s).replace(/[^A-Za-z0-9]/g, '_')}`).catch(() => null))?.[q.tf];
+        if (!d) throw new Error('這檔的 CRT 圖還沒有（只有目前有狀態的才有圖）');
+        return d;
+      }
+      return snap('crt_scan_' + q.m);
+    }
     case 'avgtrade': {
       const c = (await snap('avgtrade'))?.[q.from];
       if (!c) throw new Error('這個星期的成交資料還沒有');
