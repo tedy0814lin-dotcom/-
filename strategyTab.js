@@ -5,7 +5,6 @@ import { createVegasTab } from '/vegasTab.js';
 import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
 import { createS6Tab } from '/s6Tab.js';
-import { createCrtTab } from '/crtTab.js';
 import { createEmaTab } from '/emaTab.js';
 import { watchTypeset } from '/lib/typeset.js';
 
@@ -57,14 +56,6 @@ const CARDS = [
       { h: '策略原理', li: ['足跡圖看每根 K 棒的主動買／賣量（Delta）。買盤一階一階把價格推高，代表買方持續吃單、賣方撐不住。'] },
       { h: '提醒', li: ['BingX 沒有主動買賣量，Delta 用 OHLCV 近似（強度約幣安真 Delta 的 55～65%），期望值比幣安真 Delta 低。'] },
     ] },
-  { id: 'crt', cat: '看圖輔助', verdict: ['no', '回測 −0.12R，觀察用'], mk: '加密＋台股', tf: '1H／4H／日線 CRT', side: '多空（台股只做多）', by: 'Yuki CRT 教室', title: 'CRT 區間掃蕩',
-    note: ['C1 定區間、C2 掃一端收回、LTF 的 TBS→MSS→CISD 進場', '圖上畫 CRH／CRL、進場、止損、TP1～TP3'],
-    stats: [['專案回測（4H CRT＋KL＋15 分，加密 60 檔）', '−0.12R／筆（扣費）'], ['毛報酬（未扣費）', '−0.02R'], ['對照隨機進場', '沒有比較好'], ['1H CRT＋5 分進場', '沒有資料，未回測']],
-    doc: [
-      { h: '進場規則', li: ['C1 的高低點＝CRH／CRL；C2 刺破其中一端、收盤回到區間內，C3 往另一端走。', '掃蕩範圍要碰到關鍵區 KL：前日高低、時段高低、等高等低、OHP／OLP、A／V 水平、FVG、OB。', '進場看低週期：先 TBS（K 棒實體掃過前低高再收回），再出現帶缺口的 MSS，最後 CISD（收盤站回最後一段反向 K 的開盤）進場。', '保守＝C2 收盤確認收回後進場；激進＝C2 還沒收盤，條件到了就進。加密 1H CRT 用 5 分、4H CRT 用 15 分；台股日線 CRT 用 15 分且只做多。'] },
-      { h: '出場規則', li: ['止損：掃蕩點外側再加 0.1 倍 ATR。', 'TP1＝C1 區間 50%；TP2＝區間另一端；TP3＝外側流動性（前面更遠的高低點）。', 'TP1 到價後止損移到進場價（保本）。進場後最多追蹤 2 根 CRT K 棒。', '盈虧比 TP1 不到 1:1、或止損超過價格 3%（4H 6%、台股 8%）的不顯示進場。'] },
-      { h: '提醒', li: ['2026-11 專案回測（加密 60 檔、15 分資料 2023-01～2026-09、77,595 筆）：扣 0.1% 手續費後約 −0.12R，各年份、各種 KL、各種出場都是負的，跟用同樣出場的隨機進場沒有差別。', '所以這一頁是「看圖與前向觀察」：不計分、不推播、不進策略對比表。要改成有效策略，要先通過回測（扣費後 ≥ +0.10R、前後半段皆為正、贏過隨機）。', '1H CRT＋5 分進場沒有 5 分歷史資料可以回測，目前完全沒有驗證。', '圖上的位置是用目前已收盤 K 棒推算，TBS／MSS／缺口以最近一次為準。'] },
-    ] },
 ];
 // 台股策略對比表：數字都是 2026-11-14 重跑的回測（排除 2026），範圍＝不同窗口／出場設定下的最低～最高。
 const CMP = [
@@ -104,14 +95,13 @@ function createVegasWrap({ api, el }) {
 }
 
 export function createStrategyTab({ api, el, goto }) {
-  el.innerHTML = '<div id="st-cmp"></div><div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-more"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div><div id="st-crt" hidden></div>';
+  el.innerHTML = '<div id="st-cmp"></div><div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-more"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div>';
   const kids = {
     s6: createS6Tab({ api, el: el.querySelector('#st-s6') }),
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
     vg: createVegasWrap({ api, el: el.querySelector('#st-vg') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
-    crt: createCrtTab({ api, el: el.querySelector('#st-crt') }),
   };
   watchTypeset(el);
   let sub = 's6';
