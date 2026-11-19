@@ -50,7 +50,6 @@ export function createEmaTab({ api, el }) {
     const chip = (k) => `<button class="chip" data-g="${k}" aria-pressed="${st.group === k}">${ST[k]} <b>${cnt[k]}</b></button>`, at = st.data[m]?.at;
     el.innerHTML = `<div class="toolbar"><button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密（多空）</button><button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股（只做多）</button>
         <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
-      <div class="panel warn">觀察用，不計分、不推播。回測：加密 15 分 K（12 檔、2021～2026）扣費後每筆 −0.10～−0.13R、台股 1H「回踩再突破」每筆 −0.22R，都不比隨機進場好；你實際用的 5 分／1 分進場沒有歷史資料，無法回測。這裡只列「日線站上全部均線＋長均線不糾結不太斜＋1H 剛從均線帶下方突破」的標的，進場請自己看小級別判斷。</div>
       <div class="toolbar">${['entry', 'pb', 'brk', 'late'].map(chip).join('')}<button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button><button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">${m === 'tw' ? '股價 10–200 元、成交值前 120 名；分時資料來自 Yahoo 財經。' : 'BingX 成交額前 80 名永續合約（資料用幣安合約）。'}${at ? `快照更新 ${fmtT(at)}。` : ''}日線以前一個已收盤日判斷。</p>
