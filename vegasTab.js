@@ -117,7 +117,7 @@ function bestTf(r, m) {
 }
 
 export function createVegasTab({ api, el }) {
-  const st = { m: 'crypto', list: {}, rows: {}, loading: false, progress: '', error: '', showAll: false, loaded: {}, charts: {} };
+  const st = { m: 'crypto', list: {}, rows: {}, loading: false, progress: '', error: '', showAll: false, loaded: {}, charts: {}, i: 0 };
 
   function chartBlock(r, m, ex) {
     const tfBtns = TFS[m].map((tf) => `<button class="chip vg-tf" data-ctf="${esc(r.s)}|${tf}" aria-pressed="${ex.tf === tf}">${TFN[tf]}</button>`).join('');
@@ -173,6 +173,16 @@ export function createVegasTab({ api, el }) {
     st.loading = false; st.progress = ''; render();
   }
 
+  // 一頁一張：list＝[{ r, tag }]
+  const dtf = (r, m) => grade(r, m)?.tf || bestTf(r, m)?.tf || TFS[m][TFS[m].length - 1];
+  function page(list, m) {
+    st.i = Math.max(0, Math.min(st.i, list.length - 1));
+    const x = list[st.i]; if (!x) return '';
+    const ok = x.r.data && !x.r.data.error;
+    if (ok && !st.charts[x.r.s]) loadChart(x.r.s, dtf(x.r, m));
+    return `<div class="toolbar"><button class="ghost" data-step="-1" ${st.i ? '' : 'disabled'}>← 上一張</button><b>${esc(x.tag)}　第 ${st.i + 1} / ${list.length} 張</b><button class="ghost" data-step="1" ${st.i < list.length - 1 ? '' : 'disabled'}>下一張 →</button></div>${ok ? card(x.r, m) : `<p class="muted">${esc(x.r.name)}：資料還在載入或抓不到</p>`}`;
+  }
+
   function card(r, m) {
     const g = grade(r, m), bt = bestTf(r, m);
     const n = g?.n;
@@ -198,11 +208,10 @@ export function createVegasTab({ api, el }) {
     }).join('');
     const tip = bt ? `<div class="muted">這檔歷史上 <b>${TFN[bt.tf]}</b> 最有效（勝率 ${bt.rate}%，${bt.n} 次）</div>` : '';
     const ex = st.charts[r.s];
-    const cbtn = `<button class="ghost vg-cbtn" data-chart="${esc(r.s)}">${ex ? '收起圖' : '展開看圖（K 線＋通道＋成交量分布）'}</button>`;
     return `<article class="card"><div class="card-head"><span class="sym num">${esc(r.name)}</span>${badge}
       <div class="price"><span class="p num">${px(r.data?.[TFS[m][0]]?.price)}</span></div></div>
       ${g?.notes?.length ? `<div class="muted">${esc(g.notes.join('・'))}</div>` : ''}${rowsHtml}${tip}
-      <div class="vg-cwrap">${cbtn}${ex ? chartBlock(r, m, ex) : ''}</div></article>`;
+      <div class="vg-cwrap">${ex ? chartBlock(r, m, ex) : '<div class="muted small" style="padding:10px">載入圖中…</div>'}</div></article>`;
   }
 
   function render() {
@@ -215,11 +224,7 @@ export function createVegasTab({ api, el }) {
     graded.forEach((x) => cnt[x.g.group]++);
     const shown = graded.filter((x) => (st.group ? x.g.group === st.group : st.showAll || x.g.group !== 'far') && (!st.dir || x.g.n.dir === st.dir))
       .sort((a, b) => GO[a.g.group] - GO[b.g.group] || b.g.sc - a.g.sc);
-    let html = '', cur = null;
-    for (const x of shown) {
-      if (x.g.group !== cur) { cur = x.g.group; html += `<h3 class="vg-h">${GROUPS[cur][0]}（${cnt[cur]}）<span class="muted"> ${GROUPS[cur][1]}</span></h3>`; }
-      html += card(x.r, m);
-    }
+    const html = page(shown.map((x) => ({ r: x.r, tag: GROUPS[x.g.group][0] })), m);
     const chip = (k) => `<button class="chip" data-g="${k}" aria-pressed="${st.group === k}">${GROUPS[k][0]} <b>${cnt[k]}</b></button>`;
     el.innerHTML = toolbar(m) + `
       <div class="toolbar">${['hot', 'ready', 'watch', 'far'].map(chip).join('')}
@@ -227,7 +232,7 @@ export function createVegasTab({ api, el }) {
         <button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">${m === 'tw' ? `股價 10–200 元、成交值前 120 名，日線通道糾纏的已跳過（${skipped} 檔）。分時資料來自 Yahoo 財經，約延遲 20 分鐘。` : 'BingX 成交額前 80 名永續合約。'}依分數由高到低排序；「觀察」預設收起，點上面的按鈕可以只看某一類。</p>
-      <style>.vg-h{grid-column:1/-1;font-size:15px;margin:14px 0 0}.vg-h .muted{font-size:12.5px;font-weight:400}</style><div class="vg-grid">${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}</div>`;
+      ${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}`;
   }
 
   const toolbar = (m) => `<div class="toolbar">
@@ -246,7 +251,7 @@ export function createVegasTab({ api, el }) {
       if (m === 'tw' && !r.data['1d']?.smooth) return '日線通道糾纏，平常會被跳過';
       return grade(r, m) ? '' : '三個時區目前都沒有訊號';
     };
-    el.innerHTML = toolbar(m) + `<p class="muted">搜尋「${esc(st.q)}」：${hit.length} 筆${st.searching ? '，查詢中…' : ''}</p><div class="vg-grid">${hit.map((r) => { const w = why(r); return (w ? `<p class="muted" style="grid-column:1/-1;margin:6px 0 0">${esc(r.name)}：${esc(w)}</p>` : '') + (r.data && !r.data.error ? card(r, m) : ''); }).join('')}</div>`;
+    el.innerHTML = toolbar(m) + `<p class="muted">搜尋「${esc(st.q)}」：${hit.length} 筆${st.searching ? '，查詢中…' : ''}</p>${page(hit.map((r) => ({ r, tag: why(r) || r.name })), m)}`;
   }
 
   // 清單裡沒有的代號：直接向伺服器查
@@ -282,20 +287,18 @@ export function createVegasTab({ api, el }) {
 
   el.addEventListener('keydown', (e) => {
     if (e.target.id !== 'vg-q' || e.key !== 'Enter') return;
-    st.q = e.target.value.trim();
+    st.q = e.target.value.trim(); st.i = 0;
     if (st.q) lookup(st.m, st.q); else render();
   });
+  let x0 = null; el.addEventListener('touchstart', (e) => { x0 = e.target.closest('svg') ? e.touches[0].clientX : null; }, { passive: true });
+  el.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 70) { st.i += dx < 0 ? 1 : -1; render(); } });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.chart) {
-      const sym = b.dataset.chart;
-      if (st.charts[sym]) { delete st.charts[sym]; render(); }
-      else { const r = (st.rows[st.m] || []).find((x) => x.s === sym); const tf = grade(r, st.m)?.tf || bestTf(r, st.m)?.tf || TFS[st.m][TFS[st.m].length - 1]; loadChart(sym, tf); }
-    }
+    if (b.dataset.step) { st.i += +b.dataset.step; render(); }
     else if (b.dataset.ctf) { const [sym, tf] = b.dataset.ctf.split('|'); if (st.charts[sym]?.tf !== tf || st.charts[sym]?.err) loadChart(sym, tf); }
-    else if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; render(); if (!st.loaded[st.m]) load(); }
-    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; render(); }
-    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
+    else if (b.dataset.m) { st.m = b.dataset.m; st.q = ''; st.i = 0; render(); if (!st.loaded[st.m]) load(); }
+    else if (b.dataset.g) { st.group = st.group === b.dataset.g ? null : b.dataset.g; st.i = 0; render(); }
+    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; st.i = 0; render(); }
     else if ('reload' in b.dataset) load(true);
   });
   return { load, render, get loaded() { return !!st.loaded[st.m]; } };
