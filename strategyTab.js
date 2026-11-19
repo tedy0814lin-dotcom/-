@@ -39,6 +39,8 @@ const CARDS = [
       { h: '均線突破檢視（切換按鈕，觀察用）', li: ['你的規則：EMA 12／45／144／169／288／338；日線站上全部均線、EMA144／169／288／338 不糾結（最高−最低 ≥ 0.5×ATR）且不太斜；1H 第一次收盤站上全部均線（突破前曾在均線帶下方）→ 回踩均線 → 再突破＝進場訊號；止損＝回踩最低−0.1×ATR，止盈 2R。加密可做空（鏡像）。', '專案回測：加密 15 分（12 檔、2021～2026）扣費後每筆 −0.10～−0.13R；台股 1H（約 3 年）回踩再突破 −0.22R；都沒有比隨機進場好，所以不計分、不推播，只列清單與畫圖。你用的 5 分／1 分進場沒有歷史資料，無法回測。'] },
       { h: '提醒', li: ['2026-11-12 用 1,943 檔台股日線重測（排除 2026）：做多全部 −0.05R，「大通道」子集 +0.07～+0.12R 但區間含 0、後半段轉負；原本卡片的 +0.55R 沒有重現，已拿掉大通道加分。', '其他台股加減分（通道距離）尚未重驗；台股日線沒有穩定優勢，當看圖輔助即可。'] },
     ] },
+  { id: 'amd', cat: '看圖輔助', verdict: ['no', '觀察用，回測為負'], mk: '台股', tf: '1H', side: '多空', by: '你的規則', title: 'AMD 操縱模型',
+    stats: [['台股 1H 回測（2R／24 根，扣費）', '−0.30R'], ['你肉眼標記吻合（即時 40 張）', '57%']] },
   { id: 'pk', cat: '選股參考', verdict: ['mid', '觀察用，沒贏 0050'], mk: '台股', tf: '日線', side: '做多', by: '台股選股', title: '大單推升',
     note: ['每筆平均成交股數暴增、當日大漲、站上月線', '少數大戶在買，隔天開盤買'],
     stats: [['每筆贏 0050', '+0.02%'], ['90% 區間', '−1.62～+1.55'], ['投組年化 5 槽／10 槽', '+7.8%／+24.2%'], ['勝率（810 筆）', '33%']],
@@ -85,22 +87,23 @@ const parts = (s) => String(s ?? '').split('；').map((x) => x.trim()).filter(Bo
 const lines = (s) => parts(s).map((x) => `<div class="cl">${fmt(x)}</div>`).join('');
 const bul = (arr) => arr.flatMap(parts).map((x) => `<li>${fmt(x)}</li>`).join('');
 
-// 維加斯頁：維加斯通道／均線突破／AMD 操縱 三個檢視切換
+// 維加斯頁：維加斯通道／均線突破 兩個檢視切換
 function createVegasWrap({ api, el }) {
-  el.innerHTML = '<div class="toolbar" id="vgw"><button class="chip" data-v="vg">維加斯通道</button><button class="chip" data-v="ema">均線突破（觀察用）</button><button class="chip" data-v="amd">AMD 操縱（觀察用）</button></div><div id="vg-a"></div><div id="vg-b" hidden></div><div id="vg-c" hidden></div>';
-  const kid = { vg: createVegasTab({ api, el: el.querySelector('#vg-a') }), ema: createEmaTab({ api, el: el.querySelector('#vg-b') }), amd: createAmdTab({ api, el: el.querySelector('#vg-c') }) };
+  el.innerHTML = '<div class="toolbar" id="vgw"><button class="chip" data-v="vg">維加斯通道</button><button class="chip" data-v="ema">均線突破（觀察用）</button></div><div id="vg-a"></div><div id="vg-b" hidden></div>';
+  const kid = { vg: createVegasTab({ api, el: el.querySelector('#vg-a') }), ema: createEmaTab({ api, el: el.querySelector('#vg-b') }) };
   let v = 'vg'; try { const x = localStorage.getItem(LS + '_vg'); if (kid[x]) v = x; } catch {}
-  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.querySelector('#vg-a').hidden = v !== 'vg'; el.querySelector('#vg-b').hidden = v !== 'ema'; el.querySelector('#vg-c').hidden = v !== 'amd'; kid[v].render(); };
+  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.querySelector('#vg-a').hidden = v !== 'vg'; el.querySelector('#vg-b').hidden = v !== 'ema'; kid[v].render(); };
   el.querySelector('#vgw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; v = b.dataset.v; try { localStorage.setItem(LS + '_vg', v); } catch {} show(); if (!kid[v].loaded && !kid[v].loading) kid[v].load(); });
   return { load() { show(); if (!kid[v].loaded) kid[v].load(); }, render: show, get loaded() { return kid[v].loaded; }, get loading() { return kid[v].loading; } };
 }
 
 export function createStrategyTab({ api, el, goto }) {
-  el.innerHTML = '<div id="st-cmp"></div><div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-more"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div>';
+  el.innerHTML = '<div id="st-cmp"></div><div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-more"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-amd" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div>';
   const kids = {
     s6: createS6Tab({ api, el: el.querySelector('#st-s6') }),
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
     vg: createVegasWrap({ api, el: el.querySelector('#st-vg') }),
+    amd: createAmdTab({ api, el: el.querySelector('#st-amd') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
   };
@@ -112,7 +115,7 @@ export function createStrategyTab({ api, el, goto }) {
     el.querySelector('#st-cards').innerHTML = CARDS.map((c) => `<button class="st-card${c.link ? ' st-link' : ''}" type="button" role="tab" data-sub="${c.id}" aria-selected="${c.id === sub}">
       <div class="st-top"><span class="st-title">${esc(c.title)}${c.sub ? `<span class="st-sub">${esc(c.sub)}</span>` : ''}</span><span class="st-by">${esc(c.by)}</span></div>
       <div class="st-tags">${c.cat ? `<span class="st-cat">${esc(c.cat)}</span>` : ''}<span>${esc(c.mk)}</span><span>${esc(c.tf)}</span><span>${esc(c.side)}</span>${c.verdict ? `<span class="st-v st-v-${c.verdict[0]}">${esc(c.verdict[1])}</span>` : ''}</div>
-      <p class="st-note">${[].concat(c.note).map((x) => `<span>${fmt(x)}</span>`).join('')}</p>
+      <p class="st-note">${[].concat(c.note ?? []).map((x) => `<span>${fmt(x)}</span>`).join('')}</p>
       <dl class="st-stats">${c.stats.map(([k, v]) => `<div${String(v).length > 9 || String(k).length > 12 ? ' class="wide"' : ''}><dt>${esc(k)}</dt><dd class="num">${fmt(v)}</dd></div>`).join('')}</dl>
       </button>`).join('');
   }
