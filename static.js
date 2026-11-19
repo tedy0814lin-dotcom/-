@@ -68,6 +68,14 @@ export async function staticApi(path) {
       }
       return snap('crt_scan_' + q.m);
     }
+    case 'ema': {
+      if (q.chart) {
+        const d = (await snap(`ema_c_${q.m}_${String(q.s).replace(/[^A-Za-z0-9]/g, '_')}`).catch(() => null))?.[q.dir === '-1' ? 'S' : 'L'];
+        if (!d) throw new Error('這檔的圖還沒有（只有目前有狀態的才有圖）');
+        return d;
+      }
+      return snap('ema_scan_' + q.m);
+    }
     case 'avgtrade': {
       const c = (await snap('avgtrade'))?.[q.from];
       if (!c) throw new Error('這個星期的成交資料還沒有');

@@ -6,6 +6,7 @@ import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
 import { createS6Tab } from '/s6Tab.js';
 import { createCrtTab } from '/crtTab.js';
+import { createEmaTab } from '/emaTab.js';
 import { watchTypeset } from '/lib/typeset.js';
 
 const LS = 'wr_strat_sub';
@@ -29,12 +30,13 @@ const CARDS = [
       { h: '提醒', li: ['數字是用幣安資料回測，改用 BingX 資料後尚未重驗。', '最大回撤 −45%，勝率低，連續虧損是常態；驗證期年化 +23% 低於全期 +49%。'] },
     ] },
   { id: 'vg', cat: '看圖輔助', verdict: ['no', '台股無穩定優勢'], mk: '加密＋台股', tf: '15 分～日線', side: '多空', by: '你的規則', title: '維加斯通道',
-    note: ['價格回踩 EMA 通道、突破確認後進場', '每檔依共振與歷史勝率打 0～100 分'],
+    note: ['價格回踩 EMA 通道、突破確認後進場', '每檔依共振與歷史勝率打 0～100 分', '頁內可切換「均線突破」檢視（觀察用）'],
     stats: [['台股日線全部做多', '−0.05～+0.03R'], ['台股日線大通道子集', '+0.07～+0.12R'], ['區間（排除 2026）', '皆含 0'], ['樣本（全部／大通道）', '1,954／608 筆']],
     doc: [
       { h: '進場規則（做多，做空全部反過來）', li: ['前提：小通道（EMA144／169）整條在大通道（EMA288／338）之上，最近 30 根都維持、大通道往上、兩通道有拉開。', '① 價格回到通道（碰小通道或大通道）。', '② 第一次收盤站上 EMA12（突破 K）。', '③ 回踩 EMA12 有拒絕（下影線或收紅、收在 EMA12 之上）。', '④ 價格突破「突破 K」的高點＝確認，進場。'] },
       { h: '出場規則', li: ['停損：回踩低點再下 0.1 倍 ATR。', '目標：碰通道前 60 根內的最高價；若沒有高於進場價，就用 2 倍風險（風報比 1:2）。'] },
       { h: '策略原理', li: ['趨勢裡價格回測均線通道後順勢再起，通道提供支撐，停損點明確。', '訊號分數：確認 50／回踩完成 35／突破 EMA12 25／碰通道 10 為底，再加減大時區共振、這檔歷史勝率（±20）、風報比 ≥2、主動買賣與帶量；分數只加減經回測有效的條件。'] },
+      { h: '均線突破檢視（切換按鈕，觀察用）', li: ['你的規則：EMA 12／45／144／169／288／338；日線站上全部均線、EMA144／169／288／338 不糾結（最高−最低 ≥ 0.5×ATR）且不太斜；1H 第一次收盤站上全部均線（突破前曾在均線帶下方）→ 回踩均線 → 再突破＝進場訊號；止損＝回踩最低−0.1×ATR，止盈 2R。加密可做空（鏡像）。', '專案回測：加密 15 分（12 檔、2021～2026）扣費後每筆 −0.10～−0.13R；台股 1H（約 3 年）回踩再突破 −0.22R；都沒有比隨機進場好，所以不計分、不推播，只列清單與畫圖。你用的 5 分／1 分進場沒有歷史資料，無法回測。'] },
       { h: '提醒', li: ['2026-11-12 用 1,943 檔台股日線重測（排除 2026）：做多全部 −0.05R，「大通道」子集 +0.07～+0.12R 但區間含 0、後半段轉負；原本卡片的 +0.55R 沒有重現，已拿掉大通道加分。', '其他台股加減分（通道距離）尚未重驗；台股日線沒有穩定優勢，當看圖輔助即可。'] },
     ] },
   { id: 'pk', cat: '選股參考', verdict: ['mid', '觀察用，沒贏 0050'], mk: '台股', tf: '日線', side: '做多', by: '台股選股', title: '大單推升',
@@ -91,12 +93,22 @@ const parts = (s) => String(s ?? '').split('；').map((x) => x.trim()).filter(Bo
 const lines = (s) => parts(s).map((x) => `<div class="cl">${fmt(x)}</div>`).join('');
 const bul = (arr) => arr.flatMap(parts).map((x) => `<li>${fmt(x)}</li>`).join('');
 
+// 維加斯頁：維加斯通道／均線突破 兩個檢視切換
+function createVegasWrap({ api, el }) {
+  el.innerHTML = '<div class="toolbar" id="vgw"><button class="chip" data-v="vg">維加斯通道</button><button class="chip" data-v="ema">均線突破（觀察用）</button></div><div id="vg-a"></div><div id="vg-b" hidden></div>';
+  const kid = { vg: createVegasTab({ api, el: el.querySelector('#vg-a') }), ema: createEmaTab({ api, el: el.querySelector('#vg-b') }) };
+  let v = 'vg'; try { const x = localStorage.getItem(LS + '_vg'); if (kid[x]) v = x; } catch {}
+  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.querySelector('#vg-a').hidden = v !== 'vg'; el.querySelector('#vg-b').hidden = v !== 'ema'; kid[v].render(); };
+  el.querySelector('#vgw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; v = b.dataset.v; try { localStorage.setItem(LS + '_vg', v); } catch {} show(); if (!kid[v].loaded && !kid[v].loading) kid[v].load(); });
+  return { load() { show(); if (!kid[v].loaded) kid[v].load(); }, render: show, get loaded() { return kid[v].loaded; }, get loading() { return kid[v].loading; } };
+}
+
 export function createStrategyTab({ api, el, goto }) {
   el.innerHTML = '<div id="st-cmp"></div><div class="st-cards" id="st-cards" role="tablist" aria-label="策略"></div><div id="st-more"></div><div id="st-s6"></div><div id="st-cs" hidden></div><div id="st-vg" hidden></div><div id="st-pk" hidden></div><div id="st-fp" hidden></div><div id="st-crt" hidden></div>';
   const kids = {
     s6: createS6Tab({ api, el: el.querySelector('#st-s6') }),
     cs: createClaudeTab({ api, el: el.querySelector('#st-cs') }),
-    vg: createVegasTab({ api, el: el.querySelector('#st-vg') }),
+    vg: createVegasWrap({ api, el: el.querySelector('#st-vg') }),
     pk: createPickTab({ api, el: el.querySelector('#st-pk') }),
     fp: createFootTab({ api, el: el.querySelector('#st-fp') }),
     crt: createCrtTab({ api, el: el.querySelector('#st-crt') }),
