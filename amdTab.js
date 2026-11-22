@@ -1,6 +1,6 @@
 // AMD 操縱模型檢視（維加斯頁的第三個檢視，觀察用，只有台股 1H）。規則與回測見 lib/amd.js
 // 專案回測：台股 1H 2R／24 根扣費 −0.30R、持有到 120 根 −0.09R，不比隨機進場好 → 不計分、不推播
-const CF = { E: '吞噬', I: 'IFVG', F: '位移＋FVG' };
+const CF = { E: '吞噬', I: 'IFVG', F: '位移＋FVG' }, TR = { 順: '順勢', 逆: '逆勢', 盤: '盤整' };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toPrecision(4));
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -23,7 +23,7 @@ function draw(cd, now, dir) {
 }
 
 export function createAmdTab({ api, el }) {
-  const st = { data: null, loading: false, error: '', loaded: false, charts: {}, dir: 0, q: '', by: {} };
+  const st = { data: null, loading: false, error: '', loaded: false, charts: {}, dir: 0, tr: '', q: '', by: {} };
   const items = () => {
     const D = st.data?.d || {}, names = st.data?.names || {}, out = [];
     for (const [s, v] of Object.entries(D)) for (const r of [v?.L, v?.S]) if (r?.now) out.push({ key: s + '|' + r.dir, s, name: names[s] || s, r, n: r.now });
@@ -31,7 +31,7 @@ export function createAmdTab({ api, el }) {
   };
   function card(it) {
     const { r, n } = it, up = r.dir > 0;
-    return `<article class="card" data-ck="${esc(it.key)}"><div class="card-head"><span class="sym num">${esc(it.name)}</span><span class="cat ${up ? 'cat-long' : 'cat-short'}">${up ? '做多 掃低收回' : '做空 掃高收回'}</span><div class="price"><span class="p num">${px(r.price)}</span></div></div>
+    return `<article class="card" data-ck="${esc(it.key)}"><div class="card-head"><span class="sym num">${esc(it.name)}</span><span class="cat ${up ? 'cat-long' : 'cat-short'}">${up ? '做多 掃低收回' : '做空 掃高收回'}</span>${n.tr ? `<span class="cat">${TR[n.tr]}</span>` : ''}<div class="price"><span class="p num">${px(r.price)}</span></div></div>
       <div class="vg-row"><span class="k">狀態</span><b>${n.age === 0 ? '剛收盤確認' : `確認 ${n.age} 根 1H 前`}</b>（${n.conf.split('').map((c) => CF[c]).join('＋')}）・ 累積 ${n.W} 根 ・ 區間 ${n.bh.toFixed(1)}×ATR</div>
       <div class="vg-row"><span class="k">位置</span>${up ? '低' : '高'}位 ${(n.pos * 100).toFixed(0)}%（120 根，0＝最${up ? '低' : '高'}）</div>
       <div class="vg-row"><span class="k">參考</span>確認棒收 <b>${px(n.ref)}</b> ・ 止損 <span class="down">${px(n.stop)}</span>（${n.stPct.toFixed(2)}%）</div><div class="vg-cwrap">${chartHtml(it)}</div></article>`;
@@ -52,10 +52,10 @@ export function createAmdTab({ api, el }) {
   }
   function render() {
     const all = items(), q = st.q.toUpperCase(), at = st.data?.at;
-    const shown = all.filter((x) => (!q || x.name.toUpperCase().includes(q) || x.s.toUpperCase().startsWith(q)) && (!st.dir || x.r.dir === st.dir)).sort((a, b) => a.n.age - b.n.age || a.name.localeCompare(b.name));
+    const shown = all.filter((x) => (!q || x.name.toUpperCase().includes(q) || x.s.toUpperCase().startsWith(q)) && (!st.dir || x.r.dir === st.dir) && (!st.tr || x.n.tr === st.tr)).sort((a, b) => a.n.age - b.n.age || a.name.localeCompare(b.name));
     st.by = Object.fromEntries(shown.map((x) => [x.key, x]));
     const html = shown.length ? `<p class="muted">共 ${shown.length} 張，往下滑看下一檔</p>` + shown.map((it, i) => `<div class="muted small" style="margin:14px 0 4px">${i + 1} / ${shown.length}</div>${card(it)}`).join('') : '';
-    el.innerHTML = `<div class="toolbar"><input id="amd-q" class="search" type="search" placeholder="搜尋代號或名稱" value="${esc(st.q)}" style="max-width:170px"><button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button><button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button><span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
+    el.innerHTML = `<div class="toolbar"><input id="amd-q" class="search" type="search" placeholder="搜尋代號或名稱" value="${esc(st.q)}" style="max-width:170px"><button class="chip chip-long" data-d="1" aria-pressed="${st.dir === 1}">只看做多</button><button class="chip chip-short" data-d="-1" aria-pressed="${st.dir === -1}">只看做空</button><button class="chip" data-t="順" aria-pressed="${st.tr === '順'}">只看順勢</button><button class="chip" data-t="逆" aria-pressed="${st.tr === '逆'}">只看逆勢</button><span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">台股 1H（股價 10–200 元、成交值前 120 名；分時資料來自 Yahoo 財經）。只列還沒派發、確認在最近 6 根內的標的。${at ? `快照更新 ${fmtT(at)}。` : ''}</p>
       ${html || (st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>')}`;
@@ -75,7 +75,8 @@ export function createAmdTab({ api, el }) {
   el.addEventListener('keydown', (e) => { if (e.target.id === 'amd-q' && e.key === 'Enter') { st.q = e.target.value.trim(); render(); el.querySelector('#amd-q')?.focus(); } });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
+    if (b.dataset.t) { st.tr = st.tr === b.dataset.t ? '' : b.dataset.t; render(); }
+    else if (b.dataset.d) { const d = +b.dataset.d; st.dir = st.dir === d ? 0 : d; render(); }
     else if ('reload' in b.dataset) load(true);
   });
   return { load, render, get loaded() { return st.loaded; }, get loading() { return st.loading; } };
