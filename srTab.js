@@ -20,15 +20,14 @@ function draw(cd, showEma) {
   const lab = []; // 文字最後一起排，互相不重疊
   for (const z of cd.z) { // 區：從形成那根畫到最右邊
     const x0 = X(Math.max(0, z.x)) - dx / 2, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC;
-    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${z.r === '現價' ? 0.28 : 0.16}" stroke="${col}" stroke-opacity="0.7" stroke-width="1"/>`;
-    lab.push({ x: xr - 3, y: y1 - 3, a: 'end', col, t: `${z.r} ${px(z.lo)}–${px(z.hi)}`, tip: `${z.k}${z.t ? `，形成後被碰 ${z.t} 次` : ''}` });
+    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${Math.min(0.12 + 0.04 * z.n, 0.4)}" stroke="${col}" stroke-opacity="0.7" stroke-width="1"/>`;
+
   }
   if (showEma) cd.e.forEach((e, k) => { s += `<polyline fill="none" stroke="${COL[k]}" stroke-width="1.2" points="${e.map((v, i) => (inR(v) ? `${f(X(i))},${f(Y(v))}` : '')).filter(Boolean).join(' ')}"/>`; });
   bars.forEach((b, i) => { const c = b[3] >= b[0] ? 'pc-u' : 'pc-d', x = X(i), y1 = Y(Math.max(b[0], b[3])), y2 = Y(Math.min(b[0], b[3])); s += `<line x1="${f(x)}" x2="${f(x)}" y1="${f(Y(b[1]))}" y2="${f(Y(b[2]))}" class="${c}s"/><rect x="${f(x - bw / 2)}" y="${f(y1)}" width="${f(bw)}" height="${f(Math.max(1, y2 - y1))}" class="${c}"/>`; });
   for (const e of cd.ev) { // 結構：被突破的轉折價畫虛線到突破那根
     const col = e.d > 0 ? '#26a69a' : '#ef5350', x0 = X(Math.max(0, e.x0)), x1 = X(e.x1), y = Y(e.v);
     s += `<line x1="${f(x0)}" x2="${f(x1)}" y1="${f(y)}" y2="${f(y)}" stroke="${col}" stroke-dasharray="4 3" stroke-width="1.2"/>`;
-    lab.push({ x: (x0 + x1) / 2, y: e.d > 0 ? y - 4 : y + 12, a: 'middle', col, t: e.type, b: 1 });
   }
   const placed = [], wd = (t) => [...t].reduce((n, ch) => n + (/[\x00-\x7f]/.test(ch) ? 6.6 : 11), 0) + 4;
   for (const L of lab) { // 跟已放的文字重疊就往下移一行
@@ -57,7 +56,7 @@ export function createSrTab({ api, el }) {
     const ex = st.charts[it.key], cd = ex?.data?.[st.tf];
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
     if (ex.err || !cd) return `<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div>`;
-    return `<div class="vg-chart">${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（較深的是現價所在的區）；區＝轉折點影線區或訂單塊（點區域文字可看來源）；虛線＝被突破的結構（BOS／CHoCH）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    return `<div class="vg-chart">${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（價格最常轉折的價位，顏色越深＝轉折次數越多）；虛線＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
   const paint = (key) => { const w = el.querySelector(`[data-ck="${CSS.escape(key)}"] .vg-cwrap`), it = st.by[key]; if (w && it) w.innerHTML = chartHtml(it); };
   let io;
