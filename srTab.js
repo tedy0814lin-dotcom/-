@@ -17,16 +17,25 @@ function draw(cd, showEma) {
   const Y = (v) => pt + (1 - (v - lo) / (hi - lo)) * ph, inR = (v) => v >= lo && v <= hi;
   let s = `<svg viewBox="0 0 ${Wd} ${Ht}" class="pc" role="img" aria-label="支撐壓力圖">`;
   for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4; s += `<line x1="${px0}" x2="${xr}" y1="${f(Y(v))}" y2="${f(Y(v))}" class="pc-g"/><text x="${xr + 4}" y="${f(Y(v) + 3)}" class="pc-t">${px(v)}</text>`; }
+  const lab = []; // 文字最後一起排，互相不重疊
   for (const z of cd.z) { // 區：從形成那根畫到最右邊
     const x0 = X(Math.max(0, z.x)) - dx / 2, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC;
     s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${z.r === '現價' ? 0.28 : 0.16}" stroke="${col}" stroke-opacity="0.7" stroke-width="1"/>`;
-    s += `<text x="${xr - 3}" y="${f(y1 - 3)}" class="pc-t" fill="${col}" text-anchor="end">${z.r} ${px(z.lo)}–${px(z.hi)}<title>${z.k}${z.t ? `，形成後被碰 ${z.t} 次` : ''}</title></text>`;
+    lab.push({ x: xr - 3, y: y1 - 3, a: 'end', col, t: `${z.r} ${px(z.lo)}–${px(z.hi)}`, tip: `${z.k}${z.t ? `，形成後被碰 ${z.t} 次` : ''}` });
   }
   if (showEma) cd.e.forEach((e, k) => { s += `<polyline fill="none" stroke="${COL[k]}" stroke-width="1.2" points="${e.map((v, i) => (inR(v) ? `${f(X(i))},${f(Y(v))}` : '')).filter(Boolean).join(' ')}"/>`; });
   bars.forEach((b, i) => { const c = b[3] >= b[0] ? 'pc-u' : 'pc-d', x = X(i), y1 = Y(Math.max(b[0], b[3])), y2 = Y(Math.min(b[0], b[3])); s += `<line x1="${f(x)}" x2="${f(x)}" y1="${f(Y(b[1]))}" y2="${f(Y(b[2]))}" class="${c}s"/><rect x="${f(x - bw / 2)}" y="${f(y1)}" width="${f(bw)}" height="${f(Math.max(1, y2 - y1))}" class="${c}"/>`; });
   for (const e of cd.ev) { // 結構：被突破的轉折價畫虛線到突破那根
     const col = e.d > 0 ? '#26a69a' : '#ef5350', x0 = X(Math.max(0, e.x0)), x1 = X(e.x1), y = Y(e.v);
-    s += `<line x1="${f(x0)}" x2="${f(x1)}" y1="${f(y)}" y2="${f(y)}" stroke="${col}" stroke-dasharray="4 3" stroke-width="1.2"/><text x="${f((x0 + x1) / 2)}" y="${f(e.d > 0 ? y - 4 : y + 12)}" class="pc-t" fill="${col}" text-anchor="middle" font-weight="700">${e.type}</text>`;
+    s += `<line x1="${f(x0)}" x2="${f(x1)}" y1="${f(y)}" y2="${f(y)}" stroke="${col}" stroke-dasharray="4 3" stroke-width="1.2"/>`;
+    lab.push({ x: (x0 + x1) / 2, y: e.d > 0 ? y - 4 : y + 12, a: 'middle', col, t: e.type, b: 1 });
+  }
+  const placed = [], wd = (t) => [...t].reduce((n, ch) => n + (/[\x00-\x7f]/.test(ch) ? 6.6 : 11), 0) + 4;
+  for (const L of lab) { // 跟已放的文字重疊就往下移一行
+    const w = wd(L.t), xl = L.a === 'end' ? L.x - w : L.a === 'middle' ? L.x - w / 2 : L.x, hit = (y) => placed.some((p) => xl < p.xr && xl + w > p.xl && y - 11 < p.yb && y + 2 > p.yt);
+    let y = L.y; for (let k = 0; k < 30 && hit(y); k++) y += 13;
+    placed.push({ xl, xr: xl + w, yt: y - 11, yb: y + 2 });
+    s += `<rect x="${f(xl - 1)}" y="${f(y - 11)}" width="${f(w + 2)}" height="14" rx="2" fill="var(--panel-2)" fill-opacity="0.8"/><text x="${f(L.x)}" y="${f(y)}" class="pc-t" fill="${L.col}" text-anchor="${L.a}"${L.b ? ' font-weight="700"' : ''}>${esc(L.t)}${L.tip ? `<title>${esc(L.tip)}</title>` : ''}</text>`;
   }
   for (const i of [0, 2, 4, 6].map((k) => Math.round((k * (N - 1)) / 6))) s += `<text x="${f(X(i))}" y="${Ht - 3}" class="pc-t" text-anchor="${i === 0 ? 'start' : i >= N - 1 ? 'end' : 'middle'}">${esc(fmtT(cd.t[i]))}</text>`;
   return s + '</svg>';
