@@ -2,7 +2,7 @@
 // 專案回測（2026-11-25）：在這類區掛單扣費後皆為負、不比隨機好 → 只畫參考，不給進出場、不計分、不推播
 const TFS = ['4h', '1h', '15m'], TFN = { '4h': '4H', '1h': '1H', '15m': '15分' };
 const COL = ['#ff9800', '#26c6da', '#ab47bc', '#8bc34a', '#f48fb1', '#5c6bc0'], EN = [12, 45, 144, 169, 288, 338];
-const ZC = { 壓力: '#ef5350', 支撐: '#26a69a', 現價: '#ffca28' };
+const ZC = '#5b8cff'; // 區一律同色（不分支撐壓力，突破後角色會互換）
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const px = (v) => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v >= 1 ? v.toFixed(3) : v.toPrecision(4));
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -18,8 +18,8 @@ function draw(cd, showEma) {
   let s = `<svg viewBox="0 0 ${Wd} ${Ht}" class="pc" role="img" aria-label="支撐壓力圖">`;
   for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4; s += `<line x1="${px0}" x2="${xr}" y1="${f(Y(v))}" y2="${f(Y(v))}" class="pc-g"/><text x="${xr + 4}" y="${f(Y(v) + 3)}" class="pc-t">${px(v)}</text>`; }
   for (const z of cd.z) { // 區：從形成那根畫到最右邊
-    const x0 = X(Math.max(0, z.x)) - dx / 2, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC[z.r];
-    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="0.16" stroke="${col}" stroke-opacity="0.7" stroke-width="1"/>`;
+    const x0 = X(Math.max(0, z.x)) - dx / 2, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC;
+    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${z.r === '現價' ? 0.28 : 0.16}" stroke="${col}" stroke-opacity="0.7" stroke-width="1"/>`;
     s += `<text x="${xr - 3}" y="${f(y1 - 3)}" class="pc-t" fill="${col}" text-anchor="end">${z.r} ${px(z.lo)}–${px(z.hi)}<title>${z.k}${z.t ? `，形成後被碰 ${z.t} 次` : ''}</title></text>`;
   }
   if (showEma) cd.e.forEach((e, k) => { s += `<polyline fill="none" stroke="${COL[k]}" stroke-width="1.2" points="${e.map((v, i) => (inR(v) ? `${f(X(i))},${f(Y(v))}` : '')).filter(Boolean).join(' ')}"/>`; });
@@ -48,7 +48,7 @@ export function createSrTab({ api, el }) {
     const ex = st.charts[it.key], cd = ex?.data?.[st.tf];
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
     if (ex.err || !cd) return `<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div>`;
-    return `<div class="vg-chart">${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">紅＝上方壓力、綠＝下方支撐、黃＝現價所在區；區＝轉折點影線區或訂單塊（點區域文字可看來源）；虛線＝被突破的結構（BOS／CHoCH）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    return `<div class="vg-chart">${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（較深的是現價所在的區）；區＝轉折點影線區或訂單塊（點區域文字可看來源）；虛線＝被突破的結構（BOS／CHoCH）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
   const paint = (key) => { const w = el.querySelector(`[data-ck="${CSS.escape(key)}"] .vg-cwrap`), it = st.by[key]; if (w && it) w.innerHTML = chartHtml(it); };
   let io;
