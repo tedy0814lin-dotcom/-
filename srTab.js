@@ -12,15 +12,16 @@ const TR = { 1: ['多頭', 'up'], '-1': ['空頭', 'down'], 0: ['未定', 'muted
 function draw(cd, showEma) {
   const bars = cd.bars, N = bars.length; if (!N) return '';
   const Wd = 1000, Ht = 440, pt = 10, pr = 60, px0 = 6, xr = Wd - pr, ph = Ht - pt - 18, dx = (xr - px0) / (N + 4), bw = Math.max(1.4, dx * 0.6), X = (i) => px0 + (i + 0.5) * dx, f = (v) => v.toFixed(1);
-  let lo = Math.min(...bars.map((b) => b[2]), ...cd.z.map((z) => z.lo)), hi = Math.max(...bars.map((b) => b[1]), ...cd.z.map((z) => z.hi));
+  const kz = cd.z.filter((z) => !z.old); let lo = Math.min(...bars.map((b) => b[2]), ...kz.map((z) => z.lo)), hi = Math.max(...bars.map((b) => b[1]), ...kz.map((z) => z.hi));
   const pd = (hi - lo) * 0.04; lo -= pd; hi += pd;
   const Y = (v) => pt + (1 - (v - lo) / (hi - lo)) * ph, inR = (v) => v >= lo && v <= hi;
   let s = `<svg viewBox="0 0 ${Wd} ${Ht}" class="pc" role="img" aria-label="支撐壓力圖">`;
   for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4; s += `<line x1="${px0}" x2="${xr}" y1="${f(Y(v))}" y2="${f(Y(v))}" class="pc-g"/><text x="${xr + 4}" y="${f(Y(v) + 3)}" class="pc-t">${px(v)}</text>`; }
   const lab = []; // 文字最後一起排，互相不重疊
-  for (const z of cd.z) { // 區：從形成那根畫到最右邊
-    const x0 = X(Math.max(0, z.x)) - dx / 2, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC;
-    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${Math.min(0.12 + 0.04 * z.n, 0.4)}" stroke="${col}" stroke-opacity="0.7" stroke-width="1"/>`;
+  for (const z0 of cd.z) { // 區：畫滿整張圖；碰過的區超出圖的價格範圍就截掉
+    if (z0.hi < lo || z0.lo > hi) continue; const z = { ...z0, lo: Math.max(z0.lo, lo), hi: Math.min(z0.hi, hi) };
+    const x0 = px0, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC; // 區畫滿整張圖（長一點比較好看出價格曾經在哪裡碰過）
+    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${z.old ? 0.08 : Math.min(0.12 + 0.04 * z.n, 0.4)}" stroke="${col}" stroke-opacity="${z.old ? 0.6 : 0.8}" stroke-width="1"${z.old ? ' stroke-dasharray="5 3"' : ''}/>`;
 
   }
   if (showEma) cd.e.forEach((e, k) => { s += `<polyline fill="none" stroke="${COL[k]}" stroke-width="1.2" points="${e.map((v, i) => (inR(v) ? `${f(X(i))},${f(Y(v))}` : '')).filter(Boolean).join(' ')}"/>`; });
@@ -63,7 +64,7 @@ export function createSrTab({ api, el }) {
     const bar = `<div class="vg-tfbar">${TFS.map((t) => `<button class="chip vg-tf" data-ctf="${esc(it.key)}|${t}" aria-pressed="${tf === t}">${TFN[t]}</button>`).join('')}</div>`;
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
     if (ex.err || !cd) return `<div class="vg-chart">${bar}<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div></div>`;
-    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝4H 支撐壓力區（各時區都畫同一組；價格最常轉折＋均線重疊處，顏色越深越強）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝4H 支撐壓力區（各時區都畫同一組；價格最常轉折＋均線重疊處，顏色越深越強；虛線框＝這段期間價格曾經碰過的其他區）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
   const paint = (key) => { const a = el.querySelector(`[data-ck="${CSS.escape(key)}"]`), it = st.by[key]; if (!a || !it) return; a.querySelector('.vg-cwrap').innerHTML = chartHtml(it); a.querySelector('.sr-tl').innerHTML = tline(it.v, tfOf(it)); a.querySelector('.sr-near').innerHTML = near(it); a.querySelector('.p').textContent = px(it.v[tfOf(it)]?.price); };
   let io;
