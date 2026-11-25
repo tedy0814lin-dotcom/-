@@ -21,7 +21,7 @@ function draw(cd, showEma) {
   for (const z0 of cd.z) { // 區：畫滿整張圖；碰過的區超出圖的價格範圍就截掉
     if (z0.hi < lo || z0.lo > hi) continue; const z = { ...z0, lo: Math.max(z0.lo, lo), hi: Math.min(z0.hi, hi) };
     const x0 = px0, y1 = Y(z.hi), y2 = Y(z.lo), col = ZC; // 區畫滿整張圖（長一點比較好看出價格曾經在哪裡碰過）
-    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${z.old ? 0.08 : Math.min(0.12 + 0.04 * z.n, 0.4)}" stroke="${col}" stroke-opacity="${z.old ? 0.6 : 0.8}" stroke-width="1"${z.old ? ' stroke-dasharray="5 3"' : ''}/>`;
+    s += `<rect x="${f(x0)}" y="${f(y1)}" width="${f(xr - x0)}" height="${f(Math.max(2, y2 - y1))}" fill="${col}" fill-opacity="${Math.min(0.12 + 0.03 * z.n, 0.4)}" stroke="${col}" stroke-opacity="0.8" stroke-width="1"/>`;
 
   }
   if (showEma) cd.e.forEach((e, k) => { s += `<polyline fill="none" stroke="${COL[k]}" stroke-width="1.2" points="${e.map((v, i) => (inR(v) ? `${f(X(i))},${f(Y(v))}` : '')).filter(Boolean).join(' ')}"/>`; });
@@ -64,7 +64,7 @@ export function createSrTab({ api, el }) {
     const bar = `<div class="vg-tfbar">${TFS.map((t) => `<button class="chip vg-tf" data-ctf="${esc(it.key)}|${t}" aria-pressed="${tf === t}">${TFN[t]}</button>`).join('')}</div>`;
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
     if (ex.err || !cd) return `<div class="vg-chart">${bar}<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div></div>`;
-    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝4H 支撐壓力區（各時區都畫同一組；價格最常轉折＋均線重疊處，顏色越深越強；虛線框＝這段期間價格曾經碰過的其他區）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝4H 支撐壓力區（各時區都畫同一組；價格最常轉折＋均線重疊處，顏色越深越強，含這段期間價格碰過的強區）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
   const paint = (key) => { const a = el.querySelector(`[data-ck="${CSS.escape(key)}"]`), it = st.by[key]; if (!a || !it) return; a.querySelector('.vg-cwrap').innerHTML = chartHtml(it); a.querySelector('.sr-tl').innerHTML = tline(it.v, tfOf(it)); a.querySelector('.sr-near').innerHTML = near(it); a.querySelector('.p').textContent = px(it.v[tfOf(it)]?.price); };
   let io;
