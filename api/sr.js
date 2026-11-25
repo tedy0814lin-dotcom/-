@@ -10,10 +10,10 @@ async function one(m, s) {
     const [h1, m15] = await Promise.all([rawBars('tw', s, '1h'), rawBars('tw', s, '15m')]);
     const H = h1.filter((b) => new Date(b.t + 8 * 3600e3).getUTCMinutes() !== 30); // 去掉 13:30 尾盤零碎 K
     const b = srScan(tw4h(h1));
-    return { '4h': b, '1h': useBigZones(srScan(H, 140, false), b), '15m': useBigZones(srScan(m15, 140, false), b) };
+    return { '4h': b, '1h': useBigZones(srScan(H), b), '15m': useBigZones(srScan(m15), b) };
   }
   const o = {};
-  for (const tf of ['4h', '1h', '15m']) o[tf] = srScan(await rawBars('crypto', s, tf), 140, tf === '4h');
+  for (const tf of ['4h', '1h', '15m']) o[tf] = srScan(await rawBars('crypto', s, tf));
   useBigZones(o['1h'], o['4h']); useBigZones(o['15m'], o['4h']);
   return o;
 }
