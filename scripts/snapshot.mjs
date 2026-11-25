@@ -29,7 +29,7 @@ const status = (() => { try { return JSON.parse(fs.readFileSync(path.join(OUT, '
 // 台股這組比較慢，只在需要時跑：手動指定 TW=1、平日盤中／盤後的整點時段（每小時一次）、或快照超過 6 小時沒更新（含第一次）
 const tpe = new Date(Date.now() + 8 * 3600e3), hr = tpe.getUTCHours(), dow = tpe.getUTCDay();
 const twAge = Date.now() - (status.twstock?.at || 0);
-const WITH_TW = process.env.TW === '1' || (ONLY && [...ONLY].some((k) => /^(tw|pat_tw|vegas_.*tw|ema_.*tw|amd_.*tw|avg)/.test(k)))
+const WITH_TW = process.env.TW === '1' || (ONLY && [...ONLY].some((k) => /^(tw|pat_tw|vegas_.*tw|ema_.*tw|amd_.*tw|sr_.*tw|avg)/.test(k)))
   || (!ONLY && ((dow >= 1 && dow <= 5 && [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(hr) && twAge > 50 * 60e3) || twAge > 6 * 3600e3));
 const write = (key, data) => fs.writeFileSync(path.join(OUT, key + '.json'), JSON.stringify(data));
 const read = (key) => { try { return JSON.parse(fs.readFileSync(path.join(OUT, key + '.json'), 'utf8')); } catch { return null; } };
@@ -131,6 +131,24 @@ async function emaScan(m, L, per, ep = 'ema', pre = 'ema_c') {
   return { d: out, names, at: Date.now() };
 }
 await job('ema_scan_crypto', () => emaScan('crypto', vgc || [], 4));
+// 支撐壓力＋SMC 趨勢（觀察用，不計分）：每檔 4H／1H／15 分。總表只留每週期摘要，圖一檔一個檔案 sr_c_<市場>_<代號>.json
+async function srJob(m, L) {
+  const out = {}, names = Object.fromEntries(L.map((x) => [x.s, x.name])); let ok = 0;
+  const parts = []; for (let i = 0; i < L.length; i += 4) parts.push(L.slice(i, i + 4).map((x) => x.s));
+  await pool(parts, 2, async (p) => {
+    const j = await get(`/api/sr?m=${m}&s=${p.join(',')}`);
+    for (const [s, v] of Object.entries(j)) {
+      if (v.error) { out[s] = { error: v.error }; continue; }
+      const sum = {}, ch = {};
+      for (const [tf, r] of Object.entries(v)) if (r) { sum[tf] = r.sum; ch[tf] = r.chart; }
+      out[s] = sum; ok++;
+      write(`sr_c_${m}_${s.replace(/[^A-Za-z0-9]/g, '_')}`, ch);
+    }
+  });
+  if (!ok) throw new Error('一檔都沒算出來');
+  return { d: out, names, at: Date.now() };
+}
+await job('sr_scan_crypto', () => srJob('crypto', vgc || []));
 
 // ───────── 台股這一組 ─────────
 if (WITH_TW) {
@@ -163,6 +181,7 @@ if (WITH_TW) {
   await job('vegas_chart_tw', () => charts('tw', (vgt || []).map((x) => x.s), ['15m', '1h', '1d']));
   await job('ema_scan_tw', () => emaScan('tw', vgt || [], 6));
   await job('amd_scan_tw', () => emaScan('tw', vgt || [], 6, 'amd', 'amd_c')); // AMD 操縱模型（觀察用）
+  await job('sr_scan_tw', () => srJob('tw', vgt || []));
   // 台股選股（大單推升）：近 7 週每週的成交資料。pickTab 的週區間規則：週一～週日，往前 6 週
   await job('avgtrade', async () => {
     const tpe = new Date(Date.now() + 8 * 3600e3), mon = new Date(Date.UTC(tpe.getUTCFullYear(), tpe.getUTCMonth(), tpe.getUTCDate()));

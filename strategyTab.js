@@ -6,6 +6,7 @@ import { createPickTab } from '/pickTab.js';
 import { createFootTab } from '/footTab.js';
 import { createS6Tab } from '/s6Tab.js';
 import { createEmaTab } from '/emaTab.js';
+import { createSrTab } from '/srTab.js';
 import { createAmdTab } from '/amdTab.js';
 import { watchTypeset } from '/lib/typeset.js';
 
@@ -87,12 +88,13 @@ const parts = (s) => String(s ?? '').split('；').map((x) => x.trim()).filter(Bo
 const lines = (s) => parts(s).map((x) => `<div class="cl">${fmt(x)}</div>`).join('');
 const bul = (arr) => arr.flatMap(parts).map((x) => `<li>${fmt(x)}</li>`).join('');
 
-// 維加斯頁：維加斯通道／均線突破 兩個檢視切換
+// 維加斯頁：維加斯通道／均線突破／支撐壓力 三個檢視切換
 function createVegasWrap({ api, el }) {
-  el.innerHTML = '<div class="toolbar" id="vgw"><button class="chip" data-v="vg">維加斯通道</button><button class="chip" data-v="ema">均線突破（觀察用）</button></div><div id="vg-a"></div><div id="vg-b" hidden></div>';
-  const kid = { vg: createVegasTab({ api, el: el.querySelector('#vg-a') }), ema: createEmaTab({ api, el: el.querySelector('#vg-b') }) };
+  const V = [['vg', '維加斯通道', createVegasTab], ['ema', '均線突破（觀察用）', createEmaTab], ['sr', '支撐壓力（觀察用）', createSrTab]];
+  el.innerHTML = `<div class="toolbar" id="vgw">${V.map(([k, t]) => `<button class="chip" data-v="${k}">${t}</button>`).join('')}</div>${V.map(([k]) => `<div id="vg-${k}" hidden></div>`).join('')}`;
+  const kid = Object.fromEntries(V.map(([k, , f]) => [k, f({ api, el: el.querySelector('#vg-' + k) })]));
   let v = 'vg'; try { const x = localStorage.getItem(LS + '_vg'); if (kid[x]) v = x; } catch {}
-  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.querySelector('#vg-a').hidden = v !== 'vg'; el.querySelector('#vg-b').hidden = v !== 'ema'; kid[v].render(); };
+  const show = () => { el.querySelectorAll('#vgw .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); V.forEach(([k]) => { el.querySelector('#vg-' + k).hidden = k !== v; }); kid[v].render(); };
   el.querySelector('#vgw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; v = b.dataset.v; try { localStorage.setItem(LS + '_vg', v); } catch {} show(); if (!kid[v].loaded && !kid[v].loading) kid[v].load(); });
   return { load() { show(); if (!kid[v].loaded) kid[v].load(); }, render: show, get loaded() { return kid[v].loaded; }, get loading() { return kid[v].loading; } };
 }
