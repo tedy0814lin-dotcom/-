@@ -28,6 +28,7 @@ function draw(cd, showEma) {
   for (const e of cd.ev) { // 結構：被突破的轉折價畫虛線到突破那根
     const col = e.d > 0 ? '#26a69a' : '#ef5350', x0 = X(Math.max(0, e.x0)), x1 = X(e.x1), y = Y(e.v);
     s += `<line x1="${f(x0)}" x2="${f(x1)}" y1="${f(y)}" y2="${f(y)}" stroke="${col}" stroke-dasharray="4 3" stroke-width="1.2"/>`;
+    lab.push({ x: (x0 + x1) / 2, y: e.d > 0 ? y - 4 : y + 12, a: 'middle', col, t: e.type, b: 1 });
   }
   const placed = [], wd = (t) => [...t].reduce((n, ch) => n + (/[\x00-\x7f]/.test(ch) ? 6.6 : 11), 0) + 4;
   for (const L of lab) { // 跟已放的文字重疊就往下移一行
@@ -62,7 +63,7 @@ export function createSrTab({ api, el }) {
     const bar = `<div class="vg-tfbar">${TFS.map((t) => `<button class="chip vg-tf" data-ctf="${esc(it.key)}|${t}" aria-pressed="${tf === t}">${TFN[t]}</button>`).join('')}</div>`;
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
     if (ex.err || !cd) return `<div class="vg-chart">${bar}<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div></div>`;
-    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（價格最常轉折的價位，顏色越深＝轉折次數越多）；虛線＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（價格最常轉折的價位，顏色越深＝轉折次數越多）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
   const paint = (key) => { const a = el.querySelector(`[data-ck="${CSS.escape(key)}"]`), it = st.by[key]; if (!a || !it) return; a.querySelector('.vg-cwrap').innerHTML = chartHtml(it); a.querySelector('.sr-tl').innerHTML = tline(it.v, tfOf(it)); a.querySelector('.sr-near').innerHTML = near(it); a.querySelector('.p').textContent = px(it.v[tfOf(it)]?.price); };
   let io;
