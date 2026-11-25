@@ -76,17 +76,16 @@ export function createSrTab({ api, el }) {
     el.querySelectorAll('article[data-ck]').forEach((a) => io.observe(a));
   }
   function render() {
-    const m = st.m, all = items(m), tr = (x) => x.v[st.tf]?.trend, inz = (x) => !!x.v[st.tf]?.inZone;
+    const m = st.m, all = items(m), tr = (x) => { const t = TFS.map((f) => x.v[f]?.trend); return t.every((v) => v === 1) ? 1 : t.every((v) => v === -1) ? -1 : 0; }, inz = (x) => TFS.some((f) => x.v[f]?.inZone);
     const cnt = { up: all.filter((x) => tr(x) === 1).length, dn: all.filter((x) => tr(x) === -1).length, z: all.filter(inz).length };
     const q = st.q.toUpperCase();
     const shown = all.filter((x) => (q ? x.name.toUpperCase().includes(q) || x.s.toUpperCase().startsWith(q) : true) && (!st.f || (st.f === 'up' ? tr(x) === 1 : st.f === 'dn' ? tr(x) === -1 : inz(x))))
-      .sort((a, b) => inz(b) - inz(a) || (a.v[st.tf]?.ev?.ago ?? 999) - (b.v[st.tf]?.ev?.ago ?? 999));
+      .sort((a, b) => inz(b) - inz(a) || a.name.localeCompare(b.name));
     st.by = Object.fromEntries(shown.map((x) => [x.key, x]));
     const chip = (k, t) => `<button class="chip" data-f="${k}" aria-pressed="${st.f === k}">${t} <b>${cnt[k]}</b></button>`, at = st.data[m]?.at;
     el.innerHTML = `<div class="toolbar"><button class="chip" data-m="crypto" aria-pressed="${m === 'crypto'}">加密</button><button class="chip" data-m="tw" aria-pressed="${m === 'tw'}">台股</button>
         <span class="spacer"></span><button class="ghost" data-reload ${st.loading ? 'disabled' : ''}>${st.loading ? '更新中…' : '重新整理'}</button></div>
-      <div class="toolbar">${TFS.map((tf) => `<button class="chip" data-tf="${tf}" aria-pressed="${st.tf === tf}">${TFN[tf]}</button>`).join('')}<button class="chip" data-ema aria-pressed="${st.ema}">均線 ${st.ema ? '開' : '關'}</button></div>
-      <div class="toolbar">${chip('up', `${TFN[st.tf]}多頭`)}${chip('dn', `${TFN[st.tf]}空頭`)}${chip('z', '現價在區內')}<input id="sr-q" class="search" type="search" placeholder="搜尋代號或名稱" value="${esc(st.q)}" style="max-width:170px"></div>
+      <div class="toolbar">${chip('up', '三週期都多頭')}${chip('dn', '三週期都空頭')}${chip('z', '現價在區內')}<button class="chip" data-ema aria-pressed="${st.ema}">均線 ${st.ema ? '開' : '關'}</button><input id="sr-q" class="search" type="search" placeholder="搜尋代號或名稱" value="${esc(st.q)}" style="max-width:170px"></div>
       ${st.error ? `<div class="panel warn">${esc(st.error)}</div>` : ''}
       <p class="muted">${m === 'tw' ? '股價 10–200 元、成交值前 120 名；Yahoo 財經，4H 由 1H 合成。' : 'BingX 成交額前 80 名永續合約。'}${at ? `快照更新 ${fmtT(at)}。` : ''}自動畫的區只當參考，不給進出場。</p>
       ${shown.length ? `<p class="muted">共 ${shown.length} 檔，往下滑看下一檔</p>` + shown.map((it, i) => `<div class="muted small" style="margin:14px 0 4px">${i + 1} / ${shown.length}</div>${card(it)}`).join('') : st.loading ? '' : '<p class="muted">目前沒有符合的標的。</p>'}`;
@@ -108,7 +107,6 @@ export function createSrTab({ api, el }) {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.ctf) { const [k, t] = b.dataset.ctf.split('|'); st.ctf[k] = t; paint(k); return; }
     if (b.dataset.m) { st.m = b.dataset.m; st.charts = {}; st.ctf = {}; render(); if (!st.loaded[st.m]) load(); }
-    else if (b.dataset.tf) { st.tf = b.dataset.tf; st.ctf = {}; saveUi(); render(); }
     else if ('ema' in b.dataset) { st.ema = !st.ema; saveUi(); render(); }
     else if (b.dataset.f) { st.f = st.f === b.dataset.f ? null : b.dataset.f; render(); }
     else if ('reload' in b.dataset) load(true);
