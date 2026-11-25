@@ -41,24 +41,30 @@ function draw(cd, showEma) {
 }
 
 export function createSrTab({ api, el }) {
-  const st = { m: 'crypto', tf: '1h', ema: false, data: {}, loading: false, error: '', loaded: {}, charts: {}, f: null, q: '', by: {} };
+  const st = { ctf: {}, m: 'crypto', tf: '1h', ema: false, data: {}, loading: false, error: '', loaded: {}, charts: {}, f: null, q: '', by: {} };
   try { const o = JSON.parse(localStorage.getItem('sr_ui') || '{}'); if (TFS.includes(o.tf)) st.tf = o.tf; st.ema = !!o.ema; } catch {}
   const saveUi = () => { try { localStorage.setItem('sr_ui', JSON.stringify({ tf: st.tf, ema: st.ema })); } catch {} };
   const items = (m) => { const D = st.data[m]?.d || {}, names = st.data[m]?.names || {}; return Object.entries(D).filter(([, v]) => v && !v.error).map(([s, v]) => ({ key: s, s, name: names[s] || s, v })); };
-  const tline = (v) => TFS.map((tf) => { const r = v[tf]; if (!r) return `<span class="muted">${TFN[tf]} —</span>`; const [t, c] = TR[r.trend]; return `<span class="${tf === st.tf ? '' : 'muted'}">${TFN[tf]} <b class="${c}">${t}</b>${r.ev ? `（${r.ev.type}${r.ev.dir > 0 ? '↑' : '↓'} ${r.ev.ago} 根前）` : ''}${r.inZone ? ' <b>在區內</b>' : ''}</span>`; }).join('　');
+  const tline = (v, cur) => TFS.map((tf) => { const r = v[tf]; if (!r) return `<span class="muted">${TFN[tf]} —</span>`; const [t, c] = TR[r.trend]; return `<span class="${tf === cur ? '' : 'muted'}">${TFN[tf]} <b class="${c}">${t}</b>${r.ev ? `（${r.ev.type}${r.ev.dir > 0 ? '↑' : '↓'} ${r.ev.ago} 根前）` : ''}${r.inZone ? ' <b>在區內</b>' : ''}</span>`; }).join('　');
+  const tfOf = (it) => st.ctf[it.key] || st.tf;
+  function near(it) {
+    const tf = tfOf(it), r = it.v[tf];
+    return r ? `<span class="k">${TFN[tf]}</span>${r.res != null ? `距壓力 ${r.res.toFixed(1)}×ATR` : '上方無區'} ・ ${r.sup != null ? `距支撐 ${r.sup.toFixed(1)}×ATR` : '下方無區'}${r.inZone ? ' ・ <b>現價在區內</b>' : ''}` : '';
+  }
   function card(it) {
-    const r = it.v[st.tf];
-    const near = r ? `<div class="vg-row"><span class="k">${TFN[st.tf]}</span>${r.res != null ? `距壓力 ${r.res.toFixed(1)}×ATR` : '上方無區'} ・ ${r.sup != null ? `距支撐 ${r.sup.toFixed(1)}×ATR` : '下方無區'}${r.inZone ? ' ・ <b>現價在區內</b>' : ''}</div>` : '';
+    const r = it.v[tfOf(it)];
+
     return `<article class="card" data-ck="${esc(it.key)}"><div class="card-head"><span class="sym num">${esc(it.name)}</span><div class="price"><span class="p num">${px(r?.price)}</span></div></div>
-      <div class="vg-row" style="flex-wrap:wrap">${tline(it.v)}</div>${near}<div class="vg-cwrap">${chartHtml(it)}</div></article>`;
+      <div class="vg-row sr-tl" style="flex-wrap:wrap">${tline(it.v, tfOf(it))}</div><div class="vg-row sr-near">${near(it)}</div><div class="vg-cwrap">${chartHtml(it)}</div></article>`;
   }
   function chartHtml(it) {
-    const ex = st.charts[it.key], cd = ex?.data?.[st.tf];
+    const ex = st.charts[it.key], tf = tfOf(it), cd = ex?.data?.[tf];
+    const bar = `<div class="vg-tfbar">${TFS.map((t) => `<button class="chip vg-tf" data-ctf="${esc(it.key)}|${t}" aria-pressed="${tf === t}">${TFN[t]}</button>`).join('')}</div>`;
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
-    if (ex.err || !cd) return `<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div>`;
-    return `<div class="vg-chart">${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（價格最常轉折的價位，顏色越深＝轉折次數越多）；虛線＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    if (ex.err || !cd) return `<div class="vg-chart">${bar}<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div></div>`;
+    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（價格最常轉折的價位，顏色越深＝轉折次數越多）；虛線＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
-  const paint = (key) => { const w = el.querySelector(`[data-ck="${CSS.escape(key)}"] .vg-cwrap`), it = st.by[key]; if (w && it) w.innerHTML = chartHtml(it); };
+  const paint = (key) => { const a = el.querySelector(`[data-ck="${CSS.escape(key)}"]`), it = st.by[key]; if (!a || !it) return; a.querySelector('.vg-cwrap').innerHTML = chartHtml(it); a.querySelector('.sr-tl').innerHTML = tline(it.v, tfOf(it)); a.querySelector('.sr-near').innerHTML = near(it); a.querySelector('.p').textContent = px(it.v[tfOf(it)]?.price); };
   let io;
   function observe() {
     io?.disconnect();
@@ -99,8 +105,9 @@ export function createSrTab({ api, el }) {
   el.addEventListener('keydown', (e) => { if (e.target.id === 'sr-q' && e.key === 'Enter') { st.q = e.target.value.trim(); render(); el.querySelector('#sr-q')?.focus(); } });
   el.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.m) { st.m = b.dataset.m; st.charts = {}; render(); if (!st.loaded[st.m]) load(); }
-    else if (b.dataset.tf) { st.tf = b.dataset.tf; saveUi(); render(); }
+    if (b.dataset.ctf) { const [k, t] = b.dataset.ctf.split('|'); st.ctf[k] = t; paint(k); return; }
+    if (b.dataset.m) { st.m = b.dataset.m; st.charts = {}; st.ctf = {}; render(); if (!st.loaded[st.m]) load(); }
+    else if (b.dataset.tf) { st.tf = b.dataset.tf; st.ctf = {}; saveUi(); render(); }
     else if ('ema' in b.dataset) { st.ema = !st.ema; saveUi(); render(); }
     else if (b.dataset.f) { st.f = st.f === b.dataset.f ? null : b.dataset.f; render(); }
     else if ('reload' in b.dataset) load(true);
