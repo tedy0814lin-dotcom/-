@@ -1,7 +1,7 @@
 // GET /api/sr?m=crypto&s=BTCUSDT,ETHUSDT → 每檔 4H／1H／15 分的支撐壓力區＋SMC 趨勢（觀察用，不計分、不推播）。規則見 lib/sr.js
 // GET /api/sr?m=tw&s=2330.TW            → 台股（Yahoo；4H 由 1H 合成）
 import { requireUser, pool } from './_lib.js';
-import { srScan, tw4h } from '../lib/sr.js';
+import { srScan, tw4h, useBigZones } from '../lib/sr.js';
 import { rawBars } from './vegas.js';
 
 const cache = new Map();
@@ -9,10 +9,12 @@ async function one(m, s) {
   if (m === 'tw') {
     const [h1, m15] = await Promise.all([rawBars('tw', s, '1h'), rawBars('tw', s, '15m')]);
     const H = h1.filter((b) => new Date(b.t + 8 * 3600e3).getUTCMinutes() !== 30); // 去掉 13:30 尾盤零碎 K
-    return { '4h': srScan(tw4h(h1)), '1h': srScan(H), '15m': srScan(m15) };
+    const b = srScan(tw4h(h1));
+    return { '4h': b, '1h': useBigZones(srScan(H), b), '15m': useBigZones(srScan(m15), b) };
   }
   const o = {};
   for (const tf of ['4h', '1h', '15m']) o[tf] = srScan(await rawBars('crypto', s, tf));
+  useBigZones(o['1h'], o['4h']); useBigZones(o['15m'], o['4h']);
   return o;
 }
 export default async function handler(req, res) {

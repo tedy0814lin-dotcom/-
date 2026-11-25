@@ -50,7 +50,7 @@ export function createSrTab({ api, el }) {
   const tfOf = (it) => st.ctf[it.key] || st.tf;
   function near(it) {
     const tf = tfOf(it), r = it.v[tf];
-    return r ? `<span class="k">${TFN[tf]}</span>${r.res != null ? `距壓力 ${r.res.toFixed(1)}×ATR` : '上方無區'} ・ ${r.sup != null ? `距支撐 ${r.sup.toFixed(1)}×ATR` : '下方無區'}${r.inZone ? ' ・ <b>現價在區內</b>' : ''}` : '';
+    return r ? `<span class="k">${TFN[tf]} 現價</span>對 4H 區：${r.res != null ? `距壓力 ${r.res.toFixed(1)}×ATR` : '上方無區'} ・ ${r.sup != null ? `距支撐 ${r.sup.toFixed(1)}×ATR` : '下方無區'}${r.inZone ? ' ・ <b>現價在區內</b>' : ''}` : '';
   }
   function card(it) {
     const r = it.v[tfOf(it)];
@@ -63,7 +63,7 @@ export function createSrTab({ api, el }) {
     const bar = `<div class="vg-tfbar">${TFS.map((t) => `<button class="chip vg-tf" data-ctf="${esc(it.key)}|${t}" aria-pressed="${tf === t}">${TFN[t]}</button>`).join('')}</div>`;
     if (!ex || ex.loading) return '<div class="muted small" style="padding:10px">載入圖中…</div>';
     if (ex.err || !cd) return `<div class="vg-chart">${bar}<div class="muted small" style="padding:10px">沒有圖：${esc(ex.err || '這個週期資料不足')}</div></div>`;
-    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝支撐壓力區（價格最常轉折的價位，顏色越深＝轉折次數越多）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
+    return `<div class="vg-chart">${bar}${draw(cd, st.ema)}<div class="muted small" style="padding:4px 2px">藍色＝4H 支撐壓力區（各時區都畫同一組；價格最常轉折＋均線重疊處，顏色越深越強）；虛線＋BOS／CHoCH＝被突破的結構（綠向上、紅向下）${st.ema ? `<br>${EN.map((e, k) => `<span style="color:${COL[k]}">EMA${e}</span>`).join('・')}` : ''}</div></div>`;
   }
   const paint = (key) => { const a = el.querySelector(`[data-ck="${CSS.escape(key)}"]`), it = st.by[key]; if (!a || !it) return; a.querySelector('.vg-cwrap').innerHTML = chartHtml(it); a.querySelector('.sr-tl').innerHTML = tline(it.v, tfOf(it)); a.querySelector('.sr-near').innerHTML = near(it); a.querySelector('.p').textContent = px(it.v[tfOf(it)]?.price); };
   let io;
