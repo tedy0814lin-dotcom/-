@@ -13,7 +13,8 @@ export async function onRequest({ request, env, params }) {
   const headers = { 'User-Agent': 'whale-radar', 'Cache-Control': 'no-cache' };
   if (env.GH_TOKEN) headers.Authorization = 'Bearer ' + env.GH_TOKEN;
   let r;
-  try { r = await fetch(`${BASE}/${key}.json`, { headers, signal: AbortSignal.timeout(15000) }); }
+  // 加上每 30 秒換一次的參數，避開 GitHub／Cloudflare 對 raw 檔的 5 分鐘快取（改完資料約半分鐘內就看得到）
+  try { r = await fetch(`${BASE}/${key}.json?t=${Math.floor(Date.now() / 30000)}`, { headers, cf: { cacheTtl: 30 }, signal: AbortSignal.timeout(15000) }); }
   catch (e) { return json({ error: '讀不到快照：' + e.message }, 502); }
   if (r.status === 404) return json({ error: `還沒有「${key}」的資料（GitHub 排程還沒算出來）` }, 404);
   if (!r.ok) return json({ error: '讀取快照失敗 HTTP ' + r.status }, 502);
