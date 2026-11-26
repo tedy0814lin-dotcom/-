@@ -40,8 +40,8 @@ export function createLogTab({ api, el }) {
   // 主力策略（上線在「策略」頁的）實盤記錄：只存訊號，結果用實際 K 線依回測規則重播
   const SROWS = [
     { id: 'cs', label: '大陽線突破新高', mk: '加密日線・多', ref: '回測年化 +49%、勝率 24%（賺大賠小）', f: (x) => x.k === 'cs', cur: '$' },
-    { id: 'fpL', label: 'Delta 階梯・做多', mk: '加密 4H', ref: '回測 +0.26R／筆（4R 目標）', f: (x) => x.k === 'fp' && x.dir > 0 },
-    { id: 'fpS', label: 'Delta 階梯・做空', mk: '加密 4H', ref: '回測 +0.13R／筆（4R 目標）', f: (x) => x.k === 'fp' && x.dir < 0 },
+    { id: 'fpL', label: 'Delta 階梯・做多', mk: '加密 4H', ref: '回測 +0.35R／筆（4R、BTC 濾網，11/26 起）', f: (x) => x.k === 'fp' && x.dir > 0 },
+    { id: 'fpS', label: 'Delta 階梯・做空', mk: '加密 4H', ref: '回測 +0.14R／筆（4R、BTC 濾網，11/26 起）', f: (x) => x.k === 'fp' && x.dir < 0 },
     { id: 'pk', label: '大單推升', mk: '台股上櫃日線', ref: '回測 +2.45%／筆（約 +0.20R）', f: (x) => x.k === 'pk', tw: true },
   ];
   const SST = { open: '持有中', closed: '已結算', pending: '等進場', skipped: '沒進場', invalid: '無效', error: '資料缺' };

@@ -48,7 +48,7 @@ export function createFootTab({ api, el }) {
   function render() {
     if (!el.isConnected) return;
     const d = st.data;
-    const head = `<div class="toolbar"><div class="status" style="width:auto;flex:1">${d ? `資料到 ${esc(d.asOf)}（UTC・4H 收盤）・掃描 ${d.scanned} 個 USDT 永續${d.cached ? '・10 分鐘內快取' : ''}` : st.loading ? '掃描中（約 10～30 秒）…' : ''}</div>
+    const head = `<div class="toolbar"><div class="status" style="width:auto;flex:1">${d ? `資料到 ${esc(d.asOf)}（UTC・4H 收盤）・掃描 ${d.scanned} 個 USDT 永續${d.btcUp == null ? '' : d.btcUp ? '・BTC 在 4H EMA200 上，只列做多' : '・BTC 在 4H EMA200 下，只列做空'}${d.cached ? '・10 分鐘內快取' : ''}` : st.loading ? '掃描中（約 10～30 秒）…' : ''}</div>
       <button class="refresh" id="fp-refresh" type="button" ${st.loading ? 'disabled' : ''}>${st.loading ? '掃描中…' : '重新掃描'}</button></div>${st.error ? `<div class="status err">${esc(st.error)}</div>` : ''}`;
     const rules = `
       <section class="panel"><details class="fold" ${st.rulesOpen ? 'open' : ''}><summary><strong>Delta 階梯（足跡圖訂單流・加密 4H・多空）</strong><span class="muted small">規則與回測（點開展開）</span></summary>
@@ -57,6 +57,7 @@ export function createFootTab({ api, el }) {
           <li><b>概念</b>：足跡圖看每根 K 棒的主動買／賣（Delta）。這裡抓「買盤一階一階把價格推上去」的連續堆疊。</li>
           <li><b>做多訊號</b>：連續 2 根 4H，每根都 ①淨買 Delta 強（≥ 近 50 根平均的 2 倍）②創新高 ③收紅 → <b>下一根 4H 開盤進場</b>。</li>
           <li><b>做空</b>：完全相反（連 2 根淨賣 Delta 強＋創新低＋收綠）。</li>
+          <li><b>大盤濾網</b>：BTC 4H 收盤在 EMA200 上只出做多、在下只出做空（2018–2026 回測：做多 +0.35R、9 年 8 年正；做空 +0.14R、7 年正；逆大盤的做多是 −0.06R）。</li>
           <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>4R 出場</b>（賺到風險的 4 倍）。</li>
         </ol>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回測（150 主流幣・4H・4R 出場・扣費・事件層級）</th><th class="n">每筆期望</th><th class="n">贏隨機</th><th class="n">訓練/驗證</th></tr></thead><tbody>
