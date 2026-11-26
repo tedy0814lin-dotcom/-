@@ -63,6 +63,18 @@ const bubble = (title, sub, color, rows) => ({
   footer: { type: 'box', layout: 'vertical', backgroundColor: '#18191B', paddingTop: '0px', contents: [{ type: 'text', text: `🤖 Delta 階梯・${TAG}・${tpe()}`, size: 'xxs', color: '#6F6E77' }] },
 });
 const coin = (sym) => sym.replace(/-USDT$/, '');
+
+// 保護單檢查：持倉一定要有停損（止盈價 > 0 才掛止盈）；附帶的止盈止損沒掛上就另外補掛
+const ordersOf = async (sym) => { const d = await bx('GET', '/openApi/swap/v2/trade/openOrders', { symbol: sym }); return Array.isArray(d) ? d : d?.orders || []; };
+async function protect(sym, o, hedge) {
+  const od = await ordersOf(sym), has = (t) => od.some((x) => x.type === t);
+  const close = o.side === 'LONG' ? 'SELL' : 'BUY', ps = hedge ? o.side : 'BOTH', fixed = [];
+  const put = (type, price) => bx('POST', '/openApi/swap/v2/trade/order', { symbol: sym, side: close, positionSide: ps, type, quantity: o.qty, stopPrice: price, workingType: 'MARK_PRICE', closePosition: 'true' });
+  if (!has('STOP_MARKET')) { await put('STOP_MARKET', o.stop); fixed.push('停損 ' + o.stop); }
+  if (o.tp > 0 && !has('TAKE_PROFIT_MARKET')) { await put('TAKE_PROFIT_MARKET', o.tp); fixed.push('止盈 ' + o.tp); }
+  return fixed;
+}
+const HOLD = 20 * 864e5; // 回測最長持有 120 根 4H（20 天），到期市價平倉
 const fix = (v, d) => +(Math.floor(v * 10 ** d + 1e-9) / 10 ** d).toFixed(d);
 const toBx = (s) => s.replace(/USDT$/, '-USDT');
 
@@ -101,6 +113,23 @@ for (const [sym, o] of Object.entries(state.open)) {
   delete state.open[sym];
 }
 if (closes.length) await card(closes, '📊 Delta 自動交易平倉\n' + closeTxt.join('\n'));
+// 每輪檢查還開著的單：沒有保護單就補掛；持有超過 20 天就平倉（同回測）
+{
+  const hedge0 = String((await bx('GET', '/openApi/swap/v1/positionSide/dual'))?.dualSidePosition) === 'true', notes = [];
+  for (const [sym, o] of Object.entries(state.open)) {
+    if (!active.has(sym)) continue;
+    try {
+      if (Date.now() - o.t > HOLD) {
+        const p = (pos || []).find((x) => x.symbol === sym && +x.positionAmt !== 0);
+        await bx('POST', '/openApi/swap/v1/trade/closePosition', { positionId: p.positionId });
+        notes.push(`⏰ ${coin(sym)} 持有滿 20 天，已市價平倉`); continue;
+      }
+      const f = await protect(sym, o, hedge0);
+      if (f.length) notes.push(`🛡️ ${coin(sym)} 補掛 ${f.join('、')}`);
+    } catch (e) { notes.push(`⚠️ ${coin(sym)} 保護單檢查失敗：${e.message.slice(0, 120)}`); }
+  }
+  if (notes.length) { console.log(notes.join('\n')); await push('🤖 Delta 自動交易｜' + TAG + '\n' + notes.join('\n')); }
+}
 const fp = process.env.FP_FILE ? JSON.parse(fs.readFileSync(process.env.FP_FILE, 'utf8')) : await get('/api/twhist?fp=1&force=1'); // FP_FILE：測試用
 if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); process.exit(0); }
 // 只做真正的加密幣（回測同範圍：排除黃金、穩定幣）；2026-11-26 回測：真加密幣含 BTC 1%／10 筆 年化 159%、回撤 −49%（BTC 本身每筆 +0.32R、隨機 −0.07R）
@@ -145,12 +174,17 @@ for (const r of sigs) {
     const o = await bx('POST', `/openApi/swap/v2/trade/order${LIVE ? '' : '/test'}`, {
       symbol: sym, side: long ? 'BUY' : 'SELL', positionSide: side, type: 'MARKET', quantity: qty,
       stopLoss: JSON.stringify({ type: 'STOP_MARKET', stopPrice: stop, workingType: 'MARK_PRICE' }),
-      takeProfit: JSON.stringify({ type: 'TAKE_PROFIT_MARKET', stopPrice: tp, workingType: 'MARK_PRICE' }),
+      ...(tp > 0 ? { takeProfit: JSON.stringify({ type: 'TAKE_PROFIT_MARKET', stopPrice: tp, workingType: 'MARK_PRICE' }) } : {}),
     });
     state.done[id] = LIVE ? 'open' : 'test'; slots--;
-    if (LIVE) state.open[sym] = { side: long ? 'LONG' : 'SHORT', entry: px, stop, tp, qty, t: Date.now() };
+    if (LIVE) {
+      state.open[sym] = { side: long ? 'LONG' : 'SHORT', entry: px, stop, tp, qty, t: Date.now() };
+      await new Promise((ok) => setTimeout(ok, 1500));
+      try { const f = await protect(sym, state.open[sym], hedge); if (f.length) log.push(`🛡️ ${sym} 附帶止盈止損沒掛上，已補掛 ${f.join('、')}`); }
+      catch (e) { log.push(`❌ ${sym} 補掛停損失敗：${e.message}`); }
+    }
     opens.push(bubble(`${long ? '📈 做多' : '📉 做空'} ${coin(sym)}`, LIVE ? '✅ 已下單' : '🧪 測試通過（未成交）', long ? '#30A46C' : '#E5484D', [
-      row('進場', '≈ ' + px), row('停損 🛑', stop, '#FF6369'), row('止盈 🎯', tp + '（4R）', '#3DD68C'),
+      row('進場', '≈ ' + px), row('停損 🛑', stop, '#FF6369'), row('止盈 🎯', tp > 0 ? tp + '（4R）' : '不設（最多持有 20 天）', '#3DD68C'),
       row('數量', qty), row('槓桿', lev + 'x 逐倉'), row('風險', RISK + ' U（' + (RISK / usdt * 100).toFixed(1) + '%）'),
     ]));
     log.push(`${LIVE ? '✅ 已下單' : '🧪 測試通過'} ${long ? '做多' : '做空'} ${sym} ${qty} 顆 @≈${px}｜損 ${stop}｜盈 ${tp}｜槓桿 ${lev}x${o?.order?.orderID ? '｜單號 ' + o.order.orderID : ''}`);
@@ -160,5 +194,5 @@ for (const r of sigs) {
 for (const k of Object.keys(state.done)) if (Date.now() - +k.split('|')[1] > 3 * 864e5) delete state.done[k];
 save();
 console.log(log.join('\n'));
-const msg = log.filter((x) => /^(✅|🧪|❌)/.test(x));
+const msg = log.filter((x) => /^(✅|🧪|❌|🛡️)/.test(x));
 if (opens.length) await card(opens, `🤖 Delta 自動交易｜${TAG}新單 ${msg.length} 筆\n` + msg.join('\n'));
