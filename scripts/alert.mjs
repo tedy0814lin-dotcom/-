@@ -15,6 +15,7 @@ if (!KEY || !LINE) { console.log('還沒設定 ALERT_KEY / LINE_TOKEN，先跳�
 import { get } from './_api.mjs'; // 直接在這台主機算（不再呼叫網站）
 
 async function push(text) {
+  if (process.env.ALERT_PUSH === '0') return console.log('（訊號推播已關閉，只推自動交易下單）');
   if (text.length > 4900) text = text.slice(0, 4880) + '\n…（其餘請看網站）';
   const r = await fetch('https://api.line.me/v2/bot/message/broadcast', {
     method: 'POST',

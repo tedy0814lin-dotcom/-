@@ -66,6 +66,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          ALERT_PUSH: ${{ vars.ALERT_PUSH || '0' }}   # 2026-11-26 使用者：LINE 暫時只推自動交易下單；要恢復訊號推播就設 Variables ALERT_PUSH=1
           BINGX_KEY: ${{ secrets.BINGX_KEY }}
           BINGX_SECRET: ${{ secrets.BINGX_SECRET }}
           TRADE_LIVE: ${{ vars.TRADE_LIVE || '1' }}
