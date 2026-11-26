@@ -160,7 +160,6 @@ for (const r of sigs) {
   try {
     const px = +(await bx('GET', '/openApi/swap/v2/quote/price', { symbol: sym })).price;
     const stop = fix(r.stop, c.pricePrecision), tp = fix(r.target, c.pricePrecision), risk = long ? px - stop : stop - px;
-    if (!long && risk / px > 0.15) { log.push(`${sym} 略過：做空停損距離 ${(risk / px * 100).toFixed(1)}% > 15%（回測這類每筆平均虧 −0.24～−0.31R）`); state.done[id] = 'skip'; continue; }
     if (risk <= 0 || (long ? px >= tp : px <= tp)) { log.push(`${sym} 略過：價格已過停損或目標`); state.done[id] = 'skip'; continue; }
     const qty = fix(RISK / risk, c.quantityPrecision);
     if (qty < +c.tradeMinQuantity || qty * px < +(c.tradeMinUSDT || 0)) { log.push(`${sym} 略過：${RISK}U 風險下數量低於 BingX 最小下單量`); state.done[id] = 'skip'; continue; }
