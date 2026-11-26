@@ -107,7 +107,7 @@ export default async function handler(req, res) {
       const [cs, fp] = await Promise.all([cap(claudeScan), cap(footprintScan)]);
       const items = [];
       for (const r of cs.fresh || []) items.push({ k: 'cs', s: r.sym, dir: 1, sigT: Date.parse(r.sigDay + 'T00:00:00Z'), close: r.close, stop: r.stop0 });
-      for (const [arr, dir] of [[fp.long || [], 1], [fp.short || [], -1]]) for (const r of arr) items.push({ k: 'fp', s: r.sym, dir, sigT: r.sigT, close: r.close, stop: r.stop });
+      for (const [arr, dir] of [[fp.long || [], 1], [fp.short || [], -1]]) for (const r of arr) items.push({ k: 'fp', s: r.sym, dir, sigT: r.sigT, close: r.close, stop: r.stop, sc: r.score ?? null });
       return res.status(200).json({ at: Date.now(), items });
     }
     // 數據記錄用：所有策略（含不計分的觀察策略）目前成立的進出場計畫
