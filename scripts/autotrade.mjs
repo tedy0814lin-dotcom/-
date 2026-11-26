@@ -3,7 +3,8 @@
 //
 // 需要（GitHub → Settings → Secrets and variables → Actions）：
 //   Secrets：BINGX_KEY、BINGX_SECRET（BingX API，只開「合約交易」，不要開提現，建議綁 IP）
-//   Variables：TRADE_LIVE=1 才真的下單；沒設 = 只用 BingX「測試下單」端點驗證、不成交
+//   預設（alert.yml）：TRADE_ENV=vst＋TRADE_LIVE=1 → 在 BingX 模擬盤真的下單；要實盤就在 Variables 設 TRADE_ENV=live
+//   TRADE_LIVE=0 → 只用「測試下單」端點驗證、不成交
 //   選填 Variables：RISK_PCT（預設 1）、RISK_USD（設了就改用固定金額）、MAX_POS（預設 10）、TRADE_ENV=vst（模擬盤）
 // 投組回測（2018–2026、60 幣、複利、扣費）：1%／10 筆＋斷路器 年化約 113%、最大回撤 −48%（成本加倍 −50%）、9 年全正；使用者選 1%（可接受回撤 −50%）；隨機進場 −4%／年。
 // 防爆倉：每檔改逐倉，槓桿 ≤ 1 ÷（3 × 停損%），強平價約在停損 3 倍遠，停損一定先觸發；單筆最多賠它自己的保證金。

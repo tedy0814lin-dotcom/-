@@ -68,8 +68,8 @@ jobs:
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
           BINGX_KEY: ${{ secrets.BINGX_KEY }}
           BINGX_SECRET: ${{ secrets.BINGX_SECRET }}
-          TRADE_LIVE: ${{ vars.TRADE_LIVE }}
-          TRADE_ENV: ${{ vars.TRADE_ENV }}
+          TRADE_LIVE: ${{ vars.TRADE_LIVE || '1' }}
+          TRADE_ENV: ${{ vars.TRADE_ENV || 'vst' }}
           RISK_USD: ${{ vars.RISK_USD }}
           RISK_PCT: ${{ vars.RISK_PCT }}
           MAX_POS: ${{ vars.MAX_POS }}
