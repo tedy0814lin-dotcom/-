@@ -17,7 +17,7 @@ import { get } from './_api.mjs';
 const KEY = process.env.BINGX_KEY, SEC = process.env.BINGX_SECRET;
 if (!KEY || !SEC) { console.log('還沒設定 BINGX_KEY / BINGX_SECRET，跳過自動交易'); process.exit(0); }
 const LIVE = process.env.TRADE_LIVE === '1';
-const PCT = +(process.env.RISK_PCT || 1) / 100, MAX_POS = +(process.env.MAX_POS || 10);
+const PCT = +(process.env.RISK_PCT || 0.7) / 100, MAX_POS = +(process.env.MAX_POS || 10);
 const HOST = process.env.TRADE_ENV === 'vst' ? 'https://open-api-vst.bingx.com' : 'https://open-api.bingx.com';
 const STATE = '.alert-state/autotrade.json', LINE = process.env.LINE_TOKEN;
 const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); };
@@ -135,8 +135,24 @@ if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); pr
 // 只做真正的加密幣（回測同範圍：排除黃金、穩定幣）；2026-11-26 回測：真加密幣含 BTC 1%／10 筆 年化 159%、回撤 −49%（BTC 本身每筆 +0.32R、隨機 −0.07R）
 const NOT_CRYPTO = /^(XAUT|PAXG|WBTC|USDC|FDUSD|TUSD|USD1|DAI|XUSD|RLUSD|RWUSD|U)USDT$|^NC/;
 // 只做 BTC 同向；訊號 4H 收盤後 4 小時內才進（sigT 是 K 棒開盤時間）
+// 選幣：只做「過去 90 天平均成交額」前 TOP_N（預設 50）的幣，每天重算一次（2026-11-27 回測：387 幣 90 天前 50、0.7% → 年化 65%、回撤 −44%）
+const TOP_N = +(process.env.TOP_N || 50), today = new Date().toISOString().slice(0, 10);
+if (state.rank?.day !== today || !state.rank?.top?.length) {
+  try {
+    const pub = async (path) => { const r = await fetch('https://open-api.bingx.com' + path, { signal: AbortSignal.timeout(15000) }); const j = await r.json(); if (j.code !== 0) throw new Error(j.msg); return j.data; };
+    const tk = (await pub('/openApi/swap/v2/quote/ticker')).filter((t) => /-USDT$/.test(t.symbol) && !NOT_CRYPTO.test(t.symbol.replace('-', '')));
+    const cand = tk.sort((a, b) => +b.quoteVolume - +a.quoteVolume).slice(0, 200).map((t) => t.symbol), avg = {};
+    for (let i = 0; i < cand.length; i += 8) await Promise.all(cand.slice(i, i + 8).map(async (sym) => {
+      try { const k = await pub(`/openApi/swap/v3/quote/klines?symbol=${sym}&interval=1d&limit=91`); const d = k.slice(1, 91); if (d.length >= 60) avg[sym] = d.reduce((a, x) => a + +x.volume * +x.close, 0) / d.length; } catch {}
+    }));
+    const top = Object.entries(avg).sort((a, b) => b[1] - a[1]).slice(0, TOP_N).map((x) => x[0]);
+    if (top.length >= TOP_N * 0.8) state.rank = { day: today, top };
+    console.log(`90 天平均成交額前 ${TOP_N}：${top.join(' ')}`);
+  } catch (e) { console.log('成交額排名更新失敗，沿用舊名單：' + e.message); }
+}
+const TOP = new Set(state.rank?.top || []);
 const sigs = [...fp.long, ...fp.short.map((r) => ({ ...r, short: true }))]
-  .filter((r) => !NOT_CRYPTO.test(r.sym) && r.bOk === true && Date.now() < r.sigT + 8 * 3600e3 && !state.done[`${r.sym}|${r.sigT}`])
+  .filter((r) => !NOT_CRYPTO.test(r.sym) && (!TOP.size || TOP.has(toBx(r.sym))) && r.bOk === true && Date.now() < r.sigT + 8 * 3600e3 && !state.done[`${r.sym}|${r.sigT}`])
   .sort((a, b) => Math.abs(b.dn) - Math.abs(a.dn));
 console.log(`BTC ${fp.btcUp ? '在' : '在下'} EMA200；同向新訊號 ${sigs.length} 筆；${LIVE ? '實盤' : '測試模式（不成交）'}`);
 if (!sigs.length) { save(); process.exit(0); }
