@@ -71,6 +71,7 @@ jobs:
           TRADE_LIVE: ${{ vars.TRADE_LIVE }}
           TRADE_ENV: ${{ vars.TRADE_ENV }}
           RISK_USD: ${{ vars.RISK_USD }}
+          RISK_PCT: ${{ vars.RISK_PCT }}
           MAX_POS: ${{ vars.MAX_POS }}
           SITE: ${{ vars.SITE }}
           TW_IN: ${{ github.event.inputs.tw }}
