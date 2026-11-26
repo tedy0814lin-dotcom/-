@@ -45,6 +45,8 @@ jobs:
           INT_DAY="${INT_DAY:-1800}"
           T0=$(date +%s)
           TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
+          # BingX 自動交易（Delta 階梯＋BTC 濾網；沒設 BINGX_KEY 就跳過；TRADE_LIVE=1 才真的下單）
+          timeout 180 node scripts/autotrade.mjs || true
           timeout 300 node scripts/log.mjs || true
           timeout 400 node scripts/slog.mjs || true
           # 快照（加密一定跑；台股依時段／過期自動決定，也可手動 TW=1）
@@ -64,6 +66,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          BINGX_KEY: ${{ secrets.BINGX_KEY }}
+          BINGX_SECRET: ${{ secrets.BINGX_SECRET }}
+          TRADE_LIVE: ${{ vars.TRADE_LIVE }}
+          TRADE_ENV: ${{ vars.TRADE_ENV }}
+          RISK_USD: ${{ vars.RISK_USD }}
+          MAX_POS: ${{ vars.MAX_POS }}
           SITE: ${{ vars.SITE }}
           TW_IN: ${{ github.event.inputs.tw }}
           TEST_IN: ${{ github.event.inputs.test }}
