@@ -19,14 +19,18 @@ const LIVE = process.env.TRADE_LIVE === '1';
 const PCT = +(process.env.RISK_PCT || 1) / 100, MAX_POS = +(process.env.MAX_POS || 10);
 const HOST = process.env.TRADE_ENV === 'vst' ? 'https://open-api-vst.bingx.com' : 'https://open-api.bingx.com';
 const STATE = '.alert-state/autotrade.json', LINE = process.env.LINE_TOKEN;
+const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); };
 const state = (() => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return { done: {} }; } })();
 
 async function bx(method, path, params = {}) {
   const p = { ...params, timestamp: Date.now(), recvWindow: 5000 };
   const s = Object.keys(p).sort().map((k) => `${k}=${p[k]}`).join('&');
   const sig = crypto.createHmac('sha256', SEC).update(s).digest('hex');
-  const q = Object.keys(p).sort().map((k) => `${k}=${encodeURIComponent(p[k])}`).join('&');
-  const r = await fetch(`${HOST}${path}?${q}&signature=${sig}`, { method, headers: { 'X-BX-APIKEY': KEY, 'X-SOURCE-KEY': 'BX-AI-SKILL' }, signal: AbortSignal.timeout(15000) });
+  // 照 BingX 官方範例：簽名用未編碼字串；值含 { [ 才做 URL 編碼；POST 放表單 body
+  const q = Object.keys(p).sort().map((k) => { const v = String(p[k]); return `${k}=${/[{[]/.test(v) ? encodeURIComponent(v) : v}`; }).join('&') + `&signature=${sig}`;
+  const h = { 'X-BX-APIKEY': KEY, 'X-SOURCE-KEY': 'BX-AI-SKILL' };
+  const r = method === 'GET' ? await fetch(`${HOST}${path}?${q}`, { headers: h, signal: AbortSignal.timeout(15000) })
+    : await fetch(`${HOST}${path}`, { method, headers: { ...h, 'Content-Type': 'application/x-www-form-urlencoded' }, body: q, signal: AbortSignal.timeout(15000) });
   const t = await r.text(), j = JSON.parse(t.replace(/"orderId":(\d{16,})/g, '"orderId":"$1"'));
   if (j.code !== 0) throw new Error(`BingX ${j.code} ${j.msg || ''}（${path}）`);
   return j.data;
@@ -35,9 +39,17 @@ async function push(text) {
   if (!LINE) return;
   await fetch('https://api.line.me/v2/bot/message/broadcast', { method: 'POST', headers: { Authorization: 'Bearer ' + LINE, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ type: 'text', text }] }) }).catch(() => {});
 }
-const fix = (v, d) => Math.floor(v * 10 ** d) / 10 ** d;
+const fix = (v, d) => +(Math.floor(v * 10 ** d + 1e-9) / 10 ** d).toFixed(d);
 const toBx = (s) => s.replace(/USDT$/, '-USDT');
 
+// 先確認金鑰能用（第一次連上就 LINE 通知一次）
+let usdt;
+try {
+  const bal = await bx('GET', '/openApi/swap/v3/user/balance');
+  usdt = +((Array.isArray(bal) ? bal : [bal]).find((x) => x?.asset === 'USDT')?.balance || 0);
+} catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('【Delta 自動交易】BingX 金鑰檢查失敗：' + e.message); state.authErr = 1; save(); process.exit(0); }
+if (!state.authOk || state.authErr) await push(`【Delta 自動交易${LIVE ? '' : '・測試'}】已連上 BingX${HOST.includes('vst') ? '模擬盤' : ''}，永續 USDT 餘額 ${usdt}`);
+state.authOk = 1; state.authErr = 0;
 const fp = await get('/api/twhist?fp=1&force=1');
 if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); process.exit(0); }
 // 只做 BTC 同向；訊號 4H 收盤後 4 小時內才進（sigT 是 K 棒開盤時間）
@@ -45,10 +57,9 @@ const sigs = [...fp.long, ...fp.short.map((r) => ({ ...r, short: true }))]
   .filter((r) => r.bOk === true && Date.now() < r.sigT + 8 * 3600e3 && !state.done[`${r.sym}|${r.sigT}`])
   .sort((a, b) => Math.abs(b.dn) - Math.abs(a.dn));
 console.log(`BTC ${fp.btcUp ? '在' : '在下'} EMA200；同向新訊號 ${sigs.length} 筆；${LIVE ? '實盤' : '測試模式（不成交）'}`);
-if (!sigs.length) process.exit(0);
+if (!sigs.length) { save(); process.exit(0); }
 
-const [pos, dual, cts, bal] = await Promise.all([bx('GET', '/openApi/swap/v2/user/positions'), bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts'), bx('GET', '/openApi/swap/v3/user/balance')]);
-const usdt = +((Array.isArray(bal) ? bal : [bal]).find((x) => x?.asset === 'USDT')?.balance || 0);
+const [pos, dual, cts] = await Promise.all([bx('GET', '/openApi/swap/v2/user/positions'), bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts')]);
 state.peak = Math.max(state.peak || 0, usdt);
 const brk = usdt < state.peak * 0.8; // 比最高點少 20% → 風險減半，回到 80% 以上恢復
 const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT * (brk ? 0.5 : 1)).toFixed(4);
@@ -87,7 +98,7 @@ for (const r of sigs) {
 }
 // 只留 3 天內的紀錄
 for (const k of Object.keys(state.done)) if (Date.now() - +k.split('|')[1] > 3 * 864e5) delete state.done[k];
-fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state));
+save();
 console.log(log.join('\n'));
 const msg = log.filter((x) => /^(✅|🧪|❌)/.test(x));
 if (msg.length) await push(`【Delta 自動交易${LIVE ? '' : '・測試'}】\n` + msg.join('\n'));
