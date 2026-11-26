@@ -51,7 +51,7 @@ try {
 } catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('【Delta 自動交易】BingX 金鑰檢查失敗：' + e.message); state.authErr = 1; save(); process.exit(0); }
 if (!state.authOk || state.authErr) await push(`【Delta 自動交易${LIVE ? '' : '・測試'}】已連上 BingX${HOST.includes('vst') ? '模擬盤' : ''}，永續 USDT 餘額 ${usdt}`);
 state.authOk = 1; state.authErr = 0;
-const fp = await get('/api/twhist?fp=1&force=1');
+const fp = process.env.FP_FILE ? JSON.parse(fs.readFileSync(process.env.FP_FILE, 'utf8')) : await get('/api/twhist?fp=1&force=1'); // FP_FILE：測試用
 if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); process.exit(0); }
 // 只做 BTC 同向；訊號 4H 收盤後 4 小時內才進（sigT 是 K 棒開盤時間）
 const sigs = [...fp.long, ...fp.short.map((r) => ({ ...r, short: true }))]
@@ -82,7 +82,9 @@ for (const r of sigs) {
     if (risk <= 0 || (long ? px >= tp : px <= tp)) { log.push(`${sym} 略過：價格已過停損或目標`); state.done[id] = 'skip'; continue; }
     const qty = fix(RISK / risk, c.quantityPrecision);
     if (qty < +c.tradeMinQuantity || qty * px < +(c.tradeMinUSDT || 0)) { log.push(`${sym} 略過：${RISK}U 風險下數量低於 BingX 最小下單量`); state.done[id] = 'skip'; continue; }
-    const lev = Math.max(1, Math.min(20, Math.floor(1 / (3 * risk / px)), long ? c.maxLongLeverage : c.maxShortLeverage)); // 強平距離 ≈ 3 倍停損距離
+    const L = await bx('GET', '/openApi/swap/v2/trade/leverage', { symbol: sym });
+    const mx = +(long ? L?.maxLongLeverage : L?.maxShortLeverage) || 20;
+    const lev = Math.max(1, Math.min(20, mx, Math.floor(1 / (3 * risk / px)))); // 強平距離 ≈ 3 倍停損距離
     const side = hedge ? (long ? 'LONG' : 'SHORT') : 'BOTH';
     if (LIVE) {
       await bx('POST', '/openApi/swap/v2/trade/marginType', { symbol: sym, marginType: 'ISOLATED' }).catch((e) => console.log(`${sym} 逐倉設定：${e.message}（已是逐倉時會出現，忽略）`));
