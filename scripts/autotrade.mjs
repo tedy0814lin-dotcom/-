@@ -1,11 +1,12 @@
 // BingX 自動交易：Delta 階梯（4H）＋BTC 大盤濾網（BTC 4H 在 EMA200 上只做多、下只做空）
-// 每筆打到停損賠「永續帳戶餘額 × RISK_PCT%」（預設 0.5%），同時最多 MAX_POS 筆（預設 10），進場同時掛停損與 4R 止盈（照網站訊號價位）。
+// 每筆打到停損賠「永續帳戶餘額 × RISK_PCT%」（預設 0.3%）；餘額比最高點少 20% 時風險自動減半（斷路器），同時最多 MAX_POS 筆（預設 10），進場同時掛停損與 4R 止盈（照網站訊號價位）。
 //
 // 需要（GitHub → Settings → Secrets and variables → Actions）：
 //   Secrets：BINGX_KEY、BINGX_SECRET（BingX API，只開「合約交易」，不要開提現，建議綁 IP）
 //   Variables：TRADE_LIVE=1 才真的下單；沒設 = 只用 BingX「測試下單」端點驗證、不成交
-//   選填 Variables：RISK_PCT（預設 0.5）、RISK_USD（設了就改用固定金額）、MAX_POS（預設 10）、TRADE_ENV=vst（模擬盤）
-// 投組回測（2018–2026、60 幣、複利、扣費）：0.5%／10 筆 年化約 71%、最大回撤 −41%、9 年全正；隨機進場同設定 −4%／年。
+//   選填 Variables：RISK_PCT（預設 0.3）、RISK_USD（設了就改用固定金額）、MAX_POS（預設 10）、TRADE_ENV=vst（模擬盤）
+// 投組回測（2018–2026、60 幣、複利、扣費）：0.3%／10 筆＋斷路器 年化約 40%、最大回撤 −24%、9 年全正（0.5% 無斷路器 71%／−41%）；隨機進場 −4%／年。
+// 防爆倉：每檔改逐倉，槓桿 ≤ 1 ÷（3 × 停損%），強平價約在停損 3 倍遠，停損一定先觸發；單筆最多賠它自己的保證金。
 // 回測依據：專案文件 Delta階梯多空2018起長期回測.md、Delta階梯延遲進場檢驗.md（晚 2 小時進場影響很小）。
 process.env.SNAPSHOT ??= '1';
 import fs from 'node:fs';
@@ -15,7 +16,7 @@ import { get } from './_api.mjs';
 const KEY = process.env.BINGX_KEY, SEC = process.env.BINGX_SECRET;
 if (!KEY || !SEC) { console.log('還沒設定 BINGX_KEY / BINGX_SECRET，跳過自動交易'); process.exit(0); }
 const LIVE = process.env.TRADE_LIVE === '1';
-const PCT = +(process.env.RISK_PCT || 0.5) / 100, MAX_POS = +(process.env.MAX_POS || 10);
+const PCT = +(process.env.RISK_PCT || 0.3) / 100, MAX_POS = +(process.env.MAX_POS || 10);
 const HOST = process.env.TRADE_ENV === 'vst' ? 'https://open-api-vst.bingx.com' : 'https://open-api.bingx.com';
 const STATE = '.alert-state/autotrade.json', LINE = process.env.LINE_TOKEN;
 const state = (() => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return { done: {} }; } })();
@@ -48,8 +49,10 @@ if (!sigs.length) process.exit(0);
 
 const [pos, dual, cts, bal] = await Promise.all([bx('GET', '/openApi/swap/v2/user/positions'), bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts'), bx('GET', '/openApi/swap/v3/user/balance')]);
 const usdt = +((Array.isArray(bal) ? bal : [bal]).find((x) => x?.asset === 'USDT')?.balance || 0);
-const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT).toFixed(4);
-console.log(`永續 USDT 餘額 ${usdt}，每筆風險 ${RISK}U`);
+state.peak = Math.max(state.peak || 0, usdt);
+const brk = usdt < state.peak * 0.8; // 比最高點少 20% → 風險減半，回到 80% 以上恢復
+const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT * (brk ? 0.5 : 1)).toFixed(4);
+console.log(`永續 USDT 餘額 ${usdt}（最高 ${state.peak}），每筆風險 ${RISK}U${brk ? '（斷路器：已減半）' : ''}`);
 if (!(RISK > 0)) { console.log('餘額是 0，不下單'); process.exit(0); }
 const held = new Set((pos || []).filter((x) => +x.positionAmt !== 0).map((x) => x.symbol));
 const hedge = String(dual?.dualSidePosition) === 'true';
@@ -67,9 +70,12 @@ for (const r of sigs) {
     if (risk <= 0 || (long ? px >= tp : px <= tp)) { log.push(`${sym} 略過：價格已過停損或目標`); state.done[id] = 'skip'; continue; }
     const qty = fix(RISK / risk, c.quantityPrecision);
     if (qty < +c.tradeMinQuantity || qty * px < +(c.tradeMinUSDT || 0)) { log.push(`${sym} 略過：${RISK}U 風險下數量低於 BingX 最小下單量`); state.done[id] = 'skip'; continue; }
-    const lev = Math.max(1, Math.min(20, Math.floor(0.5 / (risk / px)), long ? c.maxLongLeverage : c.maxShortLeverage)); // 停損遠就降槓桿，避免先爆倉
+    const lev = Math.max(1, Math.min(20, Math.floor(1 / (3 * risk / px)), long ? c.maxLongLeverage : c.maxShortLeverage)); // 強平距離 ≈ 3 倍停損距離
     const side = hedge ? (long ? 'LONG' : 'SHORT') : 'BOTH';
-    if (LIVE) await bx('POST', '/openApi/swap/v2/trade/leverage', { symbol: sym, side, leverage: lev });
+    if (LIVE) {
+      await bx('POST', '/openApi/swap/v2/trade/marginType', { symbol: sym, marginType: 'ISOLATED' }).catch((e) => console.log(`${sym} 逐倉設定：${e.message}（已是逐倉時會出現，忽略）`));
+      await bx('POST', '/openApi/swap/v2/trade/leverage', { symbol: sym, side, leverage: lev });
+    }
     const o = await bx('POST', `/openApi/swap/v2/trade/order${LIVE ? '' : '/test'}`, {
       symbol: sym, side: long ? 'BUY' : 'SELL', positionSide: side, type: 'MARKET', quantity: qty,
       stopLoss: JSON.stringify({ type: 'STOP_MARKET', stopPrice: stop, workingType: 'MARK_PRICE' }),
