@@ -51,6 +51,25 @@ try {
 } catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('【Delta 自動交易】BingX 金鑰檢查失敗：' + e.message); state.authErr = 1; save(); process.exit(0); }
 if (!state.authOk || state.authErr) await push(`【Delta 自動交易${LIVE ? '' : '・測試'}】已連上 BingX${HOST.includes('vst') ? '模擬盤' : ''}，永續 USDT 餘額 ${usdt}`);
 state.authOk = 1; state.authErr = 0;
+// 平倉回報：之前下的單如果持倉已經不見，查歷史倉位判斷止盈或止損，LINE 通知
+const pos = await bx('GET', '/openApi/swap/v2/user/positions');
+const active = new Set((pos || []).filter((x) => +x.positionAmt !== 0).map((x) => x.symbol));
+state.open ||= {};
+for (const [sym, o] of Object.entries(state.open)) {
+  if (active.has(sym) || Date.now() - o.t < 60e3) continue;
+  let px = null, pnl = null;
+  try {
+    const h = await bx('GET', '/openApi/swap/v1/trade/positionHistory', { symbol: sym, startTs: o.t - 60e3, endTs: Date.now() });
+    const r = (h?.positionHistory || []).sort((a, b) => +(b.updateTime || b.closeTime || 0) - +(a.updateTime || a.closeTime || 0))[0];
+    if (r) { px = +(r.avgClosePrice ?? r.closeAvgPrice ?? r.avgPrice) || null; pnl = +(r.netProfit ?? r.realisedProfit) ; if (!Number.isFinite(pnl)) pnl = null; }
+  } catch (e) { console.log(`${sym} 查歷史倉位失敗：${e.message}`); }
+  if (px == null) px = +(await bx('GET', '/openApi/swap/v2/quote/price', { symbol: sym }).catch(() => ({}))).price || null;
+  const long = o.side === 'LONG', R = px == null ? null : (long ? px - o.entry : o.entry - px) / Math.abs(o.entry - o.stop);
+  const kind = px == null ? '已平倉' : Math.abs(px - o.tp) < Math.abs(px - o.stop) ? '🎯 止盈' : '🛑 止損';
+  await push(`【Delta 自動交易${HOST.includes('vst') ? '・模擬盤' : ''}】${kind} ${long ? '做多' : '做空'} ${sym}\n進場 ${o.entry}｜平倉 ${px ?? '?'}${R == null ? '' : '｜' + (R >= 0 ? '+' : '') + R.toFixed(2) + 'R'}${pnl == null ? '' : '｜盈虧 ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + 'U'}`);
+  console.log(`${sym} ${kind} ${px} R=${R}`);
+  delete state.open[sym];
+}
 const fp = process.env.FP_FILE ? JSON.parse(fs.readFileSync(process.env.FP_FILE, 'utf8')) : await get('/api/twhist?fp=1&force=1'); // FP_FILE：測試用
 if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); process.exit(0); }
 // 只做 BTC 同向；訊號 4H 收盤後 4 小時內才進（sigT 是 K 棒開盤時間）
@@ -60,13 +79,13 @@ const sigs = [...fp.long, ...fp.short.map((r) => ({ ...r, short: true }))]
 console.log(`BTC ${fp.btcUp ? '在' : '在下'} EMA200；同向新訊號 ${sigs.length} 筆；${LIVE ? '實盤' : '測試模式（不成交）'}`);
 if (!sigs.length) { save(); process.exit(0); }
 
-const [pos, dual, cts] = await Promise.all([bx('GET', '/openApi/swap/v2/user/positions'), bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts')]);
+const [dual, cts] = await Promise.all([bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts')]);
 state.peak = Math.max(state.peak || 0, usdt);
 const brk = usdt < state.peak * 0.8; // 比最高點少 20% → 風險減半，回到 80% 以上恢復
 const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT * (brk ? 0.5 : 1)).toFixed(4);
 console.log(`永續 USDT 餘額 ${usdt}（最高 ${state.peak}），每筆風險 ${RISK}U${brk ? '（斷路器：已減半）' : ''}`);
 if (!(RISK > 0)) { console.log('餘額是 0，不下單'); process.exit(0); }
-const held = new Set((pos || []).filter((x) => +x.positionAmt !== 0).map((x) => x.symbol));
+const held = active;
 const hedge = String(dual?.dualSidePosition) === 'true';
 const spec = Object.fromEntries((cts || []).map((c) => [c.symbol, c]));
 let slots = MAX_POS - held.size;
@@ -96,6 +115,7 @@ for (const r of sigs) {
       takeProfit: JSON.stringify({ type: 'TAKE_PROFIT_MARKET', stopPrice: tp, workingType: 'MARK_PRICE' }),
     });
     state.done[id] = LIVE ? 'open' : 'test'; slots--;
+    if (LIVE) state.open[sym] = { side: long ? 'LONG' : 'SHORT', entry: px, stop, tp, qty, t: Date.now() };
     log.push(`${LIVE ? '✅ 已下單' : '🧪 測試通過'} ${long ? '做多' : '做空'} ${sym} ${qty} 顆 @≈${px}｜損 ${stop}｜盈 ${tp}｜槓桿 ${lev}x${o?.order?.orderID ? '｜單號 ' + o.order.orderID : ''}`);
   } catch (e) { log.push(`❌ ${sym} 失敗：${e.message}`); }
 }
