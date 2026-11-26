@@ -17,7 +17,7 @@ import { get } from './_api.mjs';
 const KEY = process.env.BINGX_KEY, SEC = process.env.BINGX_SECRET;
 if (!KEY || !SEC) { console.log('還沒設定 BINGX_KEY / BINGX_SECRET，跳過自動交易'); process.exit(0); }
 const LIVE = process.env.TRADE_LIVE === '1';
-const PCT = +(process.env.RISK_PCT || 0.7) / 100, MAX_POS = +(process.env.MAX_POS || 10);
+const PCT = +(process.env.RISK_PCT || 1) / 100, MAX_POS = +(process.env.MAX_POS || 10);
 const HOST = process.env.TRADE_ENV === 'vst' ? 'https://open-api-vst.bingx.com' : 'https://open-api.bingx.com';
 const STATE = '.alert-state/autotrade.json', LINE = process.env.LINE_TOKEN;
 const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); };
