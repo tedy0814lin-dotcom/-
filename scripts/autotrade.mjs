@@ -67,7 +67,8 @@ const toBx = (s) => s.replace(/USDT$/, '-USDT');
 let usdt;
 try {
   const bal = await bx('GET', '/openApi/swap/v3/user/balance');
-  usdt = +((Array.isArray(bal) ? bal : [bal]).find((x) => x?.asset === 'USDT')?.balance || 0);
+  const B = (Array.isArray(bal) ? bal : [bal]).filter(Boolean); // 模擬盤的資產叫 VST，不是 USDT
+  usdt = +((B.find((x) => x.asset === 'USDT' && +x.balance > 0) || B.find((x) => x.asset === 'VST') || B.find((x) => +x.balance > 0) || {}).balance || 0);
 } catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('⚠️ Delta 自動交易｜BingX 金鑰檢查失敗\n' + e.message); state.authErr = 1; save(); process.exit(0); }
 if (!state.authOk || state.authErr) await push(`✅ Delta 自動交易｜已連上 BingX ${TAG}${LIVE ? '' : '（測試模式）'}\n💰 永續 USDT 餘額 ${usdt}`);
 state.authOk = 1; state.authErr = 0;
