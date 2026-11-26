@@ -23,16 +23,19 @@ const STATE = '.alert-state/autotrade.json', LINE = process.env.LINE_TOKEN;
 const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); };
 const state = (() => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return { done: {} }; } })();
 
-async function bx(method, path, params = {}) {
+// BingX 簽名請求。簽名一律用「依 key 排序、未編碼」的字串（官方範例）。
+// POST 有兩種送法：A＝原字串放 body（官方範例）、B＝全部放網址（值含 { [ 才編碼，同 GET）。
+// 2026-11-26 實測 A 以外的編碼 body 會回 100001 簽名錯誤；遇 100001 自動換另一種再送一次（簽名錯誤時單子不會成立，重送安全）。
+async function bx(method, path, params = {}, mode = 0) {
   const p = { ...params, timestamp: Date.now(), recvWindow: 5000 };
   const s = Object.keys(p).sort().map((k) => `${k}=${p[k]}`).join('&');
   const sig = crypto.createHmac('sha256', SEC).update(s).digest('hex');
-  // 照 BingX 官方範例：簽名用未編碼字串；值含 { [ 才做 URL 編碼；POST 放表單 body
   const q = Object.keys(p).sort().map((k) => { const v = String(p[k]); return `${k}=${/[{[]/.test(v) ? encodeURIComponent(v) : v}`; }).join('&') + `&signature=${sig}`;
   const h = { 'X-BX-APIKEY': KEY, 'X-SOURCE-KEY': 'BX-AI-SKILL' };
-  const r = method === 'GET' ? await fetch(`${HOST}${path}?${q}`, { headers: h, signal: AbortSignal.timeout(15000) })
-    : await fetch(`${HOST}${path}`, { method, headers: { ...h, 'Content-Type': 'application/x-www-form-urlencoded' }, body: q, signal: AbortSignal.timeout(15000) });
+  const r = method === 'GET' || mode === 1 ? await fetch(`${HOST}${path}?${q}`, { method, headers: h, signal: AbortSignal.timeout(15000) })
+    : await fetch(`${HOST}${path}`, { method, headers: { ...h, 'Content-Type': 'application/x-www-form-urlencoded' }, body: `${s}&signature=${sig}`, signal: AbortSignal.timeout(15000) });
   const t = await r.text(), j = JSON.parse(t.replace(/"orderId":(\d{16,})/g, '"orderId":"$1"'));
+  if (j.code === 100001 && method !== 'GET' && mode === 0) { console.log(`${path} 簽名錯誤，改用網址參數重送`); return bx(method, path, params, 1); }
   if (j.code !== 0) throw new Error(`BingX ${j.code} ${j.msg || ''}（${path}）`);
   return j.data;
 }
