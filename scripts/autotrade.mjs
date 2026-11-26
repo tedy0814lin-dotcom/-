@@ -36,10 +36,30 @@ async function bx(method, path, params = {}) {
   if (j.code !== 0) throw new Error(`BingX ${j.code} ${j.msg || ''}（${path}）`);
   return j.data;
 }
-async function push(text) {
-  if (!LINE) return;
-  await fetch('https://api.line.me/v2/bot/message/broadcast', { method: 'POST', headers: { Authorization: 'Bearer ' + LINE, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ type: 'text', text }] }) }).catch(() => {});
+async function line(messages) {
+  if (!LINE) return false;
+  const r = await fetch('https://api.line.me/v2/bot/message/broadcast', { method: 'POST', headers: { Authorization: 'Bearer ' + LINE, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }) }).catch(() => null);
+  if (r && !r.ok) console.log('LINE 失敗 ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  return !!r?.ok;
 }
+const push = (text) => line([{ type: 'text', text }]);
+// LINE 卡片（Flex）：bubbles 最多 12 張；卡片送失敗就改送純文字
+async function card(bubbles, alt) {
+  for (let i = 0; i < bubbles.length; i += 12) {
+    const b = bubbles.slice(i, i + 12);
+    if (!(await line([{ type: 'flex', altText: alt.slice(0, 390), contents: b.length === 1 ? b[0] : { type: 'carousel', contents: b } }]))) await push(alt);
+  }
+}
+const TAG = HOST.includes('vst') ? '模擬盤' : '實盤';
+const tpe = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+const row = (k, v, color) => ({ type: 'box', layout: 'horizontal', contents: [{ type: 'text', text: k, size: 'sm', color: '#8B8D98', flex: 2 }, { type: 'text', text: String(v), size: 'sm', align: 'end', flex: 3, weight: 'bold', color: color || '#EDEEF0' }] });
+const bubble = (title, sub, color, rows) => ({
+  type: 'bubble', size: 'kilo',
+  header: { type: 'box', layout: 'vertical', backgroundColor: color, paddingAll: '14px', contents: [{ type: 'text', text: title, weight: 'bold', size: 'lg', color: '#FFFFFF' }, { type: 'text', text: sub, size: 'xs', color: '#FFFFFFCC' }] },
+  body: { type: 'box', layout: 'vertical', spacing: 'sm', backgroundColor: '#18191B', contents: rows },
+  footer: { type: 'box', layout: 'vertical', backgroundColor: '#18191B', paddingTop: '0px', contents: [{ type: 'text', text: `🤖 Delta 階梯・${TAG}・${tpe()}`, size: 'xxs', color: '#6F6E77' }] },
+});
+const coin = (sym) => sym.replace(/-USDT$/, '');
 const fix = (v, d) => +(Math.floor(v * 10 ** d + 1e-9) / 10 ** d).toFixed(d);
 const toBx = (s) => s.replace(/USDT$/, '-USDT');
 
@@ -48,13 +68,14 @@ let usdt;
 try {
   const bal = await bx('GET', '/openApi/swap/v3/user/balance');
   usdt = +((Array.isArray(bal) ? bal : [bal]).find((x) => x?.asset === 'USDT')?.balance || 0);
-} catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('【Delta 自動交易】BingX 金鑰檢查失敗：' + e.message); state.authErr = 1; save(); process.exit(0); }
-if (!state.authOk || state.authErr) await push(`【Delta 自動交易${LIVE ? '' : '・測試'}】已連上 BingX${HOST.includes('vst') ? '模擬盤' : ''}，永續 USDT 餘額 ${usdt}`);
+} catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('⚠️ Delta 自動交易｜BingX 金鑰檢查失敗\n' + e.message); state.authErr = 1; save(); process.exit(0); }
+if (!state.authOk || state.authErr) await push(`✅ Delta 自動交易｜已連上 BingX ${TAG}${LIVE ? '' : '（測試模式）'}\n💰 永續 USDT 餘額 ${usdt}`);
 state.authOk = 1; state.authErr = 0;
 // 平倉回報：之前下的單如果持倉已經不見，查歷史倉位判斷止盈或止損，LINE 通知
 const pos = await bx('GET', '/openApi/swap/v2/user/positions');
 const active = new Set((pos || []).filter((x) => +x.positionAmt !== 0).map((x) => x.symbol));
 state.open ||= {};
+const closes = [], closeTxt = [];
 for (const [sym, o] of Object.entries(state.open)) {
   if (active.has(sym) || Date.now() - o.t < 60e3) continue;
   let px = null, pnl = null;
@@ -66,10 +87,16 @@ for (const [sym, o] of Object.entries(state.open)) {
   if (px == null) px = +(await bx('GET', '/openApi/swap/v2/quote/price', { symbol: sym }).catch(() => ({}))).price || null;
   const long = o.side === 'LONG', R = px == null ? null : (long ? px - o.entry : o.entry - px) / Math.abs(o.entry - o.stop);
   const kind = px == null ? '已平倉' : Math.abs(px - o.tp) < Math.abs(px - o.stop) ? '🎯 止盈' : '🛑 止損';
-  await push(`【Delta 自動交易${HOST.includes('vst') ? '・模擬盤' : ''}】${kind} ${long ? '做多' : '做空'} ${sym}\n進場 ${o.entry}｜平倉 ${px ?? '?'}${R == null ? '' : '｜' + (R >= 0 ? '+' : '') + R.toFixed(2) + 'R'}${pnl == null ? '' : '｜盈虧 ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + 'U'}`);
+  const win = kind.includes('止盈'), Rt = R == null ? '' : (R >= 0 ? '+' : '') + R.toFixed(2) + 'R';
+  closes.push(bubble(`${kind} ${Rt}`, `${coin(sym)}・${long ? '做多 📈' : '做空 📉'}`, win ? '#30A46C' : kind.includes('止損') ? '#E5484D' : '#5B5BD6', [
+    row('進場', o.entry), row('平倉', px ?? '?'), row('結果', Rt || '-', win ? '#3DD68C' : '#FF6369'),
+    ...(pnl == null ? [] : [row('盈虧', (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' U', pnl >= 0 ? '#3DD68C' : '#FF6369')]),
+  ]));
+  closeTxt.push(`${kind} ${long ? '做多' : '做空'} ${coin(sym)} ${Rt}${pnl == null ? '' : '｜' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + 'U'}`);
   console.log(`${sym} ${kind} ${px} R=${R}`);
   delete state.open[sym];
 }
+if (closes.length) await card(closes, '📊 Delta 自動交易平倉\n' + closeTxt.join('\n'));
 const fp = process.env.FP_FILE ? JSON.parse(fs.readFileSync(process.env.FP_FILE, 'utf8')) : await get('/api/twhist?fp=1&force=1'); // FP_FILE：測試用
 if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); process.exit(0); }
 // 只做 BTC 同向；訊號 4H 收盤後 4 小時內才進（sigT 是 K 棒開盤時間）
@@ -89,7 +116,7 @@ const held = active;
 const hedge = String(dual?.dualSidePosition) === 'true';
 const spec = Object.fromEntries((cts || []).map((c) => [c.symbol, c]));
 let slots = MAX_POS - held.size;
-const log = [];
+const log = [], opens = [];
 for (const r of sigs) {
   if (slots <= 0) { log.push(`${r.sym} 略過：已達同時 ${MAX_POS} 筆上限`); continue; }
   const sym = toBx(r.sym), c = spec[sym], long = !r.short, id = `${r.sym}|${r.sigT}`;
@@ -116,12 +143,16 @@ for (const r of sigs) {
     });
     state.done[id] = LIVE ? 'open' : 'test'; slots--;
     if (LIVE) state.open[sym] = { side: long ? 'LONG' : 'SHORT', entry: px, stop, tp, qty, t: Date.now() };
+    opens.push(bubble(`${long ? '📈 做多' : '📉 做空'} ${coin(sym)}`, LIVE ? '✅ 已下單' : '🧪 測試通過（未成交）', long ? '#30A46C' : '#E5484D', [
+      row('進場', '≈ ' + px), row('停損 🛑', stop, '#FF6369'), row('止盈 🎯', tp + '（4R）', '#3DD68C'),
+      row('數量', qty), row('槓桿', lev + 'x 逐倉'), row('風險', RISK + ' U（' + (RISK / usdt * 100).toFixed(1) + '%）'),
+    ]));
     log.push(`${LIVE ? '✅ 已下單' : '🧪 測試通過'} ${long ? '做多' : '做空'} ${sym} ${qty} 顆 @≈${px}｜損 ${stop}｜盈 ${tp}｜槓桿 ${lev}x${o?.order?.orderID ? '｜單號 ' + o.order.orderID : ''}`);
-  } catch (e) { log.push(`❌ ${sym} 失敗：${e.message}`); }
+  } catch (e) { log.push(`❌ ${sym} 失敗：${e.message}`); opens.push(bubble(`⚠️ ${coin(sym)} 下單失敗`, long ? '做多' : '做空', '#6F6E77', [{ type: 'text', text: e.message.slice(0, 200), size: 'xs', color: '#B5B3AD', wrap: true }])); }
 }
 // 只留 3 天內的紀錄
 for (const k of Object.keys(state.done)) if (Date.now() - +k.split('|')[1] > 3 * 864e5) delete state.done[k];
 save();
 console.log(log.join('\n'));
 const msg = log.filter((x) => /^(✅|🧪|❌)/.test(x));
-if (msg.length) await push(`【Delta 自動交易${LIVE ? '' : '・測試'}】\n` + msg.join('\n'));
+if (opens.length) await card(opens, `🤖 Delta 自動交易｜${TAG}新單 ${msg.length} 筆\n` + msg.join('\n'));
