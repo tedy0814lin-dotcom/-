@@ -103,8 +103,8 @@ for (const [sym, o] of Object.entries(state.open)) {
 if (closes.length) await card(closes, '📊 Delta 自動交易平倉\n' + closeTxt.join('\n'));
 const fp = process.env.FP_FILE ? JSON.parse(fs.readFileSync(process.env.FP_FILE, 'utf8')) : await get('/api/twhist?fp=1&force=1'); // FP_FILE：測試用
 if (fp.btcUp == null) { console.log('BTC 狀態抓不到，這輪不下單'); process.exit(0); }
-// 只做真正的加密幣（回測同範圍：排除黃金、穩定幣、BTC 本身——BTC 只當濾網）；2026-11-26 回測排除美股代幣後全部幣 1%／10 筆 年化 137%、回撤 −46%
-const NOT_CRYPTO = /^(XAUT|PAXG|BTC|WBTC|USDC|FDUSD|TUSD|USD1|DAI|XUSD|RLUSD|RWUSD|U)USDT$|^NC/;
+// 只做真正的加密幣（回測同範圍：排除黃金、穩定幣）；2026-11-26 回測：真加密幣含 BTC 1%／10 筆 年化 159%、回撤 −49%（BTC 本身每筆 +0.32R、隨機 −0.07R）
+const NOT_CRYPTO = /^(XAUT|PAXG|WBTC|USDC|FDUSD|TUSD|USD1|DAI|XUSD|RLUSD|RWUSD|U)USDT$|^NC/;
 // 只做 BTC 同向；訊號 4H 收盤後 4 小時內才進（sigT 是 K 棒開盤時間）
 const sigs = [...fp.long, ...fp.short.map((r) => ({ ...r, short: true }))]
   .filter((r) => !NOT_CRYPTO.test(r.sym) && r.bOk === true && Date.now() < r.sigT + 8 * 3600e3 && !state.done[`${r.sym}|${r.sigT}`])
