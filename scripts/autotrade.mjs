@@ -152,7 +152,7 @@ if (state.rank?.day !== today || !state.rank?.top?.length) {
 }
 const TOP = new Set(state.rank?.top || []);
 const sigs = [...fp.long, ...fp.short.map((r) => ({ ...r, short: true }))]
-  .filter((r) => !NOT_CRYPTO.test(r.sym) && (!TOP.size || TOP.has(toBx(r.sym))) && r.bOk === true && Date.now() < r.sigT + 8 * 3600e3 && !state.done[`${r.sym}|${r.sigT}`])
+  .filter((r) => !r.deep && !NOT_CRYPTO.test(r.sym) && (!TOP.size || TOP.has(toBx(r.sym))) && r.bOk === true && Date.now() < r.sigT + 8 * 3600e3 && !state.done[`${r.sym}|${r.sigT}`])
   .sort((a, b) => Math.abs(b.dn) - Math.abs(a.dn));
 console.log(`BTC ${fp.btcUp ? '在' : '在下'} EMA200；同向新訊號 ${sigs.length} 筆；${LIVE ? '實盤' : '測試模式（不成交）'}`);
 if (!sigs.length) { save(); process.exit(0); }

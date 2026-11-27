@@ -32,6 +32,7 @@ function mini(r) {
 
 function card(r, dir) {
   return `<article class="pc-card"><header><div><b>${esc(nm(r.sym))}</b> <span class="cat ${dir > 0 ? 'cat-long' : 'cat-short'}">${dir > 0 ? '做多' : '做空'}</span></div>
+    ${r.deep ? `<div class="small" style="color:var(--down,#e5484d)">⚠️ 已低於 4H EMA144 ${-r.d144}%（跌太深），不建議追空・自動交易不做</div>` : ''}
     ${r.score == null ? '' : `<div class="small">分數 <b class="num">${r.score > 0 ? '+' : ''}${r.score.toFixed(2)}R</b>（${r.score >= 0.3 ? '高' : r.score >= 0.1 ? '中' : '低'}）<span class="muted">・BTC ${r.bOk ? '同向' : '逆向'}・本幣 ${r.cOk ? '同向' : '逆向'}</span></div>`}
     <div class="muted small">Delta 強度 <b class="num">${r.dn > 0 ? '+' : ''}${r.dn}×</b></div></header>${mini(r)}
     <div class="muted small">進場 <b class="num">${px(r.close)}</b>・停損 <b class="num">${px(r.stop)}</b>（${r.riskPct}%）・目標 <b class="num">${px(r.target)}</b>（4R）</div></article>`;
@@ -59,6 +60,7 @@ export function createFootTab({ api, el }) {
           <li><b>做多訊號</b>：連續 2 根 4H，每根都 ①淨買 Delta 強（≥ 近 50 根平均的 2 倍）②創新高 ③收紅 → <b>下一根 4H 開盤進場</b>。</li>
           <li><b>做空</b>：完全相反（連 2 根淨賣 Delta 強＋創新低＋收綠）。</li>
           <li><b>分數</b>：訊號全部照列（原版），另依「BTC、本幣 4H 收盤在 EMA200 的哪一邊」給分＝該組合 2018–2026 回測的每筆期望。做多主要看 BTC：BTC 同向 +0.34～+0.39R、BTC 逆向 −0.03～−0.12R。做空主要看本幣：本幣同向 +0.14～+0.22R、本幣逆向 −0.05～+0.11R。≥0.3 高、0.1～0.3 中、&lt;0.1 低。</li>
+          <li><b>跌太深不空</b>：價格已低於 4H EMA144 超過 15% 的空單標⚠️、排最後、自動交易不做（387 幣回測這類空單每筆 −0.13R，2014–2018 Bitfinex 樣本外 −0.45R；做多無此限制）。</li>
           <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>4R 出場</b>（賺到風險的 4 倍）。</li>
         </ol>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回測（150 主流幣・4H・4R 出場・扣費・事件層級）</th><th class="n">每筆期望</th><th class="n">贏隨機</th><th class="n">訓練/驗證</th></tr></thead><tbody>
