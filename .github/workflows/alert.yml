@@ -44,6 +44,15 @@ jobs:
           # 2026-11-14 減量：每輪只掃一次。白天等到「這一輪開始後 INT_DAY 秒」才排下一輪（掃描本身約 8～9 分鐘，其餘是等待）；夜間不接力
           INT_DAY="${INT_DAY:-1800}"
           T0=$(date +%s)
+          H=$(TZ=Asia/Taipei date +%-H)
+          # 2026-11-27 夜間（台北 01:00～07:59）只跑自動交易，並接力到下一根 4H 收盤後（GitHub 定時排程常被跳過，11/27 凌晨 05:00、07:30 兩次都沒起來，漏掉 04:00 那根 K）
+          if [ "$H" -ge 1 ] && [ "$H" -lt 8 ]; then
+            timeout 180 node scripts/autotrade.mjs || true
+            NOW=$(date +%s); NEXT=$(( (NOW / 14400 + 1) * 14400 + 180 )); WAIT=$(( NEXT - NOW )); [ "$WAIT" -gt 3300 ] && WAIT=3300
+            echo "夜間：只跑自動交易，${WAIT} 秒後接力"; sleep "$WAIT"
+            gh workflow run alert.yml --ref "$GITHUB_REF_NAME" -f test=0 -f tw=0 || echo "::warning::夜間接力失敗"
+            exit 0
+          fi
           TEST="$TEST_IN" TW="$TW_IN" timeout 600 node scripts/alert.mjs || true
           # BingX 自動交易（Delta 階梯＋BTC 濾網；沒設 BINGX_KEY 就跳過；TRADE_LIVE=1 才真的下單）
           timeout 180 node scripts/autotrade.mjs || true
@@ -53,9 +62,8 @@ jobs:
           TW="$TW_IN" timeout 1200 node scripts/snapshot.mjs || true
           ELAPSED=$(( $(date +%s) - T0 ))
           echo "這一輪掃描花 ${ELAPSED} 秒"
-          # 台北時間 01:00～07:59 網站沒人看、也不推播：掃一次就結束，不排下一輪（下一次由定時排程叫起）
+          # 這一輪跑完若已進入夜間，就接夜間模式（下一輪只跑自動交易）
           H=$(TZ=Asia/Taipei date +%-H)
-          if [ "$H" -ge 1 ] && [ "$H" -lt 8 ]; then echo "夜間：不接力"; exit 0; fi
           WAIT=$(( INT_DAY - ELAPSED )); [ "$WAIT" -lt 0 ] && WAIT=0
           [ "$WAIT" -gt 0 ] && sleep "$WAIT"
           # test=0：不要送測試訊息。排進 concurrency 佇列，這一輪結束（只差存快取的幾秒）就接上
