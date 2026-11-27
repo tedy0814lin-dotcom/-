@@ -79,12 +79,30 @@ const fix = (v, d) => +(Math.floor(v * 10 ** d + 1e-9) / 10 ** d).toFixed(d);
 const toBx = (s) => s.replace(/USDT$/, '-USDT');
 
 // 先確認金鑰能用（第一次連上就 LINE 通知一次）
-let usdt;
+let usdt, balT;
 try {
-  const bal = await bx('GET', '/openApi/swap/v3/user/balance');
+  balT = Date.now(); const bal = await bx('GET', '/openApi/swap/v3/user/balance');
   const B = (Array.isArray(bal) ? bal : [bal]).filter(Boolean); // 模擬盤的資產叫 VST，不是 USDT
   usdt = +((B.find((x) => x.asset === 'USDT' && +x.balance > 0) || B.find((x) => x.asset === 'VST') || B.find((x) => +x.balance > 0) || {}).balance || 0);
 } catch (e) { console.log('BingX 金鑰檢查失敗：' + e.message); if (!state.authErr) await push('⚠️ Delta 自動交易｜BingX 金鑰檢查失敗\n' + e.message); state.authErr = 1; save(); process.exit(0); }
+// 回撤用「策略淨值」算（像基金淨值）：入金／出金只改變本金、不改變淨值，所以減碼只看策略本身賺賠
+// 每輪：本輪賺賠 = 現在餘額 − 上輪餘額 − 這段時間的轉帳；淨值 ×= (1 + 本輪賺賠 ÷ 上輪餘額)
+{
+  const now = balT; let net = 0;
+  if (state.flowT) {
+    try {
+      const fl = await bx('GET', '/openApi/swap/v2/user/income', { incomeType: 'TRANSFER', startTime: state.flowT + 1, endTime: now, limit: 1000 });
+      for (const x of fl || []) net += +x.income;
+    } catch (e) { console.log('轉帳紀錄查詢失敗，這輪淨值不更新：' + e.message); net = null; }
+  }
+  if (net !== null) {
+    state.nav ??= 1; state.navPeak ??= 1;
+    if (state.lastBal > 0) state.nav *= 1 + (usdt - state.lastBal - net) / state.lastBal;
+    if (net) console.log(`偵測到轉帳 ${net > 0 ? '+' : ''}${net}U（不算賺賠）`);
+    state.navPeak = Math.max(state.navPeak, state.nav); state.lastBal = usdt; state.flowT = now;
+  }
+}
+const ddp = 1 - state.nav / state.navPeak, k = ddp > 0.2 ? 0.5 : ddp > 0.1 ? 0.7 : 1, brk = k < 1; // 分段減碼：淨值回撤 10% ×0.7、20% ×0.5
 if (!state.authOk || state.authErr) await push(`✅ Delta 自動交易｜已連上 BingX ${TAG}${LIVE ? '' : '（測試模式）'}\n💰 永續 USDT 餘額 ${usdt}`);
 state.authOk = 1; state.authErr = 0;
 // 平倉回報：之前下的單如果持倉已經不見，查歷史倉位判斷止盈或止損，LINE 通知
@@ -143,21 +161,8 @@ console.log(`BTC ${fp.btcUp ? '在' : '在下'} EMA200；同向新訊號 ${sigs.
 if (!sigs.length) { save(); process.exit(0); }
 
 const [dual, cts] = await Promise.all([bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts')]);
-// 入金／出金不算賺賠：最高點跟著轉帳一起調整，避免入金被當成獲利、出金被當成虧損而誤觸減碼
-try {
-  const since = state.flowT || Date.now() - 7 * 864e5;
-  const fl = await bx('GET', '/openApi/swap/v2/user/income', { incomeType: 'TRANSFER', startTime: since + 1, endTime: Date.now(), limit: 1000 });
-  let net = 0, last = since;
-  for (const x of fl || []) { if (!state.flowSeen?.[x.tranId]) { net += +x.income; (state.flowSeen ||= {})[x.tranId] = x.time; } last = Math.max(last, +x.time); }
-  if (state.peak && net) { state.peak = Math.max(0, state.peak + net); console.log(`偵測到轉帳 ${net > 0 ? '+' : ''}${net}U，最高點同步調整為 ${state.peak}`); }
-  state.flowT = last;
-  for (const [k, t] of Object.entries(state.flowSeen || {})) if (Date.now() - t > 30 * 864e5) delete state.flowSeen[k];
-} catch (e) { console.log('轉帳紀錄查詢失敗（不影響下單）：' + e.message); }
-state.peak = Math.max(state.peak || 0, usdt);
-// 分段減碼（2026-11-27 使用者選進取版：25 筆 × 0.56%）：比最高點少 10% → 風險 ×0.7，少 20% → ×0.5；回到門檻內恢復
-const ddp = 1 - usdt / state.peak, k = ddp > 0.2 ? 0.5 : ddp > 0.1 ? 0.7 : 1, brk = k < 1;
 const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT * k).toFixed(4);
-console.log(`永續 USDT 餘額 ${usdt}（最高 ${state.peak}），每筆風險 ${RISK}U${brk ? `（回撤減碼：×${k}）` : ''}`);
+console.log(`永續 USDT 餘額 ${usdt}，策略淨值 ${state.nav.toFixed(4)}（最高 ${state.navPeak.toFixed(4)}，回撤 ${(ddp * 100).toFixed(1)}%），每筆風險 ${RISK}U${brk ? `（回撤減碼：×${k}）` : ''}`);
 if (!(RISK > 0)) { console.log('餘額是 0，不下單'); process.exit(0); }
 const held = active;
 const hedge = String(dual?.dualSidePosition) === 'true';
