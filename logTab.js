@@ -40,6 +40,7 @@ export function createLogTab({ api, el }) {
   // 主力策略（上線在「策略」頁的）實盤記錄：只存訊號，結果用實際 K 線依回測規則重播
   const SROWS = [
     { id: 'cs', label: '大陽線突破新高', mk: '加密日線・多', ref: '回測年化 +49%、勝率 24%（賺大賠小）', f: (x) => x.k === 'cs', cur: '$' },
+    { id: 'fpP', label: 'Delta 階梯・濾網版（自動交易）', mk: '加密 4H', ref: '回測 多 +0.28R、空 +0.33R／筆（387 幣 2018–26；11/27 起記錄）', f: (x) => x.k === 'fp' && x.ps === true },
     { id: 'fpL', label: 'Delta 階梯・做多', mk: '加密 4H', ref: '回測 +0.22R／筆（原版全部；BTC 同向 +0.35R）', f: (x) => x.k === 'fp' && x.dir > 0 },
     { id: 'fpS', label: 'Delta 階梯・做空', mk: '加密 4H', ref: '回測 +0.11R／筆（原版全部；本幣同向 +0.16R）', f: (x) => x.k === 'fp' && x.dir < 0 },
     { id: 'pk', label: '大單推升', mk: '台股上櫃日線', ref: '回測 +2.45%／筆（約 +0.20R）', f: (x) => x.k === 'pk', tw: true },

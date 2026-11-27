@@ -60,6 +60,7 @@ export function createFootTab({ api, el }) {
           <li><b>做多訊號</b>：連續 2 根 4H，每根都 ①淨買 Delta 強（≥ 近 50 根平均的 2 倍）②創新高 ③收紅 → <b>下一根 4H 開盤進場</b>。</li>
           <li><b>做空</b>：完全相反（連 2 根淨賣 Delta 強＋創新低＋收綠）。</li>
           <li><b>分數</b>：訊號全部照列（原版），另依「BTC、本幣 4H 收盤在 EMA200 的哪一邊」給分＝該組合 2018–2026 回測的每筆期望。做多主要看 BTC：BTC 同向 +0.34～+0.39R、BTC 逆向 −0.03～−0.12R。做空主要看本幣：本幣同向 +0.14～+0.22R、本幣逆向 −0.05～+0.11R。≥0.3 高、0.1～0.3 中、&lt;0.1 低。</li>
+          <li><b>濾網（與自動交易相同）</b>：只列 ①BTC 4H EMA200 同向 ②90 天平均成交額前 50 ③非跌太深的空單；其餘收在「未通過濾網」並寫原因。</li>
           <li><b>跌太深不空</b>：價格已低於 4H EMA144 超過 15% 的空單標⚠️、排最後、自動交易不做（387 幣回測這類空單每筆 −0.13R，2014–2018 Bitfinex 樣本外 −0.45R；做多無此限制）。</li>
           <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>4R 出場</b>（賺到風險的 4 倍）。</li>
         </ol>
@@ -72,12 +73,16 @@ export function createFootTab({ api, el }) {
     if (!d) { el.innerHTML = head + rules; bind(); return; }
     const sec = (title, arr, dir) => `<section class="panel"><div class="panel-head"><strong>${title}</strong><span class="muted small">${arr.length} 個</span></div>${
       arr.length ? `<div class="cs-grid">${arr.map((r) => card(r, dir)).join('')}</div>` : '<div class="muted small">目前沒有這個方向的新訊號。</div>'}</section>`;
-    el.innerHTML = head + sec('今天做多訊號', d.long, 1) + sec('今天做空訊號', d.short, -1) + rules;
+    const ok = (a) => a.filter((r) => r.pass !== false), bad = [...d.long.filter((r) => r.pass === false).map((r) => [r, 1]), ...d.short.filter((r) => r.pass === false).map((r) => [r, -1])];
+    const rest = bad.length ? `<section class="panel"><details class="fold-rest"${st.restOpen ? ' open' : ''}><summary><strong>未通過濾網的訊號</strong><span class="muted small">${bad.length} 個・自動交易不做・點開看</span></summary>
+      <div class="cs-grid">${bad.map(([r, dir]) => `<div>${card(r, dir).replace('<header>', `<header><div class="small" style="color:var(--down,#e5484d);width:100%">✗ ${esc(r.why.join('、'))}</div>`)}</div>`).join('')}</div></details></section>` : '';
+    el.innerHTML = head + sec('今天做多訊號（通過濾網）', ok(d.long), 1) + sec('今天做空訊號（通過濾網）', ok(d.short), -1) + rest + rules;
     bind();
   }
   function bind() {
     const b = el.querySelector('#fp-refresh'); if (b) b.onclick = () => load(true);
     const f = el.querySelector('details.fold'); if (f) f.addEventListener('toggle', () => { st.rulesOpen = f.open; });
+    const g = el.querySelector('details.fold-rest'); if (g) g.addEventListener('toggle', () => { st.restOpen = g.open; });
   }
   return { load, render, get loaded() { return !!st.data; }, get loading() { return st.loading; } };
 }
