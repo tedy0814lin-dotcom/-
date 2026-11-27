@@ -1,12 +1,12 @@
 // BingX 自動交易：Delta 階梯（4H）＋BTC 大盤濾網（BTC 4H 在 EMA200 上只做多、下只做空）
-// 每筆打到停損賠「永續帳戶餘額 × RISK_PCT%」（預設 1%）；餘額比最高點少 20% 時風險自動減半（斷路器），同時最多 MAX_POS 筆（預設 10），進場同時掛停損與 4R 止盈（照網站訊號價位）。
+// 每筆打到停損賠「永續帳戶餘額 × RISK_PCT%」（預設 0.56%）；比最高點少 10% 時風險 ×0.7、少 20% 時 ×0.5，同時最多 MAX_POS 筆（預設 25），進場同時掛停損與 4R 止盈（照網站訊號價位）。
 //
 // 需要（GitHub → Settings → Secrets and variables → Actions）：
 //   Secrets：BINGX_KEY、BINGX_SECRET（BingX API，只開「合約交易」，不要開提現，建議綁 IP）
 //   預設（alert.yml）：TRADE_ENV=vst＋TRADE_LIVE=1 → 在 BingX 模擬盤真的下單；要實盤就在 Variables 設 TRADE_ENV=live
 //   TRADE_LIVE=0 → 只用「測試下單」端點驗證、不成交
 //   選填 Variables：RISK_PCT（預設 1）、RISK_USD（設了就改用固定金額）、MAX_POS（預設 10）、TRADE_ENV=vst（模擬盤）
-// 投組回測（2018–2026、60 幣、複利、扣費）：1%／10 筆＋斷路器 年化約 113%、最大回撤 −48%（成本加倍 −50%）、9 年全正；使用者選 1%（可接受回撤 −50%）；隨機進場 −4%／年。
+// 投組回測（387 幣、90 天成交額前 50、2018–2026、複利、扣費）：25 筆 × 0.56%＋分段減碼 年化約 157%、回撤 −49%、9 年全正；2022 後 81%／−49%（成本加倍 57%／−50%）。
 // 防爆倉：每檔改逐倉，槓桿 ≤ 1 ÷（3 × 停損%），強平價約在停損 3 倍遠，停損一定先觸發；單筆最多賠它自己的保證金。
 // 回測依據：專案文件 Delta階梯多空2018起長期回測.md、Delta階梯延遲進場檢驗.md（晚 2 小時進場影響很小）。
 process.env.SNAPSHOT ??= '1';
@@ -17,7 +17,7 @@ import { get } from './_api.mjs';
 const KEY = process.env.BINGX_KEY, SEC = process.env.BINGX_SECRET;
 if (!KEY || !SEC) { console.log('還沒設定 BINGX_KEY / BINGX_SECRET，跳過自動交易'); process.exit(0); }
 const LIVE = process.env.TRADE_LIVE === '1';
-const PCT = +(process.env.RISK_PCT || 1) / 100, MAX_POS = +(process.env.MAX_POS || 10);
+const PCT = +(process.env.RISK_PCT || 0.56) / 100, MAX_POS = +(process.env.MAX_POS || 25);
 const HOST = process.env.TRADE_ENV === 'vst' ? 'https://open-api-vst.bingx.com' : 'https://open-api.bingx.com';
 const STATE = '.alert-state/autotrade.json', LINE = process.env.LINE_TOKEN;
 const save = () => { fs.mkdirSync('.alert-state', { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); };
@@ -144,9 +144,10 @@ if (!sigs.length) { save(); process.exit(0); }
 
 const [dual, cts] = await Promise.all([bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts')]);
 state.peak = Math.max(state.peak || 0, usdt);
-const brk = usdt < state.peak * 0.8; // 比最高點少 20% → 風險減半，回到 80% 以上恢復
-const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT * (brk ? 0.5 : 1)).toFixed(4);
-console.log(`永續 USDT 餘額 ${usdt}（最高 ${state.peak}），每筆風險 ${RISK}U${brk ? '（斷路器：已減半）' : ''}`);
+// 分段減碼（2026-11-27 使用者選進取版：25 筆 × 0.56%）：比最高點少 10% → 風險 ×0.7，少 20% → ×0.5；回到門檻內恢復
+const ddp = 1 - usdt / state.peak, k = ddp > 0.2 ? 0.5 : ddp > 0.1 ? 0.7 : 1, brk = k < 1;
+const RISK = process.env.RISK_USD ? +process.env.RISK_USD : +(usdt * PCT * k).toFixed(4);
+console.log(`永續 USDT 餘額 ${usdt}（最高 ${state.peak}），每筆風險 ${RISK}U${brk ? `（回撤減碼：×${k}）` : ''}`);
 if (!(RISK > 0)) { console.log('餘額是 0，不下單'); process.exit(0); }
 const held = active;
 const hedge = String(dual?.dualSidePosition) === 'true';
