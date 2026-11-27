@@ -143,6 +143,16 @@ console.log(`BTC ${fp.btcUp ? '在' : '在下'} EMA200；同向新訊號 ${sigs.
 if (!sigs.length) { save(); process.exit(0); }
 
 const [dual, cts] = await Promise.all([bx('GET', '/openApi/swap/v1/positionSide/dual'), bx('GET', '/openApi/swap/v2/quote/contracts')]);
+// 入金／出金不算賺賠：最高點跟著轉帳一起調整，避免入金被當成獲利、出金被當成虧損而誤觸減碼
+try {
+  const since = state.flowT || Date.now() - 7 * 864e5;
+  const fl = await bx('GET', '/openApi/swap/v2/user/income', { incomeType: 'TRANSFER', startTime: since + 1, endTime: Date.now(), limit: 1000 });
+  let net = 0, last = since;
+  for (const x of fl || []) { if (!state.flowSeen?.[x.tranId]) { net += +x.income; (state.flowSeen ||= {})[x.tranId] = x.time; } last = Math.max(last, +x.time); }
+  if (state.peak && net) { state.peak = Math.max(0, state.peak + net); console.log(`偵測到轉帳 ${net > 0 ? '+' : ''}${net}U，最高點同步調整為 ${state.peak}`); }
+  state.flowT = last;
+  for (const [k, t] of Object.entries(state.flowSeen || {})) if (Date.now() - t > 30 * 864e5) delete state.flowSeen[k];
+} catch (e) { console.log('轉帳紀錄查詢失敗（不影響下單）：' + e.message); }
 state.peak = Math.max(state.peak || 0, usdt);
 // 分段減碼（2026-11-27 使用者選進取版：25 筆 × 0.56%）：比最高點少 10% → 風險 ×0.7，少 20% → ×0.5；回到門檻內恢復
 const ddp = 1 - usdt / state.peak, k = ddp > 0.2 ? 0.5 : ddp > 0.1 ? 0.7 : 1, brk = k < 1;
