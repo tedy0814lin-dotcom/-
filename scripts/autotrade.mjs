@@ -142,6 +142,13 @@ if (closes.length) await card(closes, '📊 Delta 自動交易平倉\n' + closeT
         await bx('POST', '/openApi/swap/v1/trade/closePosition', { positionId: p.positionId });
         notes.push(`⏰ ${coin(sym)} 持有滿 20 天，已市價平倉`); continue;
       }
+      // 2026-11-28 規則：空單停損距離 >15% 止盈 1.15R；舊單還掛 4R 的，撤掉舊止盈、改掛新的（protect 會補掛）
+      const rk = o.stop - o.entry;
+      if (o.side === 'SHORT' && o.tp > 0 && rk / o.entry > 0.15 && o.entry - o.tp > 1.2 * rk) {
+        const d = (String(o.stop).split('.')[1] || '').length, tp = fix(o.entry - 1.15 * rk, d), old = o.tp;
+        for (const x of (await ordersOf(sym)).filter((x) => x.type === 'TAKE_PROFIT_MARKET')) await bx('DELETE', '/openApi/swap/v2/trade/order', { symbol: sym, orderId: x.orderId }, 1);
+        o.tp = tp; save(); notes.push(`🎯 ${coin(sym)} 止盈 ${old} → ${tp}（1.15R，停損距離 >15% 的空單新規則）`);
+      }
       const f = await protect(sym, o, hedge0);
       if (f.length) notes.push(`🛡️ ${coin(sym)} 補掛 ${f.join('、')}`);
     } catch (e) { notes.push(`⚠️ ${coin(sym)} 保護單檢查失敗：${e.message.slice(0, 120)}`); }
