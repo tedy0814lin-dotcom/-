@@ -35,7 +35,7 @@ function card(r, dir) {
     ${r.deep ? `<div class="small" style="color:var(--down,#e5484d)">⚠️ 已低於 4H EMA144 ${-r.d144}%（跌太深），不建議追空・自動交易不做</div>` : ''}
     ${r.score == null ? '' : `<div class="small">分數 <b class="num">${r.score > 0 ? '+' : ''}${r.score.toFixed(2)}R</b>（${r.score >= 0.3 ? '高' : r.score >= 0.1 ? '中' : '低'}）<span class="muted">・BTC ${r.bOk ? '同向' : '逆向'}・本幣 ${r.cOk ? '同向' : '逆向'}</span></div>`}
     <div class="muted small">Delta 強度 <b class="num">${r.dn > 0 ? '+' : ''}${r.dn}×</b></div></header>${mini(r)}
-    <div class="muted small">進場 <b class="num">${px(r.close)}</b>・停損 <b class="num">${px(r.stop)}</b>（${r.riskPct}%）・目標 <b class="num">${px(r.target)}</b>（4R）</div></article>`;
+    <div class="muted small">進場 <b class="num">${px(r.close)}</b>・停損 <b class="num">${px(r.stop)}</b>（${r.riskPct}%）・目標 <b class="num">${px(r.target)}</b>（${(Math.abs(r.target - r.close) / Math.abs(r.close - r.stop)).toFixed(2).replace(/\.?0+$/, '')}R）</div></article>`;
 }
 
 export function createFootTab({ api, el }) {
@@ -62,7 +62,7 @@ export function createFootTab({ api, el }) {
           <li><b>分數</b>：訊號全部照列（原版），另依「BTC、本幣 4H 收盤在 EMA200 的哪一邊」給分＝該組合 2018–2026 回測的每筆期望。做多主要看 BTC：BTC 同向 +0.34～+0.39R、BTC 逆向 −0.03～−0.12R。做空主要看本幣：本幣同向 +0.14～+0.22R、本幣逆向 −0.05～+0.11R。≥0.3 高、0.1～0.3 中、&lt;0.1 低。</li>
           <li><b>濾網（與自動交易相同）</b>：只列 ①BTC 4H EMA200 同向 ②90 天平均成交額前 50 ③非跌太深的空單；其餘收在「未通過濾網」並寫原因。</li>
           <li><b>跌太深不空</b>：價格已低於 4H EMA144 超過 15% 的空單標⚠️、排最後、自動交易不做（387 幣回測這類空單每筆 −0.13R，2014–2018 Bitfinex 樣本外 −0.45R；做多無此限制）。</li>
-          <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>4R 出場</b>（賺到風險的 4 倍）。</li>
+          <li><b>停損／出場</b>：停損＝這 2 根的最低（最高）點下（上）緣；<b>4R 出場</b>（賺到風險的 4 倍）；<b>空單停損距離超過 15% 時改 1.15R</b>（4R 要跌 60% 以上幾乎打不到，2026-11-28 起）。</li>
         </ol>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回測（150 主流幣・4H・4R 出場・扣費・事件層級）</th><th class="n">每筆期望</th><th class="n">贏隨機</th><th class="n">訓練/驗證</th></tr></thead><tbody>
           <tr><td>做多（連 2 根）</td><td class="n num">+0.26R</td><td class="n num">隨機 −0.00</td><td class="n num">+0.26 / +0.25</td></tr>

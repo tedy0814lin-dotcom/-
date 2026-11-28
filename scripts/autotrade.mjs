@@ -201,7 +201,7 @@ for (const r of sigs) {
       catch (e) { log.push(`❌ ${sym} 補掛停損失敗：${e.message}`); }
     }
     opens.push(bubble(`${long ? '📈 做多' : '📉 做空'} ${coin(sym)}`, LIVE ? '✅ 已下單' : '🧪 測試通過（未成交）', long ? '#30A46C' : '#E5484D', [
-      row('進場', '≈ ' + px), row('停損 🛑', stop, '#FF6369'), row('止盈 🎯', tp > 0 ? tp + '（4R）' : '不設（最多持有 20 天）', '#3DD68C'),
+      row('進場', '≈ ' + px), row('停損 🛑', stop, '#FF6369'), row('止盈 🎯', tp > 0 ? tp + `（${(Math.abs(tp - px) / risk).toFixed(2).replace(/\.?0+$/, '')}R）` : '不設（最多持有 20 天）', '#3DD68C'),
       row('數量', qty), row('槓桿', lev + 'x 逐倉'), row('風險', RISK + ' U（' + (RISK / usdt * 100).toFixed(1) + '%）'),
     ]));
     log.push(`${LIVE ? '✅ 已下單' : '🧪 測試通過'} ${long ? '做多' : '做空'} ${sym} ${qty} 顆 @≈${px}｜損 ${stop}｜盈 ${tp}｜槓桿 ${lev}x${o?.order?.orderID ? '｜單號 ' + o.order.orderID : ''}`);
